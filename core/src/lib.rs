@@ -7,6 +7,7 @@ mod config;
 mod display;
 mod error;
 mod input;
+mod launcher;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -16,6 +17,8 @@ use display::{BrightnessKeyTap, DisplayManager};
 pub use display::{DisplayInfo, DisplayObserver};
 pub use error::CoreError;
 use input::InputEngine;
+pub use launcher::{AppInfo, LauncherObserver, ResultKind, SearchResult};
+use launcher::{HotkeyManager, Launcher};
 
 /// Basic facts about the core, shown in the shell so the FFI is exercised end to end.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -40,6 +43,8 @@ pub struct Core {
     input: InputEngine,
     displays: Arc<DisplayManager>,
     brightness_keys: BrightnessKeyTap,
+    launcher: Arc<Launcher>,
+    hotkeys: HotkeyManager,
 }
 
 #[uniffi::export]
@@ -47,17 +52,22 @@ impl Core {
     /// `data_dir` is where settings live (the shell passes Application Support/Jaycast).
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
-        let store = ConfigStore::new(&PathBuf::from(data_dir));
+        let data_dir = PathBuf::from(data_dir);
+        let store = ConfigStore::new(&data_dir);
         let config = store.load()?;
         let input = InputEngine::new(config.mouse.clone());
         let displays = DisplayManager::new(config.monitor.clone());
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
+        let launcher = Launcher::new(&data_dir);
+        let hotkeys = HotkeyManager::new();
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
             input,
             displays,
             brightness_keys,
+            launcher,
+            hotkeys,
         }))
     }
 
@@ -101,6 +111,47 @@ impl Core {
     /// Registers the shell's observer for display and brightness changes (`None` clears it).
     pub fn set_display_observer(&self, observer: Option<Arc<dyn DisplayObserver>>) {
         self.displays.set_observer(observer);
+    }
+
+    pub fn launcher_config(&self) -> LauncherConfig {
+        self.config.lock().unwrap().launcher.clone()
+    }
+
+    /// Saves the new launcher settings and re-registers hotkeys. Main thread only.
+    pub fn set_launcher_config(&self, launcher: LauncherConfig) -> Result<(), CoreError> {
+        let mut config = self.config.lock().unwrap();
+        config.launcher = launcher.clone();
+        self.store.save(&config)?;
+        launcher::apply_config(&self.hotkeys, &launcher);
+        Ok(())
+    }
+
+    /// Registers the saved hotkeys. Call once at launch, on the main thread, after
+    /// `set_launcher_observer`.
+    pub fn start_hotkeys(&self) {
+        launcher::apply_config(&self.hotkeys, &self.launcher_config());
+    }
+
+    /// Registers the shell's observer for the palette hotkey and app index changes.
+    pub fn set_launcher_observer(&self, observer: Option<Arc<dyn LauncherObserver>>) {
+        self.launcher.set_observer(observer.clone());
+        self.hotkeys.set_observer(observer);
+    }
+
+    /// Best matches for `query` (apps and system actions). Cheap enough for every keystroke.
+    pub fn search(&self, query: String, limit: u32) -> Vec<SearchResult> {
+        self.launcher.search(&query, limit as usize)
+    }
+
+    /// Opens a search result. `query` is what was typed, so ranking learns which result
+    /// each query leads to.
+    pub fn open_result(&self, id: String, query: String) -> Result<(), CoreError> {
+        self.launcher.open(&id, &query)
+    }
+
+    /// Every indexed app, sorted by name.
+    pub fn installed_apps(&self) -> Vec<AppInfo> {
+        self.launcher.apps()
     }
 
     /// Starts the event taps (mouse and brightness keys). Fails with `PermissionDenied`

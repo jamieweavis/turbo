@@ -20,7 +20,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
-| 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ⏳ |
+| 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | 🚧 In progress |
 | 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
 | 5 | Clipboard history, file search | ⏳ |
 | 6 | Window management, snippets / text expansion | ⏳ |
@@ -54,10 +54,12 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ### Step 3: Launcher core
 
-- [ ] Global hotkey + floating palette panel
+- [x] Shared core API: `LauncherConfig` (palette hotkey, default ⌥Space; app hotkeys),
+      `SearchResult`, `LauncherObserver`, `Core` search/open/hotkey methods
 - [ ] App index (with change watching) and fuzzy ranking that learns from usage
 - [ ] System actions (lock, sleep, dark mode, empty trash, …)
-- [ ] Per-app hotkeys to focus or hide an app
+- [ ] Global hotkeys: palette + per-app focus-or-hide
+- [ ] Shell: floating palette panel with keyboard navigation, confirmations, Launcher settings pane
 
 ### Step 4: Calculator, quicklinks, shell commands
 

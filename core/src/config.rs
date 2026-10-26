@@ -15,6 +15,46 @@ use crate::error::CoreError;
 pub struct Config {
     pub mouse: MouseConfig,
     pub monitor: MonitorConfig,
+    pub launcher: LauncherConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct LauncherConfig {
+    /// Opens the palette. `None` means no global hotkey (the menu bar still opens it).
+    pub hotkey: Option<Hotkey>,
+    /// Hotkeys that focus an app (launching it if needed), or hide it if it's already in front.
+    pub app_hotkeys: Vec<AppHotkey>,
+}
+
+impl Default for LauncherConfig {
+    fn default() -> Self {
+        Self {
+            hotkey: Some(Hotkey {
+                key_code: KEY_SPACE,
+                modifiers: vec![Modifier::Option],
+            }),
+            app_hotkeys: Vec::new(),
+        }
+    }
+}
+
+/// `kVK_Space`.
+pub const KEY_SPACE: u16 = 0x31;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Record)]
+pub struct Hotkey {
+    /// macOS virtual key code (`kVK_*`).
+    pub key_code: u16,
+    pub modifiers: Vec<Modifier>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct AppHotkey {
+    pub bundle_id: String,
+    /// Shown in settings; refreshed from the app index when it's installed.
+    pub name: String,
+    pub hotkey: Hotkey,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
