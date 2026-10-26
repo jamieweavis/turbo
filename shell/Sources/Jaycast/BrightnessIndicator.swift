@@ -2,67 +2,81 @@ import AppKit
 import Observation
 import SwiftUI
 
-/// The on-screen indicator shown when the brightness keys change an external display.
+/// The on-screen indicator shown when the brightness keys change an external display,
+/// styled after macOS's own: a Liquid Glass card under the menu bar at the top right, with
+/// the display's name and a slider that can be dragged to keep adjusting.
 ///
-/// Jaycast draws its own HUD by default. The private `OSDManager` still exists on macOS 27,
-/// but calling it showed no window when tested, so it is opt-in for experimenting:
-/// `defaults write com.jamieweavis.jaycast UseSystemOSD -bool YES`.
+/// The system's indicator is drawn by Control Center, which has no API for other displays,
+/// so this recreates it. One panel per display, reused across presses.
 @MainActor
 final class BrightnessIndicator {
-    private let systemOSD = UserDefaults.standard.bool(forKey: "UseSystemOSD") ? SystemOSD() : nil
-    private var hud: BrightnessHUD?
+    private let settings: DisplaySettings
+    private var huds: [UInt32: BrightnessHUD] = [:]
 
-    func show(brightness: Double, on displayID: UInt32) {
-        if let systemOSD, systemOSD.show(brightness: brightness, on: displayID) {
-            return
-        }
-        let hud = self.hud ?? BrightnessHUD()
-        self.hud = hud
-        hud.show(brightness: brightness, on: displayID)
+    init(settings: DisplaySettings) {
+        self.settings = settings
+    }
+
+    func show(on displayID: UInt32) {
+        guard let screen = NSScreen.screens.first(where: { $0.displayID == displayID }) else { return }
+        let hud = huds[displayID] ?? BrightnessHUD(displayID: displayID, settings: settings)
+        huds[displayID] = hud
+        hud.show(on: screen)
     }
 }
 
-/// A borderless, click-through panel near the bottom of the target screen. Reused across
-/// key presses; each press restarts the fade-out.
+/// A borderless, non-activating panel: it takes clicks and drags without stealing focus
+/// from the frontmost app. It stays up while hovered or dragged, then fades out.
 @MainActor
 private final class BrightnessHUD {
-    private let state = HUDState()
     private let panel: NSPanel
+    private let interaction = HUDInteraction()
     private var hideTask: Task<Void, Never>?
 
-    private static let size = NSSize(width: 220, height: 48)
-    private static let bottomMargin: CGFloat = 96
+    private static let size = NSSize(width: 300, height: 76)
+    /// Gap from the screen's right edge and from the bottom of the menu bar.
+    private static let margin: CGFloat = 8
     private static let visibleFor = Duration.milliseconds(1500)
 
-    init() {
+    init(displayID: UInt32, settings: DisplaySettings) {
         panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: Self.size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
         )
-        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.overlayWindow)))
+        panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        panel.ignoresMouseEvents = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.contentView = NSHostingView(rootView: BrightnessHUDView(state: state))
+        panel.becomesKeyOnlyIfNeeded = true
+
+        let view = BrightnessHUDView(displayID: displayID, settings: settings, interaction: interaction)
+        panel.contentView = FirstMouseHostingView(rootView: view)
+
+        interaction.onIdle = { [weak self] in self?.scheduleHide() }
+        interaction.onBusy = { [weak self] in self?.hideTask?.cancel() }
     }
 
-    func show(brightness: Double, on displayID: UInt32) {
-        state.brightness = brightness
-        let screen = NSScreen.screens.first { $0.displayID == displayID } ?? NSScreen.main
-        if let frame = screen?.frame {
-            panel.setFrameOrigin(NSPoint(x: frame.midX - Self.size.width / 2, y: frame.minY + Self.bottomMargin))
-        }
+    func show(on screen: NSScreen) {
+        let visible = screen.visibleFrame
+        panel.setFrameOrigin(NSPoint(
+            x: visible.maxX - Self.size.width - Self.margin,
+            y: visible.maxY - Self.size.height - Self.margin
+        ))
 
-        panel.animator().alphaValue = 1
-        if !panel.isVisible {
+        if !panel.isVisible || panel.alphaValue < 1 {
+            interaction.appearance += 1
             panel.alphaValue = 1
             panel.orderFrontRegardless()
         }
+        if !interaction.isBusy {
+            scheduleHide()
+        }
+    }
 
+    private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task { [weak self] in
             try? await Task.sleep(for: Self.visibleFor)
@@ -73,7 +87,7 @@ private final class BrightnessHUD {
 
     private func fadeOut() {
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.3
+            context.duration = 0.25
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
             MainActor.assumeIsolated {
@@ -84,82 +98,124 @@ private final class BrightnessHUD {
     }
 }
 
+/// Hover and drag state shared between the panel (which owns the hide timer) and its view.
 @MainActor
 @Observable
-private final class HUDState {
-    var brightness = 0.0
+private final class HUDInteraction {
+    var isHovering = false { didSet { changed() } }
+    var isDragging = false { didSet { changed() } }
+    /// Bumped each time the panel appears, to replay the entrance animation.
+    var appearance = 0
+
+    @ObservationIgnored var onBusy: (() -> Void)?
+    @ObservationIgnored var onIdle: (() -> Void)?
+
+    var isBusy: Bool { isHovering || isDragging }
+
+    private func changed() {
+        isBusy ? onBusy?() : onIdle?()
+    }
+}
+
+/// Lets the first click land on the slider even though the panel is never key.
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 private struct BrightnessHUDView: View {
-    let state: HUDState
+    let displayID: UInt32
+    let settings: DisplaySettings
+    let interaction: HUDInteraction
+
+    @State private var scale = 1.0
+
+    private var display: DisplayInfo? {
+        settings.displays.first { $0.id == displayID }
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sun.max.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-            LevelBar(level: state.brightness)
-                .frame(height: 6)
-                .animation(.easeOut(duration: 0.12), value: state.brightness)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(display?.name ?? "Display")
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+
+            HStack(spacing: 10) {
+                Image(systemName: "sun.min.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                BrightnessSlider(
+                    value: display?.brightness ?? 0,
+                    onChange: { settings.setBrightness($0, for: displayID) },
+                    isDragging: Binding(get: { interaction.isDragging }, set: { interaction.isDragging = $0 })
+                )
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 15, weight: .semibold))
+            }
         }
+        .foregroundStyle(.white)
         .padding(.horizontal, 18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .glassEffect(.regular, in: .capsule)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .scaleEffect(scale, anchor: .topTrailing)
+        .onHover { interaction.isHovering = $0 }
+        .onChange(of: interaction.appearance, initial: true) {
+            scale = 0.92
+            withAnimation(.spring(duration: 0.3, bounce: 0.25)) { scale = 1 }
+        }
     }
 }
 
-private struct LevelBar: View {
-    let level: Double
+/// A thick rounded bar with one tick per brightness-key step underneath. Clicking jumps to
+/// a point; dragging scrubs.
+private struct BrightnessSlider: View {
+    let value: Double
+    let onChange: (Double) -> Void
+    @Binding var isDragging: Bool
+
+    private static let steps = 16
+    private static let barHeight: CGFloat = 6
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.3))
-                Capsule()
-                    .fill(Color.primary)
-                    .frame(width: proxy.size.width * min(max(level, 0), 1))
+            let width = proxy.size.width
+            VStack(spacing: 5) {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.25))
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: max(Self.barHeight, width * min(max(value, 0), 1)))
+                }
+                .frame(height: Self.barHeight)
+                .animation(isDragging ? nil : .easeOut(duration: 0.12), value: value)
+
+                HStack(spacing: 0) {
+                    ForEach(0...Self.steps, id: \.self) { index in
+                        Circle()
+                            .fill(.white.opacity(0.35))
+                            .frame(width: 2, height: 2)
+                        if index < Self.steps { Spacer(minLength: 0) }
+                    }
+                }
             }
+            .frame(maxHeight: .infinity)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        isDragging = true
+                        onChange(min(max(drag.location.x / width, 0), 1))
+                    }
+                    .onEnded { _ in isDragging = false }
+            )
         }
-    }
-}
-
-/// The private OSD.framework's `OSDManager`, looked up at runtime so a missing class or
-/// changed selector just means falling back to Jaycast's own HUD.
-@MainActor
-private final class SystemOSD {
-    private typealias ShowImage = @convention(c) (
-        NSObject, Selector, Int64, UInt32, UInt32, UInt32, UInt32, UInt32, Bool
-    ) -> Void
-
-    private let manager: NSObject?
-    private let selector = NSSelectorFromString(
-        "showImage:onDisplayID:priority:msecUntilFade:filledChiclets:totalChiclets:locked:"
-    )
-
-    private static let brightnessImage: Int64 = 1
-    private static let priority: UInt32 = 0x1F4
-    private static let fadeAfterMs: UInt32 = 1000
-    private static let chiclets: UInt32 = 16
-
-    init() {
-        dlopen("/System/Library/PrivateFrameworks/OSD.framework/OSD", RTLD_LAZY)
-        let shared = NSSelectorFromString("sharedManager")
-        guard let cls = NSClassFromString("OSDManager") as? NSObject.Type, cls.responds(to: shared) else {
-            manager = nil
-            return
+        .frame(height: 22)
+        .accessibilityElement()
+        .accessibilityLabel("Brightness")
+        .accessibilityValue("\(Int((value * 100).rounded())) percent")
+        .accessibilityAdjustableAction { direction in
+            let step = 1.0 / Double(Self.steps)
+            onChange(min(max(value + (direction == .increment ? step : -step), 0), 1))
         }
-        manager = cls.perform(shared)?.takeUnretainedValue() as? NSObject
-    }
-
-    /// Returns false if the OSD isn't available, so the caller can fall back.
-    func show(brightness: Double, on displayID: UInt32) -> Bool {
-        guard let manager, manager.responds(to: selector), let imp = manager.method(for: selector) else {
-            return false
-        }
-        let filled = UInt32((brightness * Double(Self.chiclets)).rounded())
-        let showImage = unsafeBitCast(imp, to: ShowImage.self)
-        showImage(manager, selector, Self.brightnessImage, displayID, Self.priority, Self.fadeAfterMs, filled, Self.chiclets, false)
-        return true
     }
 }
 

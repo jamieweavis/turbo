@@ -93,7 +93,9 @@ Raycast extension support.
   opt in with `defaults write com.jamieweavis.jaycast UseSystemOSD -bool YES`). Brightness
   changed with the monitor's own buttons isn't re-read until restart or hotplug. F14/F15 keys
   aren't handled. After hands-on approval, the bottom 25% of the range became gamma dimming so
-  minimum brightness is fully black (macOS restores gamma when the app exits).
+  minimum brightness is fully black (macOS restores gamma when the app exits). The brightness
+  indicator was then restyled after macOS 26's own (Liquid Glass card under the menu bar, top
+  right, display name, draggable slider with step ticks); the private `OSDManager` path was removed.
 - **Step 1**: built by three parallel agents (event tap + buttons + scroll routing; smooth-scroll
   physics + emitter; Swift settings UI), integrated on main. 50 Rust tests. The live tap is confirmed
   running (`CGGetEventTapList`: enabled). Not yet checked by hand: scroll feel, every action, the

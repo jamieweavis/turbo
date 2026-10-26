@@ -9,7 +9,7 @@ final class AppModel {
     let accessibility = AccessibilityPermission()
     let mouse: MouseSettings
     let displays: DisplaySettings
-    @ObservationIgnored private let brightnessIndicator = BrightnessIndicator()
+    @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
     private(set) var isInputRunning = false
     private(set) var inputError: String?
 
@@ -19,12 +19,13 @@ final class AppModel {
         core = try Core(dataDir: dataDirectory.path(percentEncoded: false))
         mouse = MouseSettings(core: core)
         displays = DisplaySettings(core: core)
+        brightnessIndicator = BrightnessIndicator(settings: displays)
     }
 
     /// Starts input as soon as Accessibility is granted (now or later) and stops it if revoked.
     func start() {
-        displays.onBrightnessFromKeys = { [brightnessIndicator] displayID, brightness in
-            brightnessIndicator.show(brightness: brightness, on: displayID)
+        displays.onBrightnessFromKeys = { [brightnessIndicator] displayID, _ in
+            brightnessIndicator.show(on: displayID)
         }
         core.setDisplayObserver(observer: DisplayObserverBridge(settings: displays))
         // Catch anything that changed between init and registering the observer.

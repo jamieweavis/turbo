@@ -42,6 +42,7 @@ app: build
 # Build, then (re)launch the app
 run: app
     -pkill -x Jaycast
+    @while pgrep -x Jaycast >/dev/null; do sleep 0.1; done
     open {{app}}
 
 # Run all tests
