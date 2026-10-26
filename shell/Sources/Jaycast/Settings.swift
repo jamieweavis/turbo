@@ -208,15 +208,9 @@ struct SettingsView: View {
             // collapses and the traffic lights lose their inset position.
             .toolbar {
                 ToolbarSpacer(.flexible)
-                if let isOn = isEnabled(pane) {
-                    ToolbarItem {
-                        Toggle("Enable \(pane.title)", isOn: isOn)
-                            .toggleStyle(.switch)
-                            .controlSize(.mini)
-                            .labelsHidden()
-                            .help(isOn.wrappedValue ? "Turn \(pane.title) off" : "Turn \(pane.title) on")
-                    }
-                    .sharedBackgroundVisibility(.hidden)
+                if isEnabled(pane) != nil {
+                    ToolbarItem { FeatureSwitch(pane: pane, model: model) }
+                        .sharedBackgroundVisibility(.hidden)
                 } else {
                     ToolbarItem {
                         Color.clear.frame(width: 1, height: 1)
@@ -245,6 +239,10 @@ extension SettingsView {
     /// The pane's on/off switch: its launcher feature's, or the Hyper key, mouse or display
     /// brightness master switch. Nil for panes that can't be turned off.
     private func isEnabled(_ pane: SettingsPane) -> Binding<Bool>? {
+        Self.isEnabled(pane, model: model)
+    }
+
+    fileprivate static func isEnabled(_ pane: SettingsPane, model: AppModel) -> Binding<Bool>? {
         if let feature = pane.feature {
             let launcher = model.launcher
             return Binding(get: { launcher.isEnabled(feature) }, set: { launcher.setEnabled($0, for: feature) })
@@ -261,6 +259,30 @@ extension SettingsView {
             return Binding(get: { displays.config.enabled }, set: { displays.config.enabled = $0 })
         default:
             return nil
+        }
+    }
+}
+
+/// The pane's on/off switch in the toolbar.
+private struct FeatureSwitch: View {
+    let pane: SettingsPane
+    let model: AppModel
+
+    /// Whether the switch has had its first update.
+    @State private var updated = false
+
+    var body: some View {
+        if let isOn = SettingsView.isEnabled(pane, model: model) {
+            Toggle("Enable \(pane.title)", isOn: isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                // The toolbar pads the item 9pt more each side when it first lays it out than
+                // when it updates it, so the switch drifted right on its first flip. Updating
+                // straight away with that padding added keeps it in the same place for good.
+                .padding(.horizontal, updated ? 9 : 0)
+                .help(isOn.wrappedValue ? "Turn \(pane.title) off" : "Turn \(pane.title) on")
+                .task { updated = true }
         }
     }
 }
