@@ -73,7 +73,7 @@ impl SmoothScroller {
     /// with macOS's sign convention, after the tap has applied direction and axis modifiers.
     /// Pass the raw tick count (`kCGScrollWheelEventDeltaAxis*`, normally ±1), not
     /// macOS-accelerated values: acceleration is applied here.
-    /// `precise` asks for small, unsmoothed, momentum-free steps.
+    /// `precise` asks for small, unsmoothed steps.
     pub fn feed(&self, vertical: f64, horizontal: f64, precise: bool) {
         let now = clock();
         self.shared
@@ -196,17 +196,14 @@ fn post(frame: &Frame) {
     }
 }
 
-/// Gesture events carry no momentum phase and momentum events no gesture phase.
+/// The ease-out is part of the gesture itself, so there is never a momentum phase.
 fn phase_fields(phase: Phase) -> (CGScrollPhase, CGMomentumScrollPhase) {
-    let none = CGScrollPhase(0);
-    match phase {
-        Phase::Began => (CGScrollPhase::Began, CGMomentumScrollPhase::None),
-        Phase::Changed => (CGScrollPhase::Changed, CGMomentumScrollPhase::None),
-        Phase::Ended => (CGScrollPhase::Ended, CGMomentumScrollPhase::None),
-        Phase::MomentumBegan => (none, CGMomentumScrollPhase::Begin),
-        Phase::MomentumChanged => (none, CGMomentumScrollPhase::Continue),
-        Phase::MomentumEnded => (none, CGMomentumScrollPhase::End),
-    }
+    let scroll = match phase {
+        Phase::Began => CGScrollPhase::Began,
+        Phase::Changed => CGScrollPhase::Changed,
+        Phase::Ended => CGScrollPhase::Ended,
+    };
+    (scroll, CGMomentumScrollPhase::None)
 }
 
 #[cfg(test)]
@@ -218,7 +215,7 @@ mod tests {
         let frame = Frame {
             dx: -3,
             dy: 17,
-            phase: Phase::MomentumChanged,
+            phase: Phase::Changed,
         };
         let event = make_event(&frame).expect("event");
         let e = Some(&*event);
@@ -232,8 +229,8 @@ mod tests {
             (fixed - 1.7).abs() < 0.01,
             "fixed-point delta is in lines: {fixed}"
         );
-        assert_eq!(get(CGEventField::ScrollWheelEventScrollPhase), 0);
-        assert_eq!(get(CGEventField::ScrollWheelEventMomentumPhase), 2);
+        assert_eq!(get(CGEventField::ScrollWheelEventScrollPhase), 2);
+        assert_eq!(get(CGEventField::ScrollWheelEventMomentumPhase), 0);
         assert_eq!(
             get(CGEventField::EventSourceUserData),
             SYNTHETIC_EVENT_MARKER
