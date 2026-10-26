@@ -29,6 +29,8 @@ pub struct LauncherConfig {
     pub calculator: bool,
     pub quicklinks: Vec<Quicklink>,
     pub commands: Vec<ShellCommand>,
+    pub clipboard: ClipboardConfig,
+    pub files: FileSearchConfig,
 }
 
 impl Default for LauncherConfig {
@@ -42,6 +44,70 @@ impl Default for LauncherConfig {
             calculator: true,
             quicklinks: default_quicklinks(),
             commands: Vec::new(),
+            clipboard: ClipboardConfig::default(),
+            files: FileSearchConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct ClipboardConfig {
+    /// Record clipboard history. Off also stops monitoring entirely.
+    pub enabled: bool,
+    /// Opens the palette in clipboard history.
+    pub hotkey: Option<Hotkey>,
+    /// Oldest unpinned items are dropped beyond this many.
+    pub max_items: u32,
+    /// Unpinned items older than this are dropped.
+    pub retention_days: u32,
+    /// Bundle ids whose copies are never recorded (password managers by default). Copies
+    /// marked concealed or transient by the source app are never recorded either.
+    pub ignored_apps: Vec<String>,
+    /// Choosing an item pastes it into the frontmost app (⌘V); otherwise it's only copied.
+    pub paste_on_open: bool,
+}
+
+impl Default for ClipboardConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hotkey: Some(Hotkey {
+                key_code: KEY_V,
+                modifiers: vec![Modifier::Option, Modifier::Command],
+            }),
+            max_items: 500,
+            retention_days: 30,
+            ignored_apps: [
+                "com.1password.1password",
+                "com.agilebits.onepassword7",
+                "com.bitwarden.desktop",
+                "com.apple.keychainaccess",
+                "com.apple.Passwords",
+            ]
+            .map(String::from)
+            .to_vec(),
+            paste_on_open: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct FileSearchConfig {
+    /// Opens the palette in file search.
+    pub hotkey: Option<Hotkey>,
+    /// Folders searched (`~` allowed). Spotlight indexes more, but results stay in these.
+    pub scopes: Vec<String>,
+}
+
+impl Default for FileSearchConfig {
+    fn default() -> Self {
+        Self {
+            hotkey: None,
+            scopes: ["~/Desktop", "~/Documents", "~/Downloads"]
+                .map(String::from)
+                .to_vec(),
         }
     }
 }
@@ -111,6 +177,8 @@ pub enum CommandOutput {
 
 /// `kVK_Space`.
 pub const KEY_SPACE: u16 = 0x31;
+/// `kVK_ANSI_V`.
+pub const KEY_V: u16 = 0x09;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Record)]
 pub struct Hotkey {

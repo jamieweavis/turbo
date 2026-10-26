@@ -131,6 +131,12 @@ final class LauncherObserverBridge: LauncherObserver {
         }
     }
 
+    // TODO(step 5): open the palette in this mode.
+    func showMode(mode: PaletteMode) {}
+
+    // TODO(step 5): refresh clipboard history.
+    func clipboardChanged() {}
+
     func commandFinished(name: String, output: String, success: Bool) {
         DispatchQueue.main.async { [onCommandFinished] in
             MainActor.assumeIsolated { onCommandFinished(name, output, success) }

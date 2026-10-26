@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::NSString;
 
-use super::LauncherObserver;
+use super::{LauncherObserver, PaletteMode};
 use crate::config::{Hotkey, LauncherConfig, Modifier};
 use crate::error::CoreError;
 
@@ -52,6 +52,7 @@ unsafe impl Send for Carbon {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Target {
     Palette,
+    Mode(PaletteMode),
     App(String),
 }
 
@@ -163,6 +164,12 @@ impl Inner {
                     observer.toggle_palette();
                 }
             }
+            Some(Target::Mode(mode)) => {
+                let observer = self.observer.lock().unwrap().clone();
+                if let Some(observer) = observer {
+                    observer.show_mode(mode);
+                }
+            }
             Some(Target::App(bundle_id)) => {
                 if let Err(error) = toggle_app(&bundle_id) {
                     eprintln!("jaycast: app hotkey for {bundle_id}: {error}");
@@ -195,6 +202,20 @@ fn plan(config: &LauncherConfig) -> Plan {
         .hotkey
         .iter()
         .map(|hotkey| (hotkey.clone(), Target::Palette))
+        .chain(
+            config
+                .clipboard
+                .hotkey
+                .iter()
+                .map(|hotkey| (hotkey.clone(), Target::Mode(PaletteMode::Clipboard))),
+        )
+        .chain(
+            config
+                .files
+                .hotkey
+                .iter()
+                .map(|hotkey| (hotkey.clone(), Target::Mode(PaletteMode::Files))),
+        )
         .chain(
             config
                 .app_hotkeys
@@ -500,6 +521,34 @@ mod tests {
         );
     }
 
+    /// The defaults minus the clipboard/file hotkeys, so plans only hold what a test lists.
+    fn without_mode_hotkeys() -> LauncherConfig {
+        let mut config = LauncherConfig::default();
+        config.clipboard.hotkey = None;
+        config.files.hotkey = None;
+        config
+    }
+
+    #[test]
+    fn mode_hotkeys_follow_the_palette() {
+        let mut config = without_mode_hotkeys();
+        config.clipboard.hotkey = Some(hotkey(9, &[Modifier::Option, Modifier::Command]));
+        config.files.hotkey = Some(hotkey(3, &[Modifier::Option, Modifier::Command]));
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![
+                Target::Palette,
+                Target::Mode(PaletteMode::Clipboard),
+                Target::Mode(PaletteMode::Files),
+            ]
+        );
+    }
+
     #[test]
     fn plan_numbers_palette_first_then_apps() {
         let config = LauncherConfig {
@@ -508,7 +557,7 @@ mod tests {
                 app("com.apple.Safari", hotkey(1, &[Modifier::Control])),
                 app("com.apple.Terminal", hotkey(17, &[Modifier::Control])),
             ],
-            ..LauncherConfig::default()
+            ..without_mode_hotkeys()
         };
         let plan = plan(&config);
         assert!(plan.duplicates.is_empty());
@@ -535,7 +584,7 @@ mod tests {
                 "com.apple.Safari",
                 hotkey(KEY_SPACE, &[Modifier::Shift, Modifier::Command]),
             )],
-            ..LauncherConfig::default()
+            ..without_mode_hotkeys()
         };
         let plan = plan(&config);
         assert_eq!(plan.hotkeys.len(), 1);
@@ -548,7 +597,7 @@ mod tests {
         let config = LauncherConfig {
             hotkey: None,
             app_hotkeys: vec![app("com.apple.Safari", hotkey(1, &[Modifier::Control]))],
-            ..LauncherConfig::default()
+            ..without_mode_hotkeys()
         };
         let plan = plan(&config);
         assert_eq!(plan.hotkeys.len(), 1);

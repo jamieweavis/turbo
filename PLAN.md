@@ -21,8 +21,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
-| 4 | Calculator & conversions, quicklinks & shell commands | 🧪 Built, awaiting hands-on testing |
-| 5 | Clipboard history, file search | ⏳ |
+| 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
+| 5 | Clipboard history, file search | 🚧 In progress |
 | 6 | Window management, snippets / text expansion | ⏳ |
 
 ### Step 1: Mouse
@@ -74,8 +74,14 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ### Step 5: Clipboard history, file search
 
-- [ ] Clipboard history for text and images (SQLite), searchable, paste from the palette
+- [x] Shared core API: palette modes (search / clipboard / files) with entries in search and
+      their own hotkeys (clipboard ⌥⌘V by default), `ClipboardConfig`, `FileSearchConfig`,
+      `ClipboardItem`, `FileResult`, `Core` clipboard and file methods
+- [ ] Clipboard history: monitor, SQLite store, text/links/images/files, ignore concealed copies
+      and password managers, retention, pinning, paste into the frontmost app
 - [ ] File search through Spotlight, scoped to chosen folders
+- [ ] Shell: clipboard and file modes in the palette (preview, actions, Quick Look), Clipboard
+      and File Search settings
 
 ### Step 6: Window management, snippets
 

@@ -3,9 +3,11 @@
 
 uniffi::setup_scaffolding!();
 
+mod clipboard;
 mod config;
 mod display;
 mod error;
+mod files;
 mod input;
 mod launcher;
 mod pasteboard;
@@ -13,12 +15,16 @@ mod pasteboard;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use clipboard::ClipboardHistory;
+pub use clipboard::{ClipboardItem, ClipboardKind};
 pub use config::*;
 use display::{BrightnessKeyTap, DisplayManager};
 pub use display::{DisplayInfo, DisplayObserver};
 pub use error::CoreError;
+pub use files::FileResult;
+use files::FileSearch;
 use input::InputEngine;
-pub use launcher::{AppInfo, LauncherObserver, OpenOutcome, ResultKind, SearchResult};
+pub use launcher::{AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult};
 use launcher::{HotkeyManager, Launcher};
 
 /// Basic facts about the core, shown in the shell so the FFI is exercised end to end.
@@ -46,6 +52,8 @@ pub struct Core {
     brightness_keys: BrightnessKeyTap,
     launcher: Arc<Launcher>,
     hotkeys: HotkeyManager,
+    clipboard: Arc<ClipboardHistory>,
+    files: FileSearch,
 }
 
 #[uniffi::export]
@@ -61,6 +69,8 @@ impl Core {
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
         let launcher = Launcher::new(&data_dir, config.launcher.clone());
         let hotkeys = HotkeyManager::new();
+        let clipboard = ClipboardHistory::new(&data_dir, config.launcher.clipboard.clone());
+        let files = FileSearch::new(config.launcher.files.clone());
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
@@ -69,6 +79,8 @@ impl Core {
             brightness_keys,
             launcher,
             hotkeys,
+            clipboard,
+            files,
         }))
     }
 
@@ -124,6 +136,8 @@ impl Core {
         config.launcher = launcher.clone();
         self.store.save(&config)?;
         launcher::apply_config(&self.hotkeys, &launcher);
+        self.clipboard.set_config(launcher.clipboard.clone());
+        self.files.set_config(launcher.files.clone());
         self.launcher.set_config(launcher);
         Ok(())
     }
@@ -148,6 +162,7 @@ impl Core {
     /// Registers the shell's observer for the palette hotkey and app index changes.
     pub fn set_launcher_observer(&self, observer: Option<Arc<dyn LauncherObserver>>) {
         self.launcher.set_observer(observer.clone());
+        self.clipboard.set_observer(observer.clone());
         self.hotkeys.set_observer(observer);
     }
 
@@ -160,6 +175,44 @@ impl Core {
     /// each query leads to.
     pub fn open_result(&self, id: String, query: String) -> Result<OpenOutcome, CoreError> {
         self.launcher.open(&id, &query)
+    }
+
+    /// Clipboard history: pinned first, then newest; `query` filters by text.
+    pub fn clipboard_items(&self, query: String, limit: u32) -> Vec<ClipboardItem> {
+        self.clipboard.items(&query, limit as usize)
+    }
+
+    /// Puts an item back on the clipboard and, if `paste`, pastes it into the frontmost app.
+    /// Close the palette first so the paste lands in the right place.
+    pub fn paste_clipboard_item(&self, id: i64, paste: bool) -> Result<(), CoreError> {
+        self.clipboard.paste(id, paste)
+    }
+
+    pub fn delete_clipboard_item(&self, id: i64) -> Result<(), CoreError> {
+        self.clipboard.delete(id)
+    }
+
+    pub fn set_clipboard_item_pinned(&self, id: i64, pinned: bool) -> Result<(), CoreError> {
+        self.clipboard.set_pinned(id, pinned)
+    }
+
+    /// Deletes every unpinned item.
+    pub fn clear_clipboard_history(&self) -> Result<(), CoreError> {
+        self.clipboard.clear()
+    }
+
+    /// Spotlight file search in the configured folders. Blocks briefly: call it off the
+    /// main thread.
+    pub fn search_files(&self, query: String, limit: u32) -> Result<Vec<FileResult>, CoreError> {
+        self.files.search(&query, limit as usize)
+    }
+
+    pub fn open_file(&self, path: String) -> Result<(), CoreError> {
+        self.files.open(&path)
+    }
+
+    pub fn reveal_file(&self, path: String) -> Result<(), CoreError> {
+        self.files.reveal(&path)
     }
 
     /// Every indexed app, sorted by name.

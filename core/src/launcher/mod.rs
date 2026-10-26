@@ -72,6 +72,49 @@ pub enum OpenOutcome {
     Copied {
         text: String,
     },
+    /// Switch the palette to another mode (clipboard history, file search).
+    ShowMode {
+        mode: PaletteMode,
+    },
+}
+
+/// What the palette is showing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
+pub enum PaletteMode {
+    Search,
+    Clipboard,
+    Files,
+}
+
+/// Palette modes listed in search, so they can be found without their hotkeys:
+/// (mode, id, title, keywords, SF Symbol).
+type ModeEntry = (
+    PaletteMode,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+    &'static str,
+);
+
+const MODES: &[ModeEntry] = &[
+    (
+        PaletteMode::Clipboard,
+        "clipboard",
+        "Clipboard History",
+        &["paste", "copied", "pasteboard"],
+        "doc.on.clipboard",
+    ),
+    (
+        PaletteMode::Files,
+        "files",
+        "Search Files",
+        &["find", "documents", "finder", "spotlight"],
+        "doc.text.magnifyingglass",
+    ),
+];
+
+fn mode_for_id(id: &str) -> Option<PaletteMode> {
+    MODES.iter().find(|m| m.1 == id).map(|m| m.0)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -92,6 +135,12 @@ pub trait LauncherObserver: Send + Sync {
     /// A shell command with `CommandOutput::Show` finished (or any command failed).
     /// Called from a background thread.
     fn command_finished(&self, name: String, output: String, success: bool);
+    /// A mode's hotkey was pressed: show the palette in that mode (or hide it if it's
+    /// already showing that mode). Called on the main thread.
+    fn show_mode(&self, mode: PaletteMode);
+    /// Clipboard history changed (a new copy, or items expired). Called from a background
+    /// thread.
+    fn clipboard_changed(&self);
 }
 
 /// Calculator results go above everything; a quicklink or command whose keyword was typed
@@ -146,6 +195,7 @@ impl Index {
 struct SystemEntry {
     id: String,
     title: String,
+    subtitle: &'static str,
     title_match: Prepared,
     keywords: Vec<Prepared>,
     symbol: String,
@@ -157,6 +207,7 @@ impl SystemEntry {
         Self {
             id: format!("system:{}", action.id),
             title: action.title.to_owned(),
+            subtitle: "System",
             title_match: Prepared::new(action.title),
             keywords: action.keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: action.symbol.to_owned(),
@@ -164,11 +215,23 @@ impl SystemEntry {
         }
     }
 
+    fn mode(&(_, id, title, keywords, symbol): &ModeEntry) -> Self {
+        Self {
+            id: format!("mode:{id}"),
+            title: title.to_owned(),
+            subtitle: "Jaycast",
+            title_match: Prepared::new(title),
+            keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
+            symbol: symbol.to_owned(),
+            needs_confirmation: false,
+        }
+    }
+
     fn result(&self) -> SearchResult {
         SearchResult {
             id: self.id.clone(),
             title: self.title.clone(),
-            subtitle: "System".into(),
+            subtitle: self.subtitle.into(),
             kind: ResultKind::SystemAction,
             path: None,
             symbol: Some(self.symbol.clone()),
@@ -185,7 +248,11 @@ impl Launcher {
         let store = UsageStore::new(data_dir);
         let launcher = Arc::new(Self {
             index: RwLock::new(Arc::new(Index::default())),
-            system: system::actions().iter().map(SystemEntry::new).collect(),
+            system: MODES
+                .iter()
+                .map(SystemEntry::mode)
+                .chain(system::actions().iter().map(SystemEntry::new))
+                .collect(),
             usage: Mutex::new(store.load()),
             store,
             observer: Mutex::new(None),
@@ -254,7 +321,9 @@ impl Launcher {
     /// Opens a result from `search` and records the choice for ranking.
     pub fn open(&self, id: &str, query: &str) -> Result<OpenOutcome, CoreError> {
         let mut outcome = OpenOutcome::Done;
-        if let Some(text) = id.strip_prefix("calc:") {
+        if let Some(mode) = id.strip_prefix("mode:").and_then(mode_for_id) {
+            outcome = OpenOutcome::ShowMode { mode };
+        } else if let Some(text) = id.strip_prefix("calc:") {
             crate::pasteboard::copy(text)?;
             // Calculations aren't worth remembering for ranking.
             return Ok(OpenOutcome::Copied {

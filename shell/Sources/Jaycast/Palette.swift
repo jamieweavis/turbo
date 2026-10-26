@@ -276,6 +276,9 @@ final class PaletteModel {
                 onClose?()
             case .copied(let text):
                 showCopied(text)
+            case .showMode:
+                // TODO(step 5): switch to clipboard history / file search.
+                onClose?()
             }
         } catch {
             confirming = nil
