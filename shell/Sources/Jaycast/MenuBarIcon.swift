@@ -12,15 +12,13 @@ enum MenuBarIcon {
             transform.translateX(by: 0, yBy: 0.8)
             transform.concat()
 
-            // One silhouette: pointed nose, straight body, curved swept fins.
+            // One silhouette: pointed nose, straight body, curved fins joined by one arc across the base.
             let rocket = NSBezierPath()
             rocket.move(to: NSPoint(x: 0, y: 8))
             rocket.curve(to: NSPoint(x: 2.8, y: 1.5), controlPoint1: NSPoint(x: 1.8, y: 6.4), controlPoint2: NSPoint(x: 2.8, y: 4.2))
             rocket.line(to: NSPoint(x: 2.8, y: -1))
             rocket.curve(to: NSPoint(x: 5, y: -4.5), controlPoint1: NSPoint(x: 4.6, y: -1.6), controlPoint2: NSPoint(x: 5.2, y: -3))
-            rocket.curve(to: NSPoint(x: 2.8, y: -3.8), controlPoint1: NSPoint(x: 4.2, y: -3.9), controlPoint2: NSPoint(x: 3.4, y: -3.8))
-            rocket.line(to: NSPoint(x: -2.8, y: -3.8))
-            rocket.curve(to: NSPoint(x: -5, y: -4.5), controlPoint1: NSPoint(x: -3.4, y: -3.8), controlPoint2: NSPoint(x: -4.2, y: -3.9))
+            rocket.curve(to: NSPoint(x: -5, y: -4.5), controlPoint1: NSPoint(x: 2, y: -2.6), controlPoint2: NSPoint(x: -2, y: -2.6))
             rocket.curve(to: NSPoint(x: -2.8, y: -1), controlPoint1: NSPoint(x: -5.2, y: -3), controlPoint2: NSPoint(x: -4.6, y: -1.6))
             rocket.line(to: NSPoint(x: -2.8, y: 1.5))
             rocket.curve(to: NSPoint(x: 0, y: 8), controlPoint1: NSPoint(x: -2.8, y: 4.2), controlPoint2: NSPoint(x: -1.8, y: 6.4))
