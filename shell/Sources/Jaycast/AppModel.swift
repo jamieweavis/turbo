@@ -9,6 +9,8 @@ final class AppModel {
     let accessibility = AccessibilityPermission()
     let mouse: MouseSettings
     let displays: DisplaySettings
+    let launcher: LauncherSettings
+    @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
     private(set) var isInputRunning = false
     private(set) var inputError: String?
@@ -20,6 +22,8 @@ final class AppModel {
         mouse = MouseSettings(core: core)
         displays = DisplaySettings(core: core)
         brightnessIndicator = BrightnessIndicator(settings: displays)
+        launcher = LauncherSettings(core: core)
+        palette = PaletteWindowController(core: core)
     }
 
     /// Starts input as soon as Accessibility is granted (now or later) and stops it if revoked.
@@ -30,6 +34,17 @@ final class AppModel {
         core.setDisplayObserver(observer: DisplayObserverBridge(settings: displays))
         // Catch anything that changed between init and registering the observer.
         displays.displaysChanged(core.displays())
+
+        core.setLauncherObserver(observer: LauncherObserverBridge(
+            onTogglePalette: { [palette] in palette.toggle() },
+            onAppsChanged: { [launcher, palette] in
+                launcher.refreshApps()
+                if palette.isVisible { palette.model.search() }
+            }
+        ))
+        // Hotkeys don't need Accessibility, so they work before it's granted.
+        core.startHotkeys()
+        launcher.refreshApps()
 
         accessibility.startWatching()
         Task {

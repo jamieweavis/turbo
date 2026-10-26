@@ -7,6 +7,9 @@ struct ShortcutRecorder: View {
     @Binding var shortcut: Shortcut?
     /// Start listening as soon as the recorder appears, e.g. right after choosing the action.
     var recordsOnAppear = false
+    /// For global hotkeys: a bare key (other than F1–F20) would swallow normal typing, so
+    /// it's refused with a beep and recording continues.
+    var requiresModifier = false
 
     @State private var monitor: Any?
 
@@ -27,7 +30,12 @@ struct ShortcutRecorder: View {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             MainActor.assumeIsolated {
                 let modifiers = Modifier.from(event.modifierFlags)
-                if !(event.keyCode == UInt16(kVK_Escape) && modifiers.isEmpty) {
+                let isEscape = event.keyCode == UInt16(kVK_Escape) && modifiers.isEmpty
+                if !isEscape, requiresModifier, modifiers.isEmpty, !KeyNames.isFunctionKey(event.keyCode) {
+                    NSSound.beep()
+                    return
+                }
+                if !isEscape {
                     shortcut = Shortcut(keyCode: event.keyCode, modifiers: modifiers)
                 }
                 stopRecording()

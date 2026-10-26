@@ -155,6 +155,17 @@ enum ActionKind: CaseIterable, Identifiable {
     }
 }
 
+extension Hotkey {
+    /// Like menus show it: ⌥Space, ⌘⇧K.
+    @MainActor
+    var title: String { Shortcut(self).title }
+
+    /// Same key and modifiers, regardless of modifier order.
+    func matches(_ other: Hotkey) -> Bool {
+        keyCode == other.keyCode && Set(modifiers) == Set(other.modifiers)
+    }
+}
+
 extension Action {
     @MainActor
     var title: String {
@@ -169,6 +180,19 @@ struct Shortcut: Equatable {
     var keyCode: UInt16
     var modifiers: [Modifier]
 
+    init(keyCode: UInt16, modifiers: [Modifier]) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+    }
+
+    init(_ hotkey: Hotkey) {
+        self.init(keyCode: hotkey.keyCode, modifiers: hotkey.modifiers)
+    }
+
+    var hotkey: Hotkey {
+        Hotkey(keyCode: keyCode, modifiers: modifiers)
+    }
+
     @MainActor
     var title: String {
         Modifier.allCases.filter(modifiers.contains).map(\.symbol).joined() + KeyNames.name(for: keyCode)
@@ -182,15 +206,20 @@ enum KeyNames {
         special[Int(keyCode)] ?? translated(keyCode) ?? "Key \(keyCode)"
     }
 
+    static func isFunctionKey(_ keyCode: UInt16) -> Bool {
+        functionKeys.contains(Int(keyCode))
+    }
+
+    private static let functionKeys = [
+        kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10,
+        kVK_F11, kVK_F12, kVK_F13, kVK_F14, kVK_F15, kVK_F16, kVK_F17, kVK_F18, kVK_F19, kVK_F20,
+    ]
+
     private static let special: [Int: String] = {
         var names = [
             kVK_Return: "↩", kVK_Tab: "⇥", kVK_Space: "Space", kVK_Delete: "⌫", kVK_ForwardDelete: "⌦",
             kVK_Escape: "⎋", kVK_LeftArrow: "←", kVK_RightArrow: "→", kVK_UpArrow: "↑", kVK_DownArrow: "↓",
             kVK_Home: "↖", kVK_End: "↘", kVK_PageUp: "⇞", kVK_PageDown: "⇟", kVK_ANSI_KeypadEnter: "⌤",
-        ]
-        let functionKeys = [
-            kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10,
-            kVK_F11, kVK_F12, kVK_F13, kVK_F14, kVK_F15, kVK_F16, kVK_F17, kVK_F18, kVK_F19, kVK_F20,
         ]
         for (index, keyCode) in functionKeys.enumerated() {
             names[keyCode] = "F\(index + 1)"

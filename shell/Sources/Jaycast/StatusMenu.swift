@@ -13,6 +13,13 @@ struct StatusMenu: View {
         @Bindable var mouse = model.mouse
 
         VStack(alignment: .leading, spacing: 12) {
+            MenuRow(title: "Open Launcher", systemImage: "magnifyingglass", detail: model.launcher.config.hotkey?.title) {
+                dismiss()
+                model.palette.show()
+            }
+
+            Divider()
+
             if model.displays.config.enabled, !model.displays.displays.isEmpty {
                 displays
                 Divider()
@@ -123,13 +130,21 @@ struct DisplayBrightnessRow: View {
 private struct MenuRow: View {
     let title: String
     let systemImage: String
+    /// Shown trailing in secondary text, e.g. the shortcut.
+    var detail: String? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
+            HStack {
+                Label(title, systemImage: systemImage)
+                Spacer()
+                if let detail {
+                    Text(detail).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
     }
