@@ -32,6 +32,7 @@ use objc2_foundation::{NSString, NSURL};
 
 use crate::config::LauncherConfig;
 use crate::error::CoreError;
+use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
 use crate::windows::{self, WindowManager};
 use apps::App;
 use calc::Calculator;
@@ -86,6 +87,10 @@ pub enum OpenOutcome {
     },
     /// Close the palette and show the colour picker's magnifier.
     PickColor,
+    /// Keep Awake was turned on or off: close the palette and confirm it.
+    KeepAwake {
+        active: bool,
+    },
 }
 
 /// What the palette is showing.
@@ -156,6 +161,39 @@ const MODES: &[ModeEntry] = &[
 /// The launcher result that opens the colour picker's magnifier.
 const PICK_COLOR_ID: &str = "color:pick";
 
+/// Keep Awake's commands, like its hotkeys: (command, id, title, SF Symbol). Results use
+/// `keep-awake:<id>`.
+const KEEP_AWAKE_COMMANDS: &[(KeepAwakeCommand, &str, &str, &str)] = &[
+    (
+        KeepAwakeCommand::Toggle,
+        "toggle",
+        "Toggle Keep Awake",
+        "eye",
+    ),
+    (KeepAwakeCommand::On, "on", "Turn On Keep Awake", "eye.fill"),
+    (
+        KeepAwakeCommand::Off,
+        "off",
+        "Turn Off Keep Awake",
+        "eye.slash",
+    ),
+];
+
+/// The coffee-flavoured names it went by, so they still find it.
+const KEEP_AWAKE_KEYWORDS: &[&str] = &[
+    "caffeinate",
+    "caffeine",
+    "coffee",
+    "amphetamine",
+    "stay awake",
+    "prevent sleep",
+    "no sleep",
+];
+
+fn keep_awake_command_for_id(id: &str) -> Option<KeepAwakeCommand> {
+    KEEP_AWAKE_COMMANDS.iter().find(|c| c.1 == id).map(|c| c.0)
+}
+
 fn mode_for_id(id: &str) -> Option<PaletteMode> {
     MODES.iter().find(|m| m.1 == id).map(|m| m.0)
 }
@@ -207,9 +245,9 @@ pub trait LauncherObserver: Send + Sync {
     /// Clipboard history changed (a new copy, or items expired). Called from a background
     /// thread.
     fn clipboard_changed(&self);
-    /// A caffeinate hotkey turned keeping the Mac awake on or off. Called on the main
+    /// A keep awake hotkey turned keeping the Mac awake on or off. Called on the main
     /// thread.
-    fn caffeinate_changed(&self, active: bool);
+    fn keep_awake_changed(&self, active: bool);
     /// The colour picker hotkey was pressed: show the magnifier. Called on the main thread.
     fn pick_color(&self);
 }
@@ -233,6 +271,7 @@ pub(crate) struct Launcher {
     config: RwLock<Arc<LauncherConfig>>,
     calculator: Calculator,
     windows: Arc<WindowManager>,
+    keep_awake: Arc<KeepAwake>,
 }
 
 #[derive(Default)]
@@ -331,6 +370,22 @@ impl SystemEntry {
         }
     }
 
+    fn keep_awake(&(_, id, title, symbol): &(KeepAwakeCommand, &str, &str, &str)) -> Self {
+        Self {
+            id: format!("keep-awake:{id}"),
+            title: title.to_owned(),
+            subtitle: "Jaycast",
+            title_match: Prepared::new(title),
+            keywords: KEEP_AWAKE_KEYWORDS
+                .iter()
+                .map(|k| Prepared::new(k))
+                .collect(),
+            symbol: symbol.to_owned(),
+            needs_confirmation: false,
+            kind: ResultKind::SystemAction,
+        }
+    }
+
     fn result(&self) -> SearchResult {
         SearchResult {
             id: self.id.clone(),
@@ -348,7 +403,12 @@ impl SystemEntry {
 impl Launcher {
     /// Starts indexing on a background thread; `data_dir` holds the usage history (and the
     /// currency rate cache).
-    pub fn new(data_dir: &Path, config: LauncherConfig, windows: Arc<WindowManager>) -> Arc<Self> {
+    pub fn new(
+        data_dir: &Path,
+        config: LauncherConfig,
+        windows: Arc<WindowManager>,
+        keep_awake: Arc<KeepAwake>,
+    ) -> Arc<Self> {
         let store = UsageStore::new(data_dir);
         let launcher = Arc::new(Self {
             index: RwLock::new(Arc::new(Index::default())),
@@ -356,6 +416,7 @@ impl Launcher {
                 .iter()
                 .map(SystemEntry::mode)
                 .chain([SystemEntry::pick_color()])
+                .chain(KEEP_AWAKE_COMMANDS.iter().map(SystemEntry::keep_awake))
                 .chain(system::actions().iter().map(SystemEntry::new))
                 .chain(windows::ACTIONS.iter().map(SystemEntry::window))
                 .collect(),
@@ -366,6 +427,7 @@ impl Launcher {
             config: RwLock::new(Arc::new(config)),
             calculator: Calculator::new(data_dir),
             windows,
+            keep_awake,
         });
 
         let weak = Arc::downgrade(&launcher);
@@ -433,6 +495,15 @@ impl Launcher {
             outcome = OpenOutcome::ShowMode { mode };
         } else if id == PICK_COLOR_ID {
             outcome = OpenOutcome::PickColor;
+        } else if let Some(command) = id
+            .strip_prefix("keep-awake:")
+            .and_then(keep_awake_command_for_id)
+        {
+            self.keep_awake
+                .set_active(command.resolve(self.keep_awake.is_active()))?;
+            outcome = OpenOutcome::KeepAwake {
+                active: self.keep_awake.is_active(),
+            };
         } else if let Some(text) = id.strip_prefix("calc:") {
             crate::pasteboard::copy(text)?;
             // Calculations aren't worth remembering for ranking.
@@ -813,6 +884,36 @@ mod tests {
             assert_eq!(find(query)[0].id, "mode:emoji", "{query}");
         }
         assert_eq!(mode_for_id("colors"), Some(PaletteMode::Colors));
+    }
+
+    #[test]
+    fn keep_awake_is_typable_by_its_coffee_names() {
+        let entries: Vec<SystemEntry> = KEEP_AWAKE_COMMANDS
+            .iter()
+            .map(SystemEntry::keep_awake)
+            .collect();
+        let find = |query: &str| {
+            rank(
+                &fuzzy::fold_query(query),
+                &Index::default(),
+                &entries,
+                Vec::new(),
+                &Usage::default(),
+                NOW,
+                8,
+            )
+        };
+        for query in ["keep awake", "caffeinate", "coffee", "amphetamine"] {
+            assert!(
+                find(query).iter().any(|r| r.id == "keep-awake:toggle"),
+                "{query}"
+            );
+        }
+        assert_eq!(find("turn on keep awake")[0].id, "keep-awake:on");
+        assert_eq!(
+            keep_awake_command_for_id("off"),
+            Some(KeepAwakeCommand::Off)
+        );
     }
 
     #[test]

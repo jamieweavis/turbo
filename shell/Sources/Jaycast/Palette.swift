@@ -350,6 +350,8 @@ final class PaletteModel {
     @ObservationIgnored var onQuickLook: ((URL) -> Void)?
     /// Shows the colour picker's magnifier (after the palette has closed).
     @ObservationIgnored var onPickColor: (() -> Void)?
+    /// A Keep Awake command turned it on or off here.
+    @ObservationIgnored var onKeepAwakeChanged: ((Bool) -> Void)?
     /// A colour was deleted from the history here.
     @ObservationIgnored var onColorsChanged: (() -> Void)?
     @ObservationIgnored private let core: Core
@@ -605,6 +607,9 @@ final class PaletteModel {
                 enter(mode)
             case .pickColor:
                 pickColor()
+            case .keepAwake(let active):
+                onClose?()
+                onKeepAwakeChanged?(active)
             }
         } catch {
             confirming = nil

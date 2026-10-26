@@ -11,7 +11,7 @@ final class AppModel {
     let displays: DisplaySettings
     let launcher: LauncherSettings
     let hyperKey: HyperKeySettings
-    let caffeinate: CaffeinateState
+    let keepAwake: KeepAwakeState
     let colorPicker: ColorPickerState
     @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
@@ -29,11 +29,15 @@ final class AppModel {
         brightnessIndicator = BrightnessIndicator(settings: displays)
         launcher = LauncherSettings(core: core)
         hyperKey = HyperKeySettings(core: core)
-        caffeinate = CaffeinateState(core: core)
+        keepAwake = KeepAwakeState(core: core)
         colorPicker = ColorPickerState(core: core)
         palette = PaletteWindowController(core: core, settings: launcher)
         palette.model.onPickColor = { [colorPicker] in colorPicker.pick() }
         palette.model.onColorsChanged = { [colorPicker] in colorPicker.refresh() }
+        palette.model.onKeepAwakeChanged = { [keepAwake, pill] active in
+            keepAwake.refresh()
+            pill.show(.keepAwake(active))
+        }
         colorPicker.onPicked = { [pill] color, text in pill.show(.color(color, text: text)) }
     }
 
@@ -59,9 +63,9 @@ final class AppModel {
             onClipboardChanged: { [palette] in
                 if palette.isVisible { palette.model.refresh(ifShowing: .clipboard) }
             },
-            onCaffeinateChanged: { [caffeinate, pill] active in
-                caffeinate.refresh()
-                pill.show(.caffeinate(active))
+            onKeepAwakeChanged: { [keepAwake, pill] active in
+                keepAwake.refresh()
+                pill.show(.keepAwake(active))
             },
             onPickColor: { [colorPicker] in colorPicker.pick() }
         ))

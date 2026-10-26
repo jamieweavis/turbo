@@ -3,12 +3,12 @@ import Observation
 import SwiftUI
 
 /// A small Liquid Glass capsule near the top of the screen under the pointer, confirming an
-/// action that has no window of its own (a caffeinate hotkey, a picked colour). One panel,
+/// action that has no window of its own (a keep awake hotkey, a picked colour). One panel,
 /// reused: showing again swaps the content and restarts the timer.
 @MainActor
 final class Pill {
     enum Content: Equatable {
-        case caffeinate(Bool)
+        case keepAwake(Bool)
         case color(PickedColor, text: String)
     }
 
@@ -101,10 +101,10 @@ private struct PillView: View {
     var body: some View {
         HStack(spacing: 8) {
             switch state.content {
-            case .caffeinate(let active):
-                Image(systemName: active ? "cup.and.saucer.fill" : "cup.and.saucer")
+            case .keepAwake(let active):
+                Image(systemName: active ? "eye.fill" : "eye.slash")
                     .font(.system(size: 12, weight: .semibold))
-                Text(active ? "Caffeinate on" : "Caffeinate off")
+                Text(active ? "Keep Awake on" : "Keep Awake off")
             case .color(let color, let text):
                 Circle()
                     .fill(color.color)

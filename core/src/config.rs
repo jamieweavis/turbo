@@ -36,7 +36,9 @@ pub struct LauncherConfig {
     pub files: FileSearchConfig,
     pub windows: WindowConfig,
     pub snippets: SnippetsConfig,
-    pub caffeinate: CaffeinateConfig,
+    /// Was `caffeinate` before the rename; the alias keeps older configs.
+    #[serde(alias = "caffeinate")]
+    pub keep_awake: KeepAwakeConfig,
     pub color_picker: ColorPickerConfig,
 }
 
@@ -56,7 +58,7 @@ impl Default for LauncherConfig {
             files: FileSearchConfig::default(),
             windows: WindowConfig::default(),
             snippets: SnippetsConfig::default(),
-            caffeinate: CaffeinateConfig::default(),
+            keep_awake: KeepAwakeConfig::default(),
             color_picker: ColorPickerConfig::default(),
         }
     }
@@ -237,11 +239,10 @@ impl Default for SnippetsConfig {
     }
 }
 
-/// Keeping the Mac awake. Whether it's on isn't saved: like `caffeinate`, it ends when
-/// Jaycast quits.
+/// Keeping the Mac awake. Whether it's on lives beside the config, in `keep-awake.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
-pub struct CaffeinateConfig {
+pub struct KeepAwakeConfig {
     /// Keep the display on too, not just the system awake.
     pub keep_display_on: bool,
     pub toggle_hotkey: Option<Hotkey>,
@@ -249,7 +250,7 @@ pub struct CaffeinateConfig {
     pub off_hotkey: Option<Hotkey>,
 }
 
-impl Default for CaffeinateConfig {
+impl Default for KeepAwakeConfig {
     fn default() -> Self {
         Self {
             keep_display_on: true,
@@ -731,6 +732,13 @@ mod tests {
         let off: HyperKeyConfig = serde_json::from_str(r#"{"key":null}"#).unwrap();
         assert!(!off.enabled);
         assert_eq!(off.key, HyperKeySource::CapsLock);
+    }
+
+    #[test]
+    fn keep_awake_from_before_the_rename_keeps_its_settings() {
+        let config: LauncherConfig =
+            serde_json::from_str(r#"{"caffeinate":{"keep_display_on":false}}"#).unwrap();
+        assert!(!config.keep_awake.keep_display_on);
     }
 
     #[test]

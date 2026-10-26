@@ -3,7 +3,6 @@
 
 uniffi::setup_scaffolding!();
 
-mod caffeinate;
 mod clipboard;
 mod color_picker;
 mod config;
@@ -13,6 +12,7 @@ mod error;
 mod files;
 mod hyper;
 mod input;
+mod keep_awake;
 mod launcher;
 mod pasteboard;
 mod snippets;
@@ -21,7 +21,6 @@ mod windows;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use caffeinate::Caffeinate;
 use clipboard::ClipboardHistory;
 pub use clipboard::{ClipboardItem, ClipboardKind};
 use color_picker::ColorHistory;
@@ -36,6 +35,7 @@ pub use files::FileResult;
 use files::FileSearch;
 use hyper::HyperKey;
 use input::InputEngine;
+use keep_awake::KeepAwake;
 pub use launcher::{
     AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult,
     SystemActionInfo, system_actions,
@@ -80,7 +80,7 @@ pub struct Core {
     windows: Arc<WindowManager>,
     snippets: SnippetExpander,
     hyper_key: HyperKey,
-    caffeinate: Arc<Caffeinate>,
+    keep_awake: Arc<KeepAwake>,
     colors: ColorHistory,
     emoji: EmojiPicker,
 }
@@ -97,9 +97,17 @@ impl Core {
         let displays = DisplayManager::new(config.monitor.clone());
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
         let windows = Arc::new(WindowManager::new(config.launcher.windows.clone()));
-        let launcher = Launcher::new(&data_dir, config.launcher.clone(), Arc::clone(&windows));
-        let caffeinate = Arc::new(Caffeinate::new(config.launcher.caffeinate.clone()));
-        let hotkeys = HotkeyManager::new(Arc::clone(&windows), Arc::clone(&caffeinate));
+        let keep_awake = Arc::new(KeepAwake::new(
+            &data_dir,
+            config.launcher.keep_awake.clone(),
+        ));
+        let launcher = Launcher::new(
+            &data_dir,
+            config.launcher.clone(),
+            Arc::clone(&windows),
+            Arc::clone(&keep_awake),
+        );
+        let hotkeys = HotkeyManager::new(Arc::clone(&windows), Arc::clone(&keep_awake));
         let clipboard = ClipboardHistory::new(&data_dir, config.launcher.clipboard.clone());
         let files = FileSearch::new(config.launcher.files.clone());
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
@@ -119,7 +127,7 @@ impl Core {
             windows,
             snippets,
             hyper_key,
-            caffeinate,
+            keep_awake,
             colors,
             emoji,
         }))
@@ -194,19 +202,20 @@ impl Core {
         self.files.set_config(launcher.files.clone());
         self.windows.set_config(launcher.windows.clone());
         self.snippets.set_config(launcher.snippets.clone());
-        let caffeinate = self.caffeinate.set_config(launcher.caffeinate.clone());
+        let keep_awake = self.keep_awake.set_config(launcher.keep_awake.clone());
         self.launcher.set_config(launcher);
-        caffeinate
+        keep_awake
     }
 
-    /// Whether caffeinate is keeping the Mac awake.
-    pub fn caffeinate_active(&self) -> bool {
-        self.caffeinate.is_active()
+    /// Whether Keep Awake is keeping the Mac awake.
+    pub fn keep_awake_active(&self) -> bool {
+        self.keep_awake.is_active()
     }
 
-    /// Turns keeping the Mac awake on or off. It always ends when Jaycast quits.
-    pub fn set_caffeinate_active(&self, active: bool) -> Result<(), CoreError> {
-        self.caffeinate.set_active(active)
+    /// Turns keeping the Mac awake on or off. It's remembered, so it comes back on when
+    /// Jaycast relaunches (after an update, say).
+    pub fn set_keep_awake_active(&self, active: bool) -> Result<(), CoreError> {
+        self.keep_awake.set_active(active)
     }
 
     /// Picked colours, newest first.

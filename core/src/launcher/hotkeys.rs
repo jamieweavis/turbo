@@ -1,4 +1,4 @@
-//! Global hotkeys (the palette, palette modes, per-app, system action, window, caffeinate and
+//! Global hotkeys (the palette, palette modes, per-app, system action, window, keep awake and
 //! colour picker hotkeys) and the app focus-or-hide toggle.
 //!
 //! Hotkeys go through Carbon's `RegisterEventHotKey`, which is still the supported way to
@@ -16,9 +16,9 @@ use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfigurat
 use objc2_foundation::NSString;
 
 use super::{LauncherObserver, PaletteMode, system};
-use crate::caffeinate::{Caffeinate, CaffeinateCommand};
 use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
+use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
 use crate::windows::WindowManager;
 
 /// Registers the palette and per-app hotkeys. Hotkeys don't need Accessibility.
@@ -34,7 +34,7 @@ struct Inner {
     /// What each registered hotkey id does.
     targets: Mutex<HashMap<u32, Target>>,
     windows: Arc<WindowManager>,
-    caffeinate: Arc<Caffeinate>,
+    keep_awake: Arc<KeepAwake>,
 }
 
 /// Carbon's refs: only touched on the main thread (`apply` and `Drop` check), but kept in
@@ -61,18 +61,18 @@ enum Target {
     App(String),
     System(String),
     Window(WindowAction),
-    Caffeinate(CaffeinateCommand),
+    KeepAwake(KeepAwakeCommand),
     PickColor,
 }
 
 impl HotkeyManager {
-    pub fn new(windows: Arc<WindowManager>, caffeinate: Arc<Caffeinate>) -> Self {
+    pub fn new(windows: Arc<WindowManager>, keep_awake: Arc<KeepAwake>) -> Self {
         Self {
             inner: Arc::new(Inner {
                 observer: Mutex::new(None),
                 targets: Mutex::new(HashMap::new()),
                 windows,
-                caffeinate,
+                keep_awake,
             }),
             carbon: Mutex::new(Carbon {
                 handler: ptr::null_mut(),
@@ -196,14 +196,14 @@ impl Inner {
                     eprintln!("jaycast: window hotkey {action:?}: {error}");
                 }
             }
-            Some(Target::Caffeinate(command)) => {
-                let active = command.resolve(self.caffeinate.is_active());
-                if let Err(error) = self.caffeinate.set_active(active) {
-                    eprintln!("jaycast: caffeinate hotkey {command:?}: {error}");
+            Some(Target::KeepAwake(command)) => {
+                let active = command.resolve(self.keep_awake.is_active());
+                if let Err(error) = self.keep_awake.set_active(active) {
+                    eprintln!("jaycast: keep awake hotkey {command:?}: {error}");
                 }
                 let observer = self.observer.lock().unwrap().clone();
                 if let Some(observer) = observer {
-                    observer.caffeinate_changed(self.caffeinate.is_active());
+                    observer.keep_awake_changed(self.keep_awake.is_active());
                 }
             }
             Some(Target::PickColor) => {
@@ -275,15 +275,15 @@ fn plan(config: &LauncherConfig) -> Plan {
         )
         .chain(
             [
-                (&config.caffeinate.toggle_hotkey, CaffeinateCommand::Toggle),
-                (&config.caffeinate.on_hotkey, CaffeinateCommand::On),
-                (&config.caffeinate.off_hotkey, CaffeinateCommand::Off),
+                (&config.keep_awake.toggle_hotkey, KeepAwakeCommand::Toggle),
+                (&config.keep_awake.on_hotkey, KeepAwakeCommand::On),
+                (&config.keep_awake.off_hotkey, KeepAwakeCommand::Off),
             ]
             .into_iter()
             .filter_map(|(hotkey, command)| {
                 hotkey
                     .clone()
-                    .map(|hotkey| (hotkey, Target::Caffeinate(command)))
+                    .map(|hotkey| (hotkey, Target::KeepAwake(command)))
             }),
         )
         .chain(
@@ -623,10 +623,10 @@ mod tests {
     }
 
     #[test]
-    fn caffeinate_hotkeys_come_after_windows() {
+    fn keep_awake_hotkeys_come_after_windows() {
         let mut config = without_mode_hotkeys();
-        config.caffeinate.toggle_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Option]));
-        config.caffeinate.off_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Command]));
+        config.keep_awake.toggle_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Option]));
+        config.keep_awake.off_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Command]));
         let targets: Vec<Target> = plan(&config)
             .hotkeys
             .into_iter()
@@ -636,8 +636,8 @@ mod tests {
             targets,
             vec![
                 Target::Palette,
-                Target::Caffeinate(CaffeinateCommand::Toggle),
-                Target::Caffeinate(CaffeinateCommand::Off),
+                Target::KeepAwake(KeepAwakeCommand::Toggle),
+                Target::KeepAwake(KeepAwakeCommand::Off),
             ]
         );
     }
@@ -645,7 +645,7 @@ mod tests {
     #[test]
     fn color_picker_hotkey_comes_last() {
         let mut config = without_mode_hotkeys();
-        config.caffeinate.toggle_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Option]));
+        config.keep_awake.toggle_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Option]));
         config.color_picker.hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Shift]));
         let targets: Vec<Target> = plan(&config)
             .hotkeys
@@ -656,7 +656,7 @@ mod tests {
             targets,
             vec![
                 Target::Palette,
-                Target::Caffeinate(CaffeinateCommand::Toggle),
+                Target::KeepAwake(KeepAwakeCommand::Toggle),
                 Target::PickColor,
             ]
         );
@@ -785,7 +785,10 @@ mod tests {
         // Test threads are never the main thread, so this must not touch Carbon.
         let manager = HotkeyManager::new(
             Arc::new(WindowManager::new(Default::default())),
-            Arc::new(Caffeinate::new(Default::default())),
+            Arc::new(KeepAwake::new(
+                &std::env::temp_dir().join(format!("jaycast-test-hotkeys-{}", std::process::id())),
+                Default::default(),
+            )),
         );
         manager.apply(&LauncherConfig::default());
         assert!(manager.failed().is_empty());

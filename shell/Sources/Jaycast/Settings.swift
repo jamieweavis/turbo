@@ -40,7 +40,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, keyboard, mouse, monitor, caffeinate, colorPicker
+    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, keyboard, mouse, monitor, keepAwake, colorPicker
 
     var id: Self { self }
 
@@ -57,7 +57,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
         case .monitor: "Brightness"
-        case .caffeinate: "Caffeinate"
+        case .keepAwake: "Keep Awake"
         case .colorPicker: "Colour Picker"
         }
     }
@@ -75,7 +75,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "command.square"
         case .mouse: "computermouse"
         case .monitor: "sun.max"
-        case .caffeinate: "cup.and.saucer"
+        case .keepAwake: "eye"
         case .colorPicker: "eyedropper"
         }
     }
@@ -112,7 +112,7 @@ struct SettingsView: View {
                 case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: model.isInputRunning)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
-                case .caffeinate: CaffeinatePane(state: model.caffeinate, settings: model.launcher)
+                case .keepAwake: KeepAwakePane(state: model.keepAwake, settings: model.launcher)
                 case .colorPicker: ColorPickerPane(picker: model.colorPicker, settings: model.launcher)
                 }
             }

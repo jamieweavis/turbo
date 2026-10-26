@@ -75,10 +75,10 @@ final class LauncherSettings {
                 assigned.append((.window(window.action), window.hotkey))
             }
         }
-        let caffeinate = config.caffeinate
-        if let hotkey = caffeinate.toggleHotkey { assigned.append((.caffeinate(.toggle), hotkey)) }
-        if let hotkey = caffeinate.onHotkey { assigned.append((.caffeinate(.on), hotkey)) }
-        if let hotkey = caffeinate.offHotkey { assigned.append((.caffeinate(.off), hotkey)) }
+        let keepAwake = config.keepAwake
+        if let hotkey = keepAwake.toggleHotkey { assigned.append((.keepAwake(.toggle), hotkey)) }
+        if let hotkey = keepAwake.onHotkey { assigned.append((.keepAwake(.on), hotkey)) }
+        if let hotkey = keepAwake.offHotkey { assigned.append((.keepAwake(.off), hotkey)) }
         if let hotkey = config.colorPicker.hotkey { assigned.append((.colorPicker, hotkey)) }
         return assigned
     }
@@ -213,11 +213,11 @@ enum HotkeySlot: Equatable {
     case app(Int)
     case action(Int)
     case window(WindowAction)
-    case caffeinate(CaffeinateHotkey)
+    case keepAwake(KeepAwakeHotkey)
     case colorPicker
 }
 
-enum CaffeinateHotkey {
+enum KeepAwakeHotkey {
     case toggle, on, off
 }
 
@@ -229,7 +229,7 @@ final class LauncherObserverBridge: LauncherObserver {
     private let onCommandFinished: @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void
     private let onShowMode: @MainActor @Sendable (PaletteMode) -> Void
     private let onClipboardChanged: @MainActor @Sendable () -> Void
-    private let onCaffeinateChanged: @MainActor @Sendable (Bool) -> Void
+    private let onKeepAwakeChanged: @MainActor @Sendable (Bool) -> Void
     private let onPickColor: @MainActor @Sendable () -> Void
 
     init(
@@ -238,7 +238,7 @@ final class LauncherObserverBridge: LauncherObserver {
         onCommandFinished: @escaping @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void,
         onShowMode: @escaping @MainActor @Sendable (PaletteMode) -> Void,
         onClipboardChanged: @escaping @MainActor @Sendable () -> Void,
-        onCaffeinateChanged: @escaping @MainActor @Sendable (Bool) -> Void,
+        onKeepAwakeChanged: @escaping @MainActor @Sendable (Bool) -> Void,
         onPickColor: @escaping @MainActor @Sendable () -> Void
     ) {
         self.onTogglePalette = onTogglePalette
@@ -246,7 +246,7 @@ final class LauncherObserverBridge: LauncherObserver {
         self.onCommandFinished = onCommandFinished
         self.onShowMode = onShowMode
         self.onClipboardChanged = onClipboardChanged
-        self.onCaffeinateChanged = onCaffeinateChanged
+        self.onKeepAwakeChanged = onKeepAwakeChanged
         self.onPickColor = onPickColor
     }
 
@@ -274,9 +274,9 @@ final class LauncherObserverBridge: LauncherObserver {
         }
     }
 
-    func caffeinateChanged(active: Bool) {
-        DispatchQueue.main.async { [onCaffeinateChanged] in
-            MainActor.assumeIsolated { onCaffeinateChanged(active) }
+    func keepAwakeChanged(active: Bool) {
+        DispatchQueue.main.async { [onKeepAwakeChanged] in
+            MainActor.assumeIsolated { onKeepAwakeChanged(active) }
         }
     }
 

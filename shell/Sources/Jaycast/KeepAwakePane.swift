@@ -5,7 +5,7 @@ import SwiftUI
 /// the core is the source of truth and this is refreshed when they fire.
 @MainActor
 @Observable
-final class CaffeinateState {
+final class KeepAwakeState {
     private(set) var isActive = false
     private(set) var error: String?
     @ObservationIgnored private let core: Core
@@ -17,7 +17,7 @@ final class CaffeinateState {
 
     func setActive(_ active: Bool) {
         do {
-            try core.setCaffeinateActive(active: active)
+            try core.setKeepAwakeActive(active: active)
             error = nil
         } catch {
             self.error = error.userMessage
@@ -26,12 +26,12 @@ final class CaffeinateState {
     }
 
     func refresh() {
-        isActive = core.caffeinateActive()
+        isActive = core.keepAwakeActive()
     }
 }
 
-struct CaffeinatePane: View {
-    let state: CaffeinateState
+struct KeepAwakePane: View {
+    let state: KeepAwakeState
     let settings: LauncherSettings
 
     var body: some View {
@@ -47,27 +47,27 @@ struct CaffeinatePane: View {
 
             Section {
                 Toggle("Keep Mac awake", isOn: Binding(get: { state.isActive }, set: { state.setActive($0) }))
-                Toggle("Keep display on", isOn: $settings.config.caffeinate.keepDisplayOn)
+                Toggle("Keep display on", isOn: $settings.config.keepAwake.keepDisplayOn)
             } footer: {
-                Text(settings.config.caffeinate.keepDisplayOn
-                    ? "Stops the Mac and its displays sleeping while idle. Turns off when Jaycast quits."
-                    : "Stops the Mac sleeping while idle; displays can still sleep. Turns off when Jaycast quits.")
+                Text(settings.config.keepAwake.keepDisplayOn
+                    ? "Stops the Mac and its displays sleeping while idle. Stays on when Jaycast relaunches."
+                    : "Stops the Mac sleeping while idle; displays can still sleep. Stays on when Jaycast relaunches.")
             }
 
             Section("Hotkeys") {
-                row("Toggle", hotkey: $settings.config.caffeinate.toggleHotkey, slot: .toggle)
-                row("Turn on", hotkey: $settings.config.caffeinate.onHotkey, slot: .on)
-                row("Turn off", hotkey: $settings.config.caffeinate.offHotkey, slot: .off)
+                row("Toggle", hotkey: $settings.config.keepAwake.toggleHotkey, slot: .toggle)
+                row("Turn on", hotkey: $settings.config.keepAwake.onHotkey, slot: .on)
+                row("Turn off", hotkey: $settings.config.keepAwake.offHotkey, slot: .off)
             }
         }
         .formStyle(.grouped)
     }
 
-    private func row(_ title: String, hotkey: Binding<Hotkey?>, slot: CaffeinateHotkey) -> some View {
+    private func row(_ title: String, hotkey: Binding<Hotkey?>, slot: KeepAwakeHotkey) -> some View {
         LabeledContent(title) {
             HStack(spacing: 6) {
                 if let current = hotkey.wrappedValue,
-                   let problem = settings.problem(with: current, in: .caffeinate(slot)) {
+                   let problem = settings.problem(with: current, in: .keepAwake(slot)) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow)
                         .help(problem)
