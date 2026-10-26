@@ -11,8 +11,8 @@ crate-type = ["lib", "staticlib"]
 [dependencies]
 uniffi.workspace = true
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSBitmapImageRep", "NSEvent", "NSImageRep", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSWorkspace", "block2", "objc2-core-graphics"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSError", "NSFileManager", "NSLocale", "NSString", "NSURL"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSBitmapImageRep", "NSEvent", "NSImageRep", "NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSScreen", "NSWorkspace", "block2", "libc", "objc2-core-graphics"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSError", "NSFileManager", "NSGeometry", "NSLocale", "NSString", "NSURL"] }
 objc2-core-foundation = "0.3"
 objc2-core-graphics = "0.3"
 serde = { version = "1", features = ["derive"] }
