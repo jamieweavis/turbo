@@ -24,6 +24,15 @@ enum MenuBarIcon {
             rocket.curve(to: NSPoint(x: 0, y: 8), controlPoint1: NSPoint(x: -2.8, y: 4.2), controlPoint2: NSPoint(x: -1.8, y: 6.4))
             rocket.close()
             rocket.fill()
+
+            // Exhaust flame, set just off the base so the two shapes read separately.
+            let flame = NSBezierPath()
+            flame.move(to: NSPoint(x: -1.6, y: -3.9))
+            flame.curve(to: NSPoint(x: 1.6, y: -3.9), controlPoint1: NSPoint(x: -0.8, y: -3.5), controlPoint2: NSPoint(x: 0.8, y: -3.5))
+            flame.curve(to: NSPoint(x: 0, y: -7.5), controlPoint1: NSPoint(x: 1.6, y: -5.3), controlPoint2: NSPoint(x: 0.6, y: -6.5))
+            flame.curve(to: NSPoint(x: -1.6, y: -3.9), controlPoint1: NSPoint(x: -0.6, y: -6.5), controlPoint2: NSPoint(x: -1.6, y: -5.3))
+            flame.close()
+            flame.fill()
             return true
         }
         image.isTemplate = true
