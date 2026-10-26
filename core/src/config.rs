@@ -26,6 +26,8 @@ pub struct LauncherConfig {
     pub hotkey: Option<Hotkey>,
     /// Hotkeys that focus an app (launching it if needed), or hide it if it's already in front.
     pub app_hotkeys: Vec<AppHotkey>,
+    /// Hotkeys that run a system action (Lock Screen, Sleep, …) straight away.
+    pub action_hotkeys: Vec<ActionHotkey>,
     /// Show a calculator / unit / currency result when the query is an expression.
     pub calculator: bool,
     pub quicklinks: Vec<Quicklink>,
@@ -46,6 +48,7 @@ impl Default for LauncherConfig {
                 modifiers: vec![Modifier::Option],
             }),
             app_hotkeys: Vec::new(),
+            action_hotkeys: Vec::new(),
             calculator: true,
             quicklinks: default_quicklinks(),
             commands: Vec::new(),
@@ -385,6 +388,13 @@ pub struct AppHotkey {
     pub bundle_id: String,
     /// Shown in settings; refreshed from the app index when it's installed.
     pub name: String,
+    pub hotkey: Hotkey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct ActionHotkey {
+    /// A system action id (`lock-screen`, `sleep`, …), as listed by `system_actions`.
+    pub action: String,
     pub hotkey: Hotkey,
 }
 

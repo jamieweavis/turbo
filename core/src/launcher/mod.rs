@@ -125,6 +125,29 @@ fn mode_for_id(id: &str) -> Option<PaletteMode> {
     MODES.iter().find(|m| m.1 == id).map(|m| m.0)
 }
 
+/// A system action that can be given a hotkey in settings.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct SystemActionInfo {
+    /// Stable id, stored in `ActionHotkey::action`.
+    pub id: String,
+    pub title: String,
+    /// SF Symbol name.
+    pub symbol: String,
+}
+
+/// Every system action, in menu order (for choosing action hotkeys in settings).
+#[uniffi::export]
+pub fn system_actions() -> Vec<SystemActionInfo> {
+    system::actions()
+        .iter()
+        .map(|action| SystemActionInfo {
+            id: action.id.to_owned(),
+            title: action.title.to_owned(),
+            symbol: action.symbol.to_owned(),
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AppInfo {
     pub bundle_id: String,

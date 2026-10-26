@@ -1,6 +1,5 @@
-//! Global hotkeys (the palette, palette modes, per-app, window, caffeinate and colour picker
-//! hotkeys) and the app
-//! focus-or-hide toggle.
+//! Global hotkeys (the palette, palette modes, per-app, system action, window, caffeinate and
+//! colour picker hotkeys) and the app focus-or-hide toggle.
 //!
 //! Hotkeys go through Carbon's `RegisterEventHotKey`, which is still the supported way to
 //! claim a system-wide key combination and, unlike an event tap, needs no Accessibility
@@ -16,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::NSString;
 
-use super::{LauncherObserver, PaletteMode};
+use super::{LauncherObserver, PaletteMode, system};
 use crate::caffeinate::{Caffeinate, CaffeinateCommand};
 use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
@@ -60,6 +59,7 @@ enum Target {
     Palette,
     Mode(PaletteMode),
     App(String),
+    System(String),
     Window(WindowAction),
     Caffeinate(CaffeinateCommand),
     PickColor,
@@ -186,6 +186,11 @@ impl Inner {
                     eprintln!("jaycast: app hotkey for {bundle_id}: {error}");
                 }
             }
+            Some(Target::System(action)) => {
+                if let Err(error) = system::perform(&action) {
+                    eprintln!("jaycast: system action hotkey {action}: {error}");
+                }
+            }
             Some(Target::Window(action)) => {
                 if let Err(error) = self.windows.perform(action) {
                     eprintln!("jaycast: window hotkey {action:?}: {error}");
@@ -253,6 +258,12 @@ fn plan(config: &LauncherConfig) -> Plan {
                 .app_hotkeys
                 .iter()
                 .map(|app| (app.hotkey.clone(), Target::App(app.bundle_id.clone()))),
+        )
+        .chain(
+            config
+                .action_hotkeys
+                .iter()
+                .map(|action| (action.hotkey.clone(), Target::System(action.action.clone()))),
         )
         .chain(
             config
@@ -554,7 +565,7 @@ extern "C" fn hotkey_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AppHotkey, KEY_SPACE, WindowHotkey};
+    use crate::config::{ActionHotkey, AppHotkey, KEY_SPACE, WindowHotkey};
 
     fn hotkey(key_code: u16, modifiers: &[Modifier]) -> Hotkey {
         Hotkey {
@@ -699,6 +710,31 @@ mod tests {
                 (1, Target::Palette),
                 (2, Target::App("com.apple.Safari".into())),
                 (3, Target::App("com.apple.Terminal".into())),
+            ]
+        );
+    }
+
+    #[test]
+    fn system_action_hotkeys_follow_apps() {
+        let config = LauncherConfig {
+            hotkey: None,
+            app_hotkeys: vec![app("com.apple.Safari", hotkey(1, &[Modifier::Control]))],
+            action_hotkeys: vec![ActionHotkey {
+                action: "lock-screen".into(),
+                hotkey: hotkey(37, &[Modifier::Control, Modifier::Option]),
+            }],
+            ..without_mode_hotkeys()
+        };
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![
+                Target::App("com.apple.Safari".into()),
+                Target::System("lock-screen".into()),
             ]
         );
     }

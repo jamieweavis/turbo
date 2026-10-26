@@ -33,7 +33,10 @@ pub use files::FileResult;
 use files::FileSearch;
 use hyper::HyperKey;
 use input::InputEngine;
-pub use launcher::{AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult};
+pub use launcher::{
+    AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult,
+    SystemActionInfo, system_actions,
+};
 use launcher::{HotkeyManager, Launcher};
 use snippets::SnippetExpander;
 use windows::WindowManager;

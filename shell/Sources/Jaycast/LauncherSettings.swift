@@ -42,8 +42,20 @@ final class LauncherSettings {
         apps = core.installedApps()
     }
 
-    func addAppHotkey(_ app: AppInfo, hotkey: Hotkey) {
-        config.appHotkeys.append(AppHotkey(bundleId: app.bundleId, name: app.name, hotkey: hotkey))
+    func addHotkey(_ hotkey: Hotkey, for target: HotkeyTarget) {
+        switch target {
+        case .app(let app):
+            config.appHotkeys.append(AppHotkey(bundleId: app.bundleId, name: app.name, hotkey: hotkey))
+        case .action(let action):
+            config.actionHotkeys.append(ActionHotkey(action: action.id, hotkey: hotkey))
+        }
+    }
+
+    /// The system actions that can be given a hotkey; fixed for the app's lifetime.
+    let systemActions = Jaycast.systemActions()
+
+    func systemAction(withID id: String) -> SystemActionInfo? {
+        systemActions.first { $0.id == id }
     }
 
     /// Every global hotkey in the config, with where it's set.
@@ -54,6 +66,9 @@ final class LauncherSettings {
         if let hotkey = config.files.hotkey { assigned.append((.files, hotkey)) }
         for (index, app) in config.appHotkeys.enumerated() {
             assigned.append((.app(index), app.hotkey))
+        }
+        for (index, action) in config.actionHotkeys.enumerated() {
+            assigned.append((.action(index), action.hotkey))
         }
         if config.windows.hotkeysEnabled {
             for window in config.windows.hotkeys {
@@ -196,6 +211,7 @@ final class LauncherSettings {
 enum HotkeySlot: Equatable {
     case palette, clipboard, files
     case app(Int)
+    case action(Int)
     case window(WindowAction)
     case caffeinate(CaffeinateHotkey)
     case colorPicker

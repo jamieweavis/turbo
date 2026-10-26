@@ -4,9 +4,10 @@ import SwiftUI
 struct LauncherPane: View {
     let settings: LauncherSettings
 
-    /// An app picked in the sheet but not yet given a hotkey; it's added once one is recorded.
-    @State private var pendingApp: AppInfo?
-    @State private var isPickingApp = false
+    /// An app or action picked in the sheet but not yet given a hotkey; it's added once one
+    /// is recorded.
+    @State private var pending: HotkeyTarget?
+    @State private var isPicking = false
 
     var body: some View {
         @Bindable var settings = settings
@@ -42,43 +43,62 @@ struct LauncherPane: View {
 
             Section {
                 ForEach(Array(settings.config.appHotkeys.enumerated()), id: \.offset) { index, appHotkey in
-                    AppHotkeyRow(
+                    let path = settings.path(forBundleID: appHotkey.bundleId)
+                    TargetHotkeyRow(
                         name: appHotkey.name,
-                        path: settings.path(forBundleID: appHotkey.bundleId),
+                        note: path == nil ? "Not installed" : nil,
                         hotkey: hotkeyBinding(at: index),
                         problem: settings.problem(with: appHotkey.hotkey, in: .app(index)),
                         onRemove: { settings.config.appHotkeys.remove(at: index) }
-                    )
+                    ) {
+                        AppIconView(path: path)
+                    }
                 }
 
-                if let pendingApp {
-                    PendingAppHotkeyRow(
-                        app: pendingApp,
+                ForEach(Array(settings.config.actionHotkeys.enumerated()), id: \.offset) { index, actionHotkey in
+                    let action = settings.systemAction(withID: actionHotkey.action)
+                    TargetHotkeyRow(
+                        name: action?.title ?? actionHotkey.action,
+                        note: action == nil ? "Unknown action" : nil,
+                        hotkey: actionHotkeyBinding(at: index),
+                        problem: settings.problem(with: actionHotkey.hotkey, in: .action(index)),
+                        onRemove: { settings.config.actionHotkeys.remove(at: index) }
+                    ) {
+                        ActionIconView(symbol: action?.symbol)
+                    }
+                }
+
+                if let pending {
+                    PendingHotkeyRow(
+                        target: pending,
                         onRecord: { hotkey in
-                            settings.addAppHotkey(pendingApp, hotkey: hotkey)
-                            self.pendingApp = nil
+                            settings.addHotkey(hotkey, for: pending)
+                            self.pending = nil
                         },
-                        onCancel: { self.pendingApp = nil }
+                        onCancel: { self.pending = nil }
                     )
                 }
 
-                Button("Add App…", systemImage: "plus") {
+                Button("Add…", systemImage: "plus") {
                     settings.refreshApps()
-                    isPickingApp = true
+                    isPicking = true
                 }
             } header: {
-                Text("App Hotkeys")
+                Text("Hotkeys")
             } footer: {
-                Text("Press an app's hotkey to bring it to the front, launching it if needed. Press it again to hide the app.")
+                Text("Press an app's hotkey to bring it to the front, launching it if needed. Press it again to hide the app. Other hotkeys run their action straight away.")
             }
         }
         .formStyle(.grouped)
-        .sheet(isPresented: $isPickingApp) {
-            AppPicker(apps: settings.apps) { app in
-                isPickingApp = false
-                pendingApp = app
+        .sheet(isPresented: $isPicking) {
+            AppPicker(apps: settings.apps, actions: settings.systemActions) { app in
+                isPicking = false
+                pending = .app(app)
             } onCancel: {
-                isPickingApp = false
+                isPicking = false
+            } onPickAction: { action in
+                isPicking = false
+                pending = .action(action)
             }
         }
     }
@@ -89,6 +109,19 @@ struct LauncherPane: View {
             set: { settings.config.appHotkeys[index].hotkey = $0 }
         )
     }
+
+    private func actionHotkeyBinding(at index: Int) -> Binding<Hotkey> {
+        Binding(
+            get: { settings.config.actionHotkeys[index].hotkey },
+            set: { settings.config.actionHotkeys[index].hotkey = $0 }
+        )
+    }
+}
+
+/// What a hotkey in the Hotkeys list opens or runs.
+enum HotkeyTarget {
+    case app(AppInfo)
+    case action(SystemActionInfo)
 }
 
 /// A recorder for an optional global hotkey, with a button to clear it.
@@ -115,19 +148,21 @@ struct HotkeyField: View {
     }
 }
 
-private struct AppHotkeyRow: View {
+private struct TargetHotkeyRow<Icon: View>: View {
     let name: String
-    let path: String?
+    /// Why the target can't be opened, shown next to its name.
+    let note: String?
     @Binding var hotkey: Hotkey
     let problem: String?
     let onRemove: () -> Void
+    @ViewBuilder let icon: () -> Icon
 
     var body: some View {
         HStack(spacing: 10) {
-            AppIconView(path: path)
+            icon()
             Text(name)
-            if path == nil {
-                Text("Not installed")
+            if let note {
+                Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -151,15 +186,21 @@ private struct AppHotkeyRow: View {
     }
 }
 
-private struct PendingAppHotkeyRow: View {
-    let app: AppInfo
+private struct PendingHotkeyRow: View {
+    let target: HotkeyTarget
     let onRecord: (Hotkey) -> Void
     let onCancel: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            AppIconView(path: app.path)
-            Text(app.name)
+            switch target {
+            case .app(let app):
+                AppIconView(path: app.path)
+                Text(app.name)
+            case .action(let action):
+                ActionIconView(symbol: action.symbol)
+                Text(action.title)
+            }
             Spacer()
             ShortcutRecorder(
                 shortcut: Binding(
@@ -173,6 +214,17 @@ private struct PendingAppHotkeyRow: View {
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
         }
+    }
+}
+
+/// A system action's SF Symbol, sized to sit in a list next to app icons.
+struct ActionIconView: View {
+    let symbol: String?
+
+    var body: some View {
+        Image(systemName: symbol ?? "questionmark.square.dashed")
+            .foregroundStyle(.secondary)
+            .frame(width: 20, height: 20)
     }
 }
 
@@ -195,44 +247,64 @@ struct AppIconView: View {
     }
 }
 
-/// A searchable list of installed apps.
+/// A searchable list of installed apps, and optionally system actions above them.
 struct AppPicker: View {
     let apps: [AppInfo]
+    var actions: [SystemActionInfo] = []
     let onPick: (AppInfo) -> Void
     let onCancel: () -> Void
+    var onPickAction: (SystemActionInfo) -> Void = { _ in }
 
     @State private var filter = ""
+    /// `app:<bundle id>` or `action:<action id>`.
     @State private var selection: String?
 
-    private var filtered: [AppInfo] {
-        let filter = filter.trimmingCharacters(in: .whitespaces)
-        guard !filter.isEmpty else { return apps }
-        return apps.filter { $0.name.localizedCaseInsensitiveContains(filter) }
+    private var trimmedFilter: String {
+        filter.trimmingCharacters(in: .whitespaces)
+    }
+
+    private var filteredApps: [AppInfo] {
+        guard !trimmedFilter.isEmpty else { return apps }
+        return apps.filter { $0.name.localizedCaseInsensitiveContains(trimmedFilter) }
+    }
+
+    private var filteredActions: [SystemActionInfo] {
+        guard !trimmedFilter.isEmpty else { return actions }
+        return actions.filter { $0.title.localizedCaseInsensitiveContains(trimmedFilter) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Search apps", text: $filter)
+            TextField(actions.isEmpty ? "Search apps" : "Search apps and actions", text: $filter)
                 .textFieldStyle(.roundedBorder)
                 .padding(12)
 
-            List(filtered, id: \.bundleId, selection: $selection) { app in
-                HStack(spacing: 8) {
-                    AppIconView(path: app.path)
-                    Text(app.name)
+            List(selection: $selection) {
+                if !filteredActions.isEmpty {
+                    Section("System") {
+                        ForEach(filteredActions, id: \.id) { action in
+                            HStack(spacing: 8) {
+                                ActionIconView(symbol: action.symbol)
+                                Text(action.title)
+                            }
+                            .tag("action:\(action.id)")
+                        }
+                    }
                 }
-                .tag(app.bundleId)
+                if actions.isEmpty {
+                    appRows
+                } else if !filteredApps.isEmpty {
+                    Section("Apps") { appRows }
+                }
             }
             .overlay {
-                if filtered.isEmpty {
-                    Text(apps.isEmpty ? "No apps indexed yet" : "No matching apps")
+                if filteredApps.isEmpty && filteredActions.isEmpty {
+                    Text(apps.isEmpty && actions.isEmpty ? "No apps indexed yet" : "No matches")
                         .foregroundStyle(.secondary)
                 }
             }
             .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
-                if let id = ids.first, let app = apps.first(where: { $0.bundleId == id }) {
-                    onPick(app)
-                }
+                if let id = ids.first { pick(id) }
             }
 
             HStack {
@@ -240,9 +312,7 @@ struct AppPicker: View {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Button("Choose") {
-                    if let app = apps.first(where: { $0.bundleId == selection }) {
-                        onPick(app)
-                    }
+                    if let selection { pick(selection) }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(selection == nil)
@@ -250,5 +320,29 @@ struct AppPicker: View {
             .padding(12)
         }
         .frame(width: 380, height: 460)
+    }
+
+    private var appRows: some View {
+        ForEach(filteredApps, id: \.bundleId) { app in
+            HStack(spacing: 8) {
+                AppIconView(path: app.path)
+                Text(app.name)
+            }
+            .tag("app:\(app.bundleId)")
+        }
+    }
+
+    private func pick(_ id: String) {
+        if let bundleID = id.stripping(prefix: "app:"), let app = apps.first(where: { $0.bundleId == bundleID }) {
+            onPick(app)
+        } else if let actionID = id.stripping(prefix: "action:"), let action = actions.first(where: { $0.id == actionID }) {
+            onPickAction(action)
+        }
+    }
+}
+
+private extension String {
+    func stripping(prefix: String) -> String? {
+        hasPrefix(prefix) ? String(dropFirst(prefix.count)) : nil
     }
 }
