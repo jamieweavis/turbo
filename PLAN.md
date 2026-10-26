@@ -21,7 +21,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
-| 4 | Calculator & conversions, quicklinks & shell commands | 🚧 In progress |
+| 4 | Calculator & conversions, quicklinks & shell commands | 🧪 Built, awaiting hands-on testing |
 | 5 | Clipboard history, file search | ⏳ |
 | 6 | Window management, snippets / text expansion | ⏳ |
 
@@ -66,10 +66,10 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 - [x] Shared core API: `LauncherConfig` calculator switch, quicklinks (defaults: Google `g`,
       YouTube `yt`, GitHub `gh`) and commands; `SearchResult.completion`; `OpenOutcome`;
       `command_finished` callback; search merges calculator/extension results; clipboard helper
-- [ ] Calculator: inline maths, unit and currency conversion (cached ECB rates)
-- [ ] Quicklinks with `{query}` / `{clipboard}` placeholders
-- [ ] Shell commands run from the palette (discard / show / copy output, optional confirmation)
-- [ ] Shell: calculator row, argument completion, copied/output feedback, Quicklinks and
+- [x] Calculator: inline maths, unit and currency conversion (cached ECB rates)
+- [x] Quicklinks with `{query}` / `{clipboard}` placeholders
+- [x] Shell commands run from the palette (discard / show / copy output, optional confirmation)
+- [x] Shell: calculator row, argument completion, copied/output feedback, Quicklinks and
       Commands settings
 
 ### Step 5: Clipboard history, file search
@@ -90,6 +90,13 @@ Raycast extension support.
 
 ## Log
 
+- **Step 4**: built by three parallel agents (calculator; quicklinks + commands; Swift UI),
+  integrated on main. 183 Rust tests. Calculator: own lexer/parser, units, currency (ECB rates
+  from api.frankfurter.dev via Foundation, cached in `currency-rates.json`, refreshed every 12 h;
+  the first fetch from the app worked), about 2 µs per evaluation, answers only "interesting"
+  queries so app searches aren't hijacked. Quicklinks/commands: `<keyword> <text>`, completion
+  to `<keyword> `, `{query}`/`{clipboard}` URL-encoded or shell-quoted, commands under
+  `zsh -lc` with a 60 s process-group timeout and discard/show/copy output.
 - **Step 3**: built by three parallel agents (app index + fuzzy + ranking; Carbon hotkeys, app
   toggle + system actions; Swift palette + Launcher pane), integrated on main. 118 Rust tests.
   Indexes ~99 apps in ~60 ms; search takes 20–65 µs per query. Names are Finder's localized names,
