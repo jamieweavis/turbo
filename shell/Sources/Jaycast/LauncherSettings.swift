@@ -64,6 +64,7 @@ final class LauncherSettings {
         if let hotkey = caffeinate.toggleHotkey { assigned.append((.caffeinate(.toggle), hotkey)) }
         if let hotkey = caffeinate.onHotkey { assigned.append((.caffeinate(.on), hotkey)) }
         if let hotkey = caffeinate.offHotkey { assigned.append((.caffeinate(.off), hotkey)) }
+        if let hotkey = config.colorPicker.hotkey { assigned.append((.colorPicker, hotkey)) }
         return assigned
     }
 
@@ -197,6 +198,7 @@ enum HotkeySlot: Equatable {
     case app(Int)
     case window(WindowAction)
     case caffeinate(CaffeinateHotkey)
+    case colorPicker
 }
 
 enum CaffeinateHotkey {
@@ -212,6 +214,7 @@ final class LauncherObserverBridge: LauncherObserver {
     private let onShowMode: @MainActor @Sendable (PaletteMode) -> Void
     private let onClipboardChanged: @MainActor @Sendable () -> Void
     private let onCaffeinateChanged: @MainActor @Sendable (Bool) -> Void
+    private let onPickColor: @MainActor @Sendable () -> Void
 
     init(
         onTogglePalette: @escaping @MainActor @Sendable () -> Void,
@@ -219,7 +222,8 @@ final class LauncherObserverBridge: LauncherObserver {
         onCommandFinished: @escaping @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void,
         onShowMode: @escaping @MainActor @Sendable (PaletteMode) -> Void,
         onClipboardChanged: @escaping @MainActor @Sendable () -> Void,
-        onCaffeinateChanged: @escaping @MainActor @Sendable (Bool) -> Void
+        onCaffeinateChanged: @escaping @MainActor @Sendable (Bool) -> Void,
+        onPickColor: @escaping @MainActor @Sendable () -> Void
     ) {
         self.onTogglePalette = onTogglePalette
         self.onAppsChanged = onAppsChanged
@@ -227,6 +231,7 @@ final class LauncherObserverBridge: LauncherObserver {
         self.onShowMode = onShowMode
         self.onClipboardChanged = onClipboardChanged
         self.onCaffeinateChanged = onCaffeinateChanged
+        self.onPickColor = onPickColor
     }
 
     func togglePalette() {
@@ -256,6 +261,12 @@ final class LauncherObserverBridge: LauncherObserver {
     func caffeinateChanged(active: Bool) {
         DispatchQueue.main.async { [onCaffeinateChanged] in
             MainActor.assumeIsolated { onCaffeinateChanged(active) }
+        }
+    }
+
+    func pickColor() {
+        DispatchQueue.main.async { [onPickColor] in
+            MainActor.assumeIsolated { onPickColor() }
         }
     }
 

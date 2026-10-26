@@ -152,6 +152,8 @@ pub trait LauncherObserver: Send + Sync {
     /// A caffeinate hotkey turned keeping the Mac awake on or off. Called on the main
     /// thread.
     fn caffeinate_changed(&self, active: bool);
+    /// The colour picker hotkey was pressed: show the magnifier. Called on the main thread.
+    fn pick_color(&self);
 }
 
 /// Calculator results go above everything; a quicklink or command whose keyword was typed

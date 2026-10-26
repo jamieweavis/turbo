@@ -35,6 +35,7 @@ pub struct LauncherConfig {
     pub windows: WindowConfig,
     pub snippets: SnippetsConfig,
     pub caffeinate: CaffeinateConfig,
+    pub color_picker: ColorPickerConfig,
 }
 
 impl Default for LauncherConfig {
@@ -53,6 +54,7 @@ impl Default for LauncherConfig {
             windows: WindowConfig::default(),
             snippets: SnippetsConfig::default(),
             caffeinate: CaffeinateConfig::default(),
+            color_picker: ColorPickerConfig::default(),
         }
     }
 }
@@ -253,6 +255,25 @@ impl Default for CaffeinateConfig {
             off_hotkey: None,
         }
     }
+}
+
+/// Picking a colour from anywhere on screen. The history lives beside the config, in
+/// `colors.json`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct ColorPickerConfig {
+    /// Shows the magnifier to pick a colour.
+    pub hotkey: Option<Hotkey>,
+    /// How a picked colour is copied.
+    pub format: ColorFormat,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum ColorFormat {
+    #[default]
+    Hex,
+    Rgb,
+    Hsl,
 }
 
 /// Text inserted by keyword or from the palette. Placeholders: `{clipboard}`, `{date}`,

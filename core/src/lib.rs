@@ -5,6 +5,7 @@ uniffi::setup_scaffolding!();
 
 mod caffeinate;
 mod clipboard;
+mod color_picker;
 mod config;
 mod display;
 mod error;
@@ -22,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use caffeinate::Caffeinate;
 use clipboard::ClipboardHistory;
 pub use clipboard::{ClipboardItem, ClipboardKind};
+use color_picker::ColorHistory;
+pub use color_picker::{PickedColor, format_color};
 pub use config::*;
 use display::{BrightnessKeyTap, DisplayManager};
 pub use display::{DisplayInfo, DisplayObserver};
@@ -72,6 +75,7 @@ pub struct Core {
     snippets: SnippetExpander,
     hyper_key: HyperKey,
     caffeinate: Arc<Caffeinate>,
+    colors: ColorHistory,
 }
 
 #[uniffi::export]
@@ -93,6 +97,7 @@ impl Core {
         let files = FileSearch::new(config.launcher.files.clone());
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
         let hyper_key = HyperKey::new(config.hyper_key.clone());
+        let colors = ColorHistory::new(&data_dir);
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
@@ -107,6 +112,7 @@ impl Core {
             snippets,
             hyper_key,
             caffeinate,
+            colors,
         }))
     }
 
@@ -192,6 +198,31 @@ impl Core {
     /// Turns keeping the Mac awake on or off. It always ends when Jaycast quits.
     pub fn set_caffeinate_active(&self, active: bool) -> Result<(), CoreError> {
         self.caffeinate.set_active(active)
+    }
+
+    /// Picked colours, newest first.
+    pub fn color_history(&self) -> Vec<PickedColor> {
+        self.colors.colors()
+    }
+
+    /// Records a colour the shell picked (sRGB) and copies it in the configured format.
+    /// Returns the copied text.
+    pub fn record_picked_color(&self, red: u8, green: u8, blue: u8) -> Result<String, CoreError> {
+        let format = self.config.lock().unwrap().launcher.color_picker.format;
+        self.colors.record(red, green, blue, format)
+    }
+
+    /// Copies a colour from the history as `format`.
+    pub fn copy_color(&self, color: PickedColor, format: ColorFormat) -> Result<(), CoreError> {
+        pasteboard::copy(&format_color(color, format))
+    }
+
+    pub fn delete_picked_color(&self, color: PickedColor) -> Result<(), CoreError> {
+        self.colors.delete(color)
+    }
+
+    pub fn clear_color_history(&self) -> Result<(), CoreError> {
+        self.colors.clear()
     }
 
     /// Registers the saved hotkeys. Call once at launch, on the main thread, after

@@ -1,4 +1,5 @@
-//! Global hotkeys (the palette, palette modes, per-app, window and caffeinate hotkeys) and the app
+//! Global hotkeys (the palette, palette modes, per-app, window, caffeinate and colour picker
+//! hotkeys) and the app
 //! focus-or-hide toggle.
 //!
 //! Hotkeys go through Carbon's `RegisterEventHotKey`, which is still the supported way to
@@ -61,6 +62,7 @@ enum Target {
     App(String),
     Window(WindowAction),
     Caffeinate(CaffeinateCommand),
+    PickColor,
 }
 
 impl HotkeyManager {
@@ -199,6 +201,12 @@ impl Inner {
                     observer.caffeinate_changed(self.caffeinate.is_active());
                 }
             }
+            Some(Target::PickColor) => {
+                let observer = self.observer.lock().unwrap().clone();
+                if let Some(observer) = observer {
+                    observer.pick_color();
+                }
+            }
             None => {}
         }
     }
@@ -266,6 +274,13 @@ fn plan(config: &LauncherConfig) -> Plan {
                     .clone()
                     .map(|hotkey| (hotkey, Target::Caffeinate(command)))
             }),
+        )
+        .chain(
+            config
+                .color_picker
+                .hotkey
+                .iter()
+                .map(|hotkey| (hotkey.clone(), Target::PickColor)),
         );
 
     let mut seen = Vec::new();
@@ -612,6 +627,26 @@ mod tests {
                 Target::Palette,
                 Target::Caffeinate(CaffeinateCommand::Toggle),
                 Target::Caffeinate(CaffeinateCommand::Off),
+            ]
+        );
+    }
+
+    #[test]
+    fn color_picker_hotkey_comes_last() {
+        let mut config = without_mode_hotkeys();
+        config.caffeinate.toggle_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Option]));
+        config.color_picker.hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Shift]));
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![
+                Target::Palette,
+                Target::Caffeinate(CaffeinateCommand::Toggle),
+                Target::PickColor,
             ]
         );
     }

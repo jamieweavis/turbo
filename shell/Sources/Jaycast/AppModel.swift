@@ -12,6 +12,7 @@ final class AppModel {
     let launcher: LauncherSettings
     let hyperKey: HyperKeySettings
     let caffeinate: CaffeinateState
+    let colorPicker: ColorPickerState
     @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
     @ObservationIgnored private let commandOutput = CommandOutputWindows()
@@ -28,6 +29,7 @@ final class AppModel {
         launcher = LauncherSettings(core: core)
         hyperKey = HyperKeySettings(core: core)
         caffeinate = CaffeinateState(core: core)
+        colorPicker = ColorPickerState(core: core)
         palette = PaletteWindowController(core: core, settings: launcher)
     }
 
@@ -53,7 +55,8 @@ final class AppModel {
             onClipboardChanged: { [palette] in
                 if palette.isVisible { palette.model.refresh(ifShowing: .clipboard) }
             },
-            onCaffeinateChanged: { [caffeinate] _ in caffeinate.refresh() }
+            onCaffeinateChanged: { [caffeinate] _ in caffeinate.refresh() },
+            onPickColor: { [colorPicker] in colorPicker.pick() }
         ))
         // Hotkeys don't need Accessibility, so they work before it's granted.
         core.startHotkeys()
