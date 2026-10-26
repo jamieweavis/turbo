@@ -28,8 +28,8 @@ final class LauncherSettings {
     }
 
     /// Why `hotkey` won't work, if it won't: used twice, or claimed by another app.
-    func problem(with hotkey: Hotkey, ignoringAppAt index: Int? = nil) -> String? {
-        if isDuplicate(hotkey, ignoringAppAt: index) {
+    func problem(with hotkey: Hotkey, in slot: HotkeySlot) -> String? {
+        if isDuplicate(hotkey, in: slot) {
             return "This hotkey is used more than once"
         }
         if failed.contains(where: { $0.matches(hotkey) }) {
@@ -46,17 +46,42 @@ final class LauncherSettings {
         config.appHotkeys.append(AppHotkey(bundleId: app.bundleId, name: app.name, hotkey: hotkey))
     }
 
-    /// Whether `hotkey` is also used by the palette or another app hotkey than `index`.
-    func isDuplicate(_ hotkey: Hotkey, ignoringAppAt index: Int? = nil) -> Bool {
-        if index != nil, let palette = config.hotkey, palette.matches(hotkey) {
-            return true
+    /// Every global hotkey in the config, with where it's set.
+    var assignedHotkeys: [(slot: HotkeySlot, hotkey: Hotkey)] {
+        var assigned: [(slot: HotkeySlot, hotkey: Hotkey)] = []
+        if let hotkey = config.hotkey { assigned.append((.palette, hotkey)) }
+        if let hotkey = config.clipboard.hotkey { assigned.append((.clipboard, hotkey)) }
+        if let hotkey = config.files.hotkey { assigned.append((.files, hotkey)) }
+        for (index, app) in config.appHotkeys.enumerated() {
+            assigned.append((.app(index), app.hotkey))
         }
-        return config.appHotkeys.indices.contains { other in
-            other != index && config.appHotkeys[other].hotkey.matches(hotkey)
-        }
+        return assigned
     }
 
-    /// The app's bundle path for its icon: the index first, then Launch Services.
+    /// Whether `hotkey` is also set somewhere other than `slot`.
+    func isDuplicate(_ hotkey: Hotkey, in slot: HotkeySlot) -> Bool {
+        assignedHotkeys.contains { $0.slot != slot && $0.hotkey.matches(hotkey) }
+    }
+
+    // MARK: Clipboard
+
+    /// Deletes every unpinned clipboard item.
+    func clearClipboardHistory() throws {
+        try core.clearClipboardHistory()
+    }
+
+    /// The display name for an ignored app's bundle id: the index, then Launch Services.
+    func appName(forBundleID bundleID: String) -> String {
+        if let app = apps.first(where: { $0.bundleId == bundleID }) {
+            return app.name
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            return bundleID
+        }
+        return FileManager.default.displayName(atPath: url.path(percentEncoded: false))
+            .replacingOccurrences(of: ".app", with: "")
+    }
+
     // MARK: Quicklinks and commands
 
     /// Adds `quicklink`, or replaces the one with its id.
@@ -86,6 +111,7 @@ final class LauncherSettings {
         return (Array(quicklinks) + Array(commands)).contains { $0.trimmingCharacters(in: .whitespaces).lowercased() == keyword }
     }
 
+    /// The app's bundle path for its icon: the index first, then Launch Services.
     func path(forBundleID bundleID: String) -> String? {
         apps.first { $0.bundleId == bundleID }?.path
             ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.path(percentEncoded: false)
@@ -102,21 +128,33 @@ final class LauncherSettings {
     }
 }
 
+/// Where a global hotkey is set, for telling duplicates apart from the hotkey itself.
+enum HotkeySlot: Equatable {
+    case palette, clipboard, files
+    case app(Int)
+}
+
 /// Receives the core's launcher callbacks (hotkeys on the main thread, app index changes and
 /// command results on background threads) and forwards them, in order, to the main actor.
 final class LauncherObserverBridge: LauncherObserver {
     private let onTogglePalette: @MainActor @Sendable () -> Void
     private let onAppsChanged: @MainActor @Sendable () -> Void
     private let onCommandFinished: @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void
+    private let onShowMode: @MainActor @Sendable (PaletteMode) -> Void
+    private let onClipboardChanged: @MainActor @Sendable () -> Void
 
     init(
         onTogglePalette: @escaping @MainActor @Sendable () -> Void,
         onAppsChanged: @escaping @MainActor @Sendable () -> Void,
-        onCommandFinished: @escaping @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void
+        onCommandFinished: @escaping @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void,
+        onShowMode: @escaping @MainActor @Sendable (PaletteMode) -> Void,
+        onClipboardChanged: @escaping @MainActor @Sendable () -> Void
     ) {
         self.onTogglePalette = onTogglePalette
         self.onAppsChanged = onAppsChanged
         self.onCommandFinished = onCommandFinished
+        self.onShowMode = onShowMode
+        self.onClipboardChanged = onClipboardChanged
     }
 
     func togglePalette() {
@@ -131,11 +169,17 @@ final class LauncherObserverBridge: LauncherObserver {
         }
     }
 
-    // TODO(step 5): open the palette in this mode.
-    func showMode(mode: PaletteMode) {}
+    func showMode(mode: PaletteMode) {
+        DispatchQueue.main.async { [onShowMode] in
+            MainActor.assumeIsolated { onShowMode(mode) }
+        }
+    }
 
-    // TODO(step 5): refresh clipboard history.
-    func clipboardChanged() {}
+    func clipboardChanged() {
+        DispatchQueue.main.async { [onClipboardChanged] in
+            MainActor.assumeIsolated { onClipboardChanged() }
+        }
+    }
 
     func commandFinished(name: String, output: String, success: Bool) {
         DispatchQueue.main.async { [onCommandFinished] in
@@ -148,6 +192,17 @@ final class LauncherObserverBridge: LauncherObserver {
 @MainActor
 enum AppIcons {
     private static var cache: [String: NSImage] = [:]
+    private static var pathsByBundleID: [String: String?] = [:]
+
+    /// The installed app's icon for a bundle id, if Launch Services knows the app.
+    static func icon(forBundleID bundleID: String) -> NSImage? {
+        let path = pathsByBundleID[bundleID] ?? {
+            let path = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.path(percentEncoded: false)
+            pathsByBundleID[bundleID] = path
+            return path
+        }()
+        return path.map(icon(forPath:))
+    }
 
     static func icon(forPath path: String) -> NSImage {
         if let icon = cache[path] { return icon }

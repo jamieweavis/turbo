@@ -24,7 +24,7 @@ final class AppModel {
         displays = DisplaySettings(core: core)
         brightnessIndicator = BrightnessIndicator(settings: displays)
         launcher = LauncherSettings(core: core)
-        palette = PaletteWindowController(core: core)
+        palette = PaletteWindowController(core: core, settings: launcher)
     }
 
     /// Starts input as soon as Accessibility is granted (now or later) and stops it if revoked.
@@ -40,10 +40,14 @@ final class AppModel {
             onTogglePalette: { [palette] in palette.toggle() },
             onAppsChanged: { [launcher, palette] in
                 launcher.refreshApps()
-                if palette.isVisible { palette.model.search() }
+                if palette.isVisible { palette.model.refresh(ifShowing: .search) }
             },
             onCommandFinished: { [commandOutput] name, output, success in
                 commandOutput.show(name: name, output: output, success: success)
+            },
+            onShowMode: { [palette] mode in palette.toggle(mode: mode) },
+            onClipboardChanged: { [palette] in
+                if palette.isVisible { palette.model.refresh(ifShowing: .clipboard) }
             }
         ))
         // Hotkeys don't need Accessibility, so they work before it's granted.

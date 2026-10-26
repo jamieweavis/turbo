@@ -22,7 +22,7 @@ struct LauncherPane: View {
             Section {
                 LabeledContent("Open launcher") {
                     HStack(spacing: 6) {
-                        if let hotkey = settings.config.hotkey, let problem = settings.problem(with: hotkey) {
+                        if let hotkey = settings.config.hotkey, let problem = settings.problem(with: hotkey, in: .palette) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.yellow)
                                 .help(problem)
@@ -46,7 +46,7 @@ struct LauncherPane: View {
                         name: appHotkey.name,
                         path: settings.path(forBundleID: appHotkey.bundleId),
                         hotkey: hotkeyBinding(at: index),
-                        problem: settings.problem(with: appHotkey.hotkey, ignoringAppAt: index),
+                        problem: settings.problem(with: appHotkey.hotkey, in: .app(index)),
                         onRemove: { settings.config.appHotkeys.remove(at: index) }
                     )
                 }
@@ -92,7 +92,7 @@ struct LauncherPane: View {
 }
 
 /// A recorder for an optional global hotkey, with a button to clear it.
-private struct HotkeyField: View {
+struct HotkeyField: View {
     @Binding var hotkey: Hotkey?
 
     var body: some View {
@@ -176,7 +176,7 @@ private struct PendingAppHotkeyRow: View {
     }
 }
 
-private struct AppIconView: View {
+struct AppIconView: View {
     let path: String?
 
     var body: some View {
@@ -196,7 +196,7 @@ private struct AppIconView: View {
 }
 
 /// A searchable list of installed apps.
-private struct AppPicker: View {
+struct AppPicker: View {
     let apps: [AppInfo]
     let onPick: (AppInfo) -> Void
     let onCancel: () -> Void

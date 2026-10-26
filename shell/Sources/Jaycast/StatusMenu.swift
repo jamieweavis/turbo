@@ -18,6 +18,11 @@ struct StatusMenu: View {
                 model.palette.show()
             }
 
+            MenuRow(title: "Clipboard History", systemImage: "doc.on.clipboard", detail: model.launcher.config.clipboard.hotkey?.title) {
+                dismiss()
+                model.palette.show(mode: .clipboard)
+            }
+
             Divider()
 
             if model.displays.config.enabled, !model.displays.displays.isEmpty {
