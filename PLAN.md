@@ -20,7 +20,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
-| 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | 🚧 In progress |
+| 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | 🧪 Built, awaiting hands-on testing |
 | 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
 | 5 | Clipboard history, file search | ⏳ |
 | 6 | Window management, snippets / text expansion | ⏳ |
@@ -56,10 +56,10 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 - [x] Shared core API: `LauncherConfig` (palette hotkey, default ⌥Space; app hotkeys),
       `SearchResult`, `LauncherObserver`, `Core` search/open/hotkey methods
-- [ ] App index (with change watching) and fuzzy ranking that learns from usage
-- [ ] System actions (lock, sleep, dark mode, empty trash, …)
-- [ ] Global hotkeys: palette + per-app focus-or-hide
-- [ ] Shell: floating palette panel with keyboard navigation, confirmations, Launcher settings pane
+- [x] App index (with change watching) and fuzzy ranking that learns from usage
+- [x] System actions (lock, sleep, dark mode, empty trash, …)
+- [x] Global hotkeys: palette + per-app focus-or-hide
+- [x] Shell: floating palette panel with keyboard navigation, confirmations, Launcher settings pane
 
 ### Step 4: Calculator, quicklinks, shell commands
 
@@ -85,6 +85,16 @@ Raycast extension support.
 
 ## Log
 
+- **Step 3**: built by three parallel agents (app index + fuzzy + ranking; Carbon hotkeys, app
+  toggle + system actions; Swift palette + Launcher pane), integrated on main. 118 Rust tests.
+  Indexes ~99 apps in ~60 ms; search takes 20–65 µs per query. Names are Finder's localized names,
+  with folder/bundle names as aliases. Ranking: fuzzy score + capped frecency (one-week half-life)
+  + per-query memory, in `launcher-usage.json`. Hotkeys pause while a shortcut recorder is
+  listening, and the Launcher pane flags hotkeys another app owns. System actions: lock
+  (private `SACLockScreenImmediate`), sleep/displays (`pmset`), restart/shut down/log out
+  (loginwindow Apple Events, may prompt for Automation once), dark mode (private SkyLight),
+  empty trash (Finder, prompts for Automation once), screen saver, mute. Not yet checked by hand:
+  the palette's look, the hotkey, opening apps and actions, FSEvents re-indexing.
 - **Step 2**: built by three parallel agents (DDC display manager; brightness-key tap; Swift
   popover, HUD and Monitor pane), integrated on main. 72 Rust tests; both event taps confirmed
   live. DDC verified once on the DELL U2723QE (read 100/100 in 48 ms), after which the monitor

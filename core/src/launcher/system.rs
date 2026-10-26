@@ -115,15 +115,11 @@ const ACTIONS: &[SystemAction] = &[
     },
 ];
 
-// TODO(step 3): drop the allow once the launcher's search and open call these.
-#[allow(dead_code)]
 pub(crate) fn actions() -> &'static [SystemAction] {
     ACTIONS
 }
 
 /// Runs an action by id. Must not block for long: the shell calls it from the main thread.
-// TODO(step 3): drop the allow once the launcher's `open` calls this.
-#[allow(dead_code)]
 pub(crate) fn perform(id: &str) -> Result<(), CoreError> {
     let mechanism = mechanism(id).ok_or_else(|| CoreError::Other {
         message: format!("unknown system action {id}"),
