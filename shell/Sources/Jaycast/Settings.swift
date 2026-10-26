@@ -163,10 +163,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $selection) { pane in
-                if pane == .windows {
-                    Label { Text(pane.title) } icon: { Image(nsImage: Self.windowsIcon) }
-                } else {
-                    Label(pane.title, systemImage: pane.systemImage)
+                Label {
+                    Text(pane.title)
+                } icon: {
+                    Group {
+                        if pane == .windows {
+                            Image(nsImage: Self.windowsIcon)
+                        } else {
+                            Image(systemName: pane.systemImage)
+                        }
+                    }
+                    // A turned-off feature's icon goes grey instead of the accent color.
+                    .foregroundStyle(isEnabled(pane)?.wrappedValue == false ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                 }
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
