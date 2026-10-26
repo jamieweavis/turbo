@@ -32,7 +32,10 @@ final class SettingsWindowController {
         // Clear window so the SwiftUI glass background shows the desktop through it.
         window.isOpaque = false
         window.backgroundColor = .clear
+        // Still the window's name in the Window menu and Mission Control; each pane's header
+        // shows its own title instead.
         window.title = "Jaycast Settings"
+        window.titleVisibility = .hidden
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
@@ -189,16 +192,25 @@ struct SettingsView: View {
             }
             // Monitor keeps the built-in display's slider usable, and disables the rest itself.
             .disabled(pane != .monitor && isEnabled(pane)?.wrappedValue == false)
-            .navigationTitle("Jaycast Settings")
             .scrollContentBackground(.hidden)
+            // Every pane has a toolbar item, even an invisible one: without one the toolbar
+            // collapses and the traffic lights lose their inset position.
             .toolbar {
+                ToolbarSpacer(.flexible)
                 if let isOn = isEnabled(pane) {
-                    ToolbarItem(placement: .primaryAction) {
+                    ToolbarItem {
                         Toggle("Enable \(pane.title)", isOn: isOn)
                             .toggleStyle(.switch)
+                            .controlSize(.mini)
                             .labelsHidden()
                             .help(isOn.wrappedValue ? "Turn \(pane.title) off" : "Turn \(pane.title) on")
                     }
+                    .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem {
+                        Color.clear.frame(width: 1, height: 1)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
                 }
             }
         }
