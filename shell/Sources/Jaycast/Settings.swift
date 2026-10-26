@@ -94,8 +94,8 @@ struct SettingsView: View {
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
             // so the selected (bold) "Colour Picker" fits.
-            .frame(minWidth: 200)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 200, max: 200)
+            .frame(minWidth: 165)
+            .navigationSplitViewColumnWidth(min: 165, ideal: 165, max: 165)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             let pane = selection ?? .general
