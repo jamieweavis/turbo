@@ -11,7 +11,7 @@ crate-type = ["lib", "staticlib"]
 [dependencies]
 uniffi.workspace = true
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSEvent", "NSRunningApplication", "NSWorkspace", "block2", "objc2-core-graphics"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSEvent", "NSPasteboard", "NSRunningApplication", "NSWorkspace", "block2", "objc2-core-graphics"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSError", "NSFileManager", "NSString", "NSURL"] }
 objc2-core-foundation = "0.3"
 objc2-core-graphics = "0.3"

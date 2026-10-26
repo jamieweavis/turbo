@@ -98,6 +98,9 @@ final class LauncherObserverBridge: LauncherObserver {
             MainActor.assumeIsolated { onAppsChanged() }
         }
     }
+
+    // TODO(step 4): show command output.
+    func commandFinished(name: String, output: String, success: Bool) {}
 }
 
 /// App icons by bundle path, cached since the palette redraws rows on every keystroke.

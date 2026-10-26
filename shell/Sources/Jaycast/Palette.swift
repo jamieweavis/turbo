@@ -239,7 +239,7 @@ final class PaletteModel {
             return
         }
         do {
-            try core.openResult(id: result.id, query: query)
+            _ = try core.openResult(id: result.id, query: query)
             confirming = nil
             error = nil
             onClose?()

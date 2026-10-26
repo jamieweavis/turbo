@@ -25,6 +25,10 @@ pub struct LauncherConfig {
     pub hotkey: Option<Hotkey>,
     /// Hotkeys that focus an app (launching it if needed), or hide it if it's already in front.
     pub app_hotkeys: Vec<AppHotkey>,
+    /// Show a calculator / unit / currency result when the query is an expression.
+    pub calculator: bool,
+    pub quicklinks: Vec<Quicklink>,
+    pub commands: Vec<ShellCommand>,
 }
 
 impl Default for LauncherConfig {
@@ -35,8 +39,74 @@ impl Default for LauncherConfig {
                 modifiers: vec![Modifier::Option],
             }),
             app_hotkeys: Vec::new(),
+            calculator: true,
+            quicklinks: default_quicklinks(),
+            commands: Vec::new(),
         }
     }
+}
+
+fn default_quicklinks() -> Vec<Quicklink> {
+    let link = |id: &str, name: &str, keyword: &str, url: &str| Quicklink {
+        id: id.into(),
+        name: name.into(),
+        keyword: keyword.into(),
+        url: url.into(),
+    };
+    vec![
+        link(
+            "google",
+            "Search Google",
+            "g",
+            "https://www.google.com/search?q={query}",
+        ),
+        link(
+            "youtube",
+            "Search YouTube",
+            "yt",
+            "https://www.youtube.com/results?search_query={query}",
+        ),
+        link(
+            "github",
+            "Search GitHub",
+            "gh",
+            "https://github.com/search?q={query}",
+        ),
+    ]
+}
+
+/// A URL template opened from the palette. Placeholders: `{query}` (the text typed after the
+/// keyword, URL-encoded) and `{clipboard}` (URL-encoded).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct Quicklink {
+    /// Stable and unique (the shell generates a UUID for new ones).
+    pub id: String,
+    pub name: String,
+    /// Typed before the argument: `g rust traits`. May be empty (then found by name only).
+    pub keyword: String,
+    pub url: String,
+}
+
+/// A shell command run from the palette with `/bin/zsh -lc`. Placeholders: `{query}` (the text
+/// typed after the keyword, shell-quoted) and `{clipboard}` (shell-quoted).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct ShellCommand {
+    pub id: String,
+    pub name: String,
+    pub keyword: String,
+    pub command: String,
+    pub output: CommandOutput,
+    pub needs_confirmation: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum CommandOutput {
+    /// Run in the background; only failures are reported.
+    Discard,
+    /// Show stdout/stderr in a window when it finishes.
+    Show,
+    /// Copy stdout to the clipboard when it finishes.
+    Copy,
 }
 
 /// `kVK_Space`.

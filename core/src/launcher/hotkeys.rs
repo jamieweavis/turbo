@@ -508,6 +508,7 @@ mod tests {
                 app("com.apple.Safari", hotkey(1, &[Modifier::Control])),
                 app("com.apple.Terminal", hotkey(17, &[Modifier::Control])),
             ],
+            ..LauncherConfig::default()
         };
         let plan = plan(&config);
         assert!(plan.duplicates.is_empty());
@@ -534,6 +535,7 @@ mod tests {
                 "com.apple.Safari",
                 hotkey(KEY_SPACE, &[Modifier::Shift, Modifier::Command]),
             )],
+            ..LauncherConfig::default()
         };
         let plan = plan(&config);
         assert_eq!(plan.hotkeys.len(), 1);
@@ -546,6 +548,7 @@ mod tests {
         let config = LauncherConfig {
             hotkey: None,
             app_hotkeys: vec![app("com.apple.Safari", hotkey(1, &[Modifier::Control]))],
+            ..LauncherConfig::default()
         };
         let plan = plan(&config);
         assert_eq!(plan.hotkeys.len(), 1);

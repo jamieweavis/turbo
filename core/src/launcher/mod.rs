@@ -6,8 +6,12 @@
 //! - `system`: the system actions (lock, sleep, dark mode, …) listed by `system::actions`
 //!   and run by `system::perform`.
 //! - `hotkeys`: global hotkeys (palette + per-app) and the focus-or-hide app toggle.
+//! - `calc`: calculator, unit and currency conversion (`Calculator::evaluate`).
+//! - `extensions`: quicklinks and shell commands (`extensions::results` / `open`).
 
 mod apps;
+mod calc;
+mod extensions;
 mod fuzzy;
 mod hotkeys;
 mod ranking;
@@ -26,6 +30,7 @@ use objc2_foundation::{NSString, NSURL};
 use crate::config::LauncherConfig;
 use crate::error::CoreError;
 use apps::App;
+use calc::Calculator;
 use fuzzy::Prepared;
 use ranking::{Usage, UsageStore};
 
@@ -45,12 +50,28 @@ pub struct SearchResult {
     pub symbol: Option<String>,
     /// Destructive or disruptive (restart, empty trash, …): the shell confirms first.
     pub needs_confirmation: bool,
+    /// When set, choosing the result fills the search field with this instead of opening it,
+    /// e.g. `g ` for a quicklink that still needs its argument.
+    pub completion: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ResultKind {
     Application,
     SystemAction,
+    Calculator,
+    Quicklink,
+    Command,
+}
+
+/// What opening a result did, so the palette can confirm it.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum OpenOutcome {
+    Done,
+    /// The text was copied to the clipboard (calculator results).
+    Copied {
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -68,7 +89,16 @@ pub trait LauncherObserver: Send + Sync {
     fn toggle_palette(&self);
     /// The app index changed (an app was installed, removed or renamed).
     fn apps_changed(&self);
+    /// A shell command with `CommandOutput::Show` finished (or any command failed).
+    /// Called from a background thread.
+    fn command_finished(&self, name: String, output: String, success: bool);
 }
+
+/// Calculator results go above everything; a quicklink or command whose keyword was typed
+/// with an argument goes above fuzzy matches.
+pub(crate) const CALCULATOR_SCORE: i32 = 20_000;
+#[allow(dead_code)] // TODO(step 4): used by extensions::results.
+pub(crate) const KEYWORD_SCORE: i32 = 10_000;
 
 /// Alias and keyword matches count for three quarters of a match on the title itself.
 const SECONDARY_MATCH_WEIGHT: i32 = 3;
@@ -81,6 +111,8 @@ pub(crate) struct Launcher {
     store: UsageStore,
     observer: Mutex<Option<Arc<dyn LauncherObserver>>>,
     watcher: Mutex<Option<apps::Watcher>>,
+    config: RwLock<Arc<LauncherConfig>>,
+    calculator: Calculator,
 }
 
 #[derive(Default)]
@@ -142,13 +174,15 @@ impl SystemEntry {
             path: None,
             symbol: Some(self.symbol.clone()),
             needs_confirmation: self.needs_confirmation,
+            completion: None,
         }
     }
 }
 
 impl Launcher {
-    /// Starts indexing on a background thread; `data_dir` holds the usage history.
-    pub fn new(data_dir: &Path) -> Arc<Self> {
+    /// Starts indexing on a background thread; `data_dir` holds the usage history (and the
+    /// currency rate cache).
+    pub fn new(data_dir: &Path, config: LauncherConfig) -> Arc<Self> {
         let store = UsageStore::new(data_dir);
         let launcher = Arc::new(Self {
             index: RwLock::new(Arc::new(Index::default())),
@@ -157,6 +191,8 @@ impl Launcher {
             store,
             observer: Mutex::new(None),
             watcher: Mutex::new(None),
+            config: RwLock::new(Arc::new(config)),
+            calculator: Calculator::new(data_dir),
         });
 
         let weak = Arc::downgrade(&launcher);
@@ -185,15 +221,31 @@ impl Launcher {
         *self.observer.lock().unwrap() = observer;
     }
 
+    /// Quicklinks, commands and the calculator switch come from here.
+    pub fn set_config(&self, config: LauncherConfig) {
+        *self.config.write().unwrap() = Arc::new(config);
+    }
+
     /// Best matches for `query`, apps and system actions together. An empty query returns
     /// the most used. Fast enough to call on every keystroke (no I/O).
     pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
         let index = Arc::clone(&self.index.read().unwrap());
+        let config = Arc::clone(&self.config.read().unwrap());
+        let mut extra = Vec::new();
+        if !query.trim().is_empty() {
+            if config.calculator
+                && let Some(calculation) = self.calculator.evaluate(query)
+            {
+                extra.push((CALCULATOR_SCORE, calculation.result()));
+            }
+            extra.extend(extensions::results(query, &config));
+        }
         let usage = self.usage.lock().unwrap();
         rank(
             &fuzzy::fold_query(query),
             &index,
             &self.system,
+            extra,
             &usage,
             now(),
             limit,
@@ -201,8 +253,19 @@ impl Launcher {
     }
 
     /// Opens a result from `search` and records the choice for ranking.
-    pub fn open(&self, id: &str, query: &str) -> Result<(), CoreError> {
-        if let Some(bundle_id) = id.strip_prefix("app:") {
+    pub fn open(&self, id: &str, query: &str) -> Result<OpenOutcome, CoreError> {
+        let mut outcome = OpenOutcome::Done;
+        if let Some(text) = id.strip_prefix("calc:") {
+            crate::pasteboard::copy(text)?;
+            // Calculations aren't worth remembering for ranking.
+            return Ok(OpenOutcome::Copied {
+                text: text.to_owned(),
+            });
+        } else if id.starts_with("quicklink:") || id.starts_with("command:") {
+            let config = Arc::clone(&self.config.read().unwrap());
+            let observer = self.observer.lock().unwrap().clone();
+            outcome = extensions::open(id, query, &config, observer)?;
+        } else if let Some(bundle_id) = id.strip_prefix("app:") {
             let index = Arc::clone(&self.index.read().unwrap());
             let app = index
                 .by_id
@@ -220,7 +283,7 @@ impl Launcher {
             });
         }
         self.record(id, query);
-        Ok(())
+        Ok(outcome)
     }
 
     /// Every indexed app, sorted by name (for choosing app hotkeys in settings).
@@ -260,11 +323,13 @@ impl Launcher {
     }
 }
 
-/// Scores every app and system action against `query` (folded) and returns the best.
+/// Scores every app and system action against `query` (folded), merges in `extra`
+/// (calculator, quicklinks, commands; already scored) and returns the best.
 fn rank(
     query: &[char],
     index: &Index,
     system: &[SystemEntry],
+    extra: Vec<(i32, SearchResult)>,
     usage: &Usage,
     now: f64,
     limit: usize,
@@ -299,6 +364,14 @@ fn rank(
             score: score + usage.boost(&entry.id, query, now),
             title_len: entry.title.chars().count(),
             result: entry.result(),
+        });
+    }
+
+    for (score, result) in extra {
+        scored.push(Scored {
+            score: score + usage.boost(&result.id, query, now),
+            title_len: result.title.chars().count(),
+            result,
         });
     }
 
@@ -365,6 +438,7 @@ fn app_result(app: &App) -> SearchResult {
         path: Some(app.info.path.clone()),
         symbol: None,
         needs_confirmation: false,
+        completion: None,
     }
 }
 
@@ -451,6 +525,7 @@ mod tests {
             &fuzzy::fold_query(query),
             index,
             &[lock_screen()],
+            Vec::new(),
             usage,
             NOW,
             8,
@@ -525,6 +600,7 @@ mod tests {
             &fuzzy::fold_query("code"),
             &index,
             &[],
+            Vec::new(),
             &Usage::default(),
             NOW,
             8,
@@ -555,6 +631,7 @@ mod tests {
             &fuzzy::fold_query("e"),
             &index,
             &[],
+            Vec::new(),
             &Usage::default(),
             NOW,
             3,
@@ -599,7 +676,15 @@ mod tests {
         let usage = Usage::default();
         for query in ["saf", "term", "sysset", "vsc", "fin", "act mon", "s"] {
             let start = std::time::Instant::now();
-            let results = rank(&fuzzy::fold_query(query), &index, &[], &usage, NOW, 3);
+            let results = rank(
+                &fuzzy::fold_query(query),
+                &index,
+                &[],
+                Vec::new(),
+                &usage,
+                NOW,
+                3,
+            );
             println!("{query:>8} ({:?}): {:?}", start.elapsed(), titles(&results));
         }
     }

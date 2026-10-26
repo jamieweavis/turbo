@@ -8,6 +8,7 @@ mod display;
 mod error;
 mod input;
 mod launcher;
+mod pasteboard;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -17,7 +18,7 @@ use display::{BrightnessKeyTap, DisplayManager};
 pub use display::{DisplayInfo, DisplayObserver};
 pub use error::CoreError;
 use input::InputEngine;
-pub use launcher::{AppInfo, LauncherObserver, ResultKind, SearchResult};
+pub use launcher::{AppInfo, LauncherObserver, OpenOutcome, ResultKind, SearchResult};
 use launcher::{HotkeyManager, Launcher};
 
 /// Basic facts about the core, shown in the shell so the FFI is exercised end to end.
@@ -58,7 +59,7 @@ impl Core {
         let input = InputEngine::new(config.mouse.clone());
         let displays = DisplayManager::new(config.monitor.clone());
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
-        let launcher = Launcher::new(&data_dir);
+        let launcher = Launcher::new(&data_dir, config.launcher.clone());
         let hotkeys = HotkeyManager::new();
         Ok(Arc::new(Self {
             store,
@@ -123,6 +124,7 @@ impl Core {
         config.launcher = launcher.clone();
         self.store.save(&config)?;
         launcher::apply_config(&self.hotkeys, &launcher);
+        self.launcher.set_config(launcher);
         Ok(())
     }
 
@@ -156,7 +158,7 @@ impl Core {
 
     /// Opens a search result. `query` is what was typed, so ranking learns which result
     /// each query leads to.
-    pub fn open_result(&self, id: String, query: String) -> Result<(), CoreError> {
+    pub fn open_result(&self, id: String, query: String) -> Result<OpenOutcome, CoreError> {
         self.launcher.open(&id, &query)
     }
 

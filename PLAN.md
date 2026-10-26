@@ -20,8 +20,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
-| 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | 🧪 Built, awaiting hands-on testing |
-| 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
+| 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
+| 4 | Calculator & conversions, quicklinks & shell commands | 🚧 In progress |
 | 5 | Clipboard history, file search | ⏳ |
 | 6 | Window management, snippets / text expansion | ⏳ |
 
@@ -63,9 +63,14 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ### Step 4: Calculator, quicklinks, shell commands
 
-- [ ] Inline maths, unit and currency conversion
-- [ ] Quicklinks with `{query}` placeholders
-- [ ] Custom shell commands run from the palette
+- [x] Shared core API: `LauncherConfig` calculator switch, quicklinks (defaults: Google `g`,
+      YouTube `yt`, GitHub `gh`) and commands; `SearchResult.completion`; `OpenOutcome`;
+      `command_finished` callback; search merges calculator/extension results; clipboard helper
+- [ ] Calculator: inline maths, unit and currency conversion (cached ECB rates)
+- [ ] Quicklinks with `{query}` / `{clipboard}` placeholders
+- [ ] Shell commands run from the palette (discard / show / copy output, optional confirmation)
+- [ ] Shell: calculator row, argument completion, copied/output feedback, Quicklinks and
+      Commands settings
 
 ### Step 5: Clipboard history, file search
 
