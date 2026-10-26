@@ -92,7 +92,7 @@ struct SettingsView: View {
             List(SettingsPane.allCases, selection: $selection) { pane in
                 Label(pane.title, systemImage: pane.systemImage)
             }
-            .navigationSplitViewColumnWidth(210)
+            .navigationSplitViewColumnWidth(215)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             let pane = selection ?? .general
