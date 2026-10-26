@@ -13,6 +13,10 @@ struct ShortcutRecorder: View {
 
     @State private var monitor: Any?
 
+    /// Told when any recorder starts or stops listening, so global hotkeys can be paused:
+    /// otherwise pressing an existing hotkey would fire it instead of being recorded.
+    static var onRecordingChanged: (@MainActor (Bool) -> Void)?
+
     var body: some View {
         Button {
             if monitor == nil { startRecording() } else { stopRecording() }
@@ -26,6 +30,7 @@ struct ShortcutRecorder: View {
 
     private func startRecording() {
         guard monitor == nil else { return }
+        Self.onRecordingChanged?(true)
         // Local monitors run on the main thread.
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             MainActor.assumeIsolated {
@@ -45,9 +50,9 @@ struct ShortcutRecorder: View {
     }
 
     private func stopRecording() {
-        if let monitor {
-            NSEvent.removeMonitor(monitor)
-        }
-        monitor = nil
+        guard let monitor else { return }
+        NSEvent.removeMonitor(monitor)
+        self.monitor = nil
+        Self.onRecordingChanged?(false)
     }
 }

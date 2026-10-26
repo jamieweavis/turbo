@@ -22,10 +22,10 @@ struct LauncherPane: View {
             Section {
                 LabeledContent("Open launcher") {
                     HStack(spacing: 6) {
-                        if let hotkey = settings.config.hotkey, settings.isDuplicate(hotkey) {
+                        if let hotkey = settings.config.hotkey, let problem = settings.problem(with: hotkey) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.yellow)
-                                .help("An app hotkey uses this too")
+                                .help(problem)
                         }
                         HotkeyField(hotkey: $settings.config.hotkey)
                     }
@@ -40,7 +40,7 @@ struct LauncherPane: View {
                         name: appHotkey.name,
                         path: settings.path(forBundleID: appHotkey.bundleId),
                         hotkey: hotkeyBinding(at: index),
-                        isDuplicate: settings.isDuplicate(appHotkey.hotkey, ignoringAppAt: index),
+                        problem: settings.problem(with: appHotkey.hotkey, ignoringAppAt: index),
                         onRemove: { settings.config.appHotkeys.remove(at: index) }
                     )
                 }
@@ -113,7 +113,7 @@ private struct AppHotkeyRow: View {
     let name: String
     let path: String?
     @Binding var hotkey: Hotkey
-    let isDuplicate: Bool
+    let problem: String?
     let onRemove: () -> Void
 
     var body: some View {
@@ -126,10 +126,10 @@ private struct AppHotkeyRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if isDuplicate {
+            if let problem {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.yellow)
-                    .help("This hotkey is used more than once")
+                    .help(problem)
             }
             ShortcutRecorder(
                 shortcut: Binding(

@@ -13,11 +13,29 @@ final class LauncherSettings {
     }
     private(set) var apps: [AppInfo] = []
     private(set) var saveError: String?
+    /// Hotkeys the system wouldn't register (usually taken by another app).
+    private(set) var failed: [Hotkey] = []
     @ObservationIgnored private let core: Core
 
     init(core: Core) {
         self.core = core
         config = core.launcherConfig()
+    }
+
+    /// Re-reads which hotkeys failed to register; call after the core (re)registers them.
+    func refreshFailed() {
+        failed = core.failedHotkeys()
+    }
+
+    /// Why `hotkey` won't work, if it won't: used twice, or claimed by another app.
+    func problem(with hotkey: Hotkey, ignoringAppAt index: Int? = nil) -> String? {
+        if isDuplicate(hotkey, ignoringAppAt: index) {
+            return "This hotkey is used more than once"
+        }
+        if failed.contains(where: { $0.matches(hotkey) }) {
+            return "Another app is already using this shortcut"
+        }
+        return nil
     }
 
     func refreshApps() {
@@ -48,6 +66,7 @@ final class LauncherSettings {
         do {
             try core.setLauncherConfig(launcher: config)
             saveError = nil
+            refreshFailed()
         } catch {
             saveError = error.userMessage
         }

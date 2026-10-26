@@ -38,6 +38,11 @@ struct Carbon {
     handler: EventHandlerRef,
     registered: Vec<EventHotKeyRef>,
     failed: Vec<Hotkey>,
+    /// The latest config, re-applied when hotkeys are resumed.
+    config: Option<LauncherConfig>,
+    /// While a shortcut recorder is listening, nothing is registered, so pressing an
+    /// existing hotkey records it instead of firing it.
+    paused: bool,
 }
 
 // SAFETY: the raw Carbon refs are opaque tokens only dereferenced by Carbon, and every call
@@ -61,6 +66,8 @@ impl HotkeyManager {
                 handler: ptr::null_mut(),
                 registered: Vec::new(),
                 failed: Vec::new(),
+                config: None,
+                paused: false,
             }),
         }
     }
@@ -77,10 +84,14 @@ impl HotkeyManager {
             return;
         }
         let mut carbon = self.carbon.lock().unwrap();
+        carbon.config = Some(config.clone());
         if carbon.handler.is_null() {
             carbon.handler = install_handler(&self.inner);
         }
         unregister_all(&mut carbon);
+        if carbon.paused {
+            return;
+        }
 
         let plan = plan(config);
         let mut failed = plan.duplicates;
@@ -99,11 +110,25 @@ impl HotkeyManager {
     }
 
     /// Hotkeys from the last `apply` that couldn't be registered: duplicates within the
-    /// config, or combinations Carbon refused.
-    // TODO(step 3): expose through `Core` so settings can flag them.
-    #[allow(dead_code)]
+    /// config, or combinations Carbon refused (usually taken by another app).
     pub fn failed(&self) -> Vec<Hotkey> {
         self.carbon.lock().unwrap().failed.clone()
+    }
+
+    /// Unregisters every hotkey while paused (for shortcut recorders); resuming re-applies
+    /// the latest config. Main thread only.
+    pub fn set_paused(&self, paused: bool) {
+        let config = {
+            let mut carbon = self.carbon.lock().unwrap();
+            if carbon.paused == paused {
+                return;
+            }
+            carbon.paused = paused;
+            carbon.config.clone()
+        };
+        if let Some(config) = config {
+            self.apply(&config);
+        }
     }
 }
 

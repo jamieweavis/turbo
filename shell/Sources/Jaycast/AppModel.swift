@@ -44,7 +44,11 @@ final class AppModel {
         ))
         // Hotkeys don't need Accessibility, so they work before it's granted.
         core.startHotkeys()
+        launcher.refreshFailed()
         launcher.refreshApps()
+        ShortcutRecorder.onRecordingChanged = { [core] recording in
+            core.setHotkeysPaused(paused: recording)
+        }
 
         accessibility.startWatching()
         Task {

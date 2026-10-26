@@ -132,6 +132,17 @@ impl Core {
         launcher::apply_config(&self.hotkeys, &self.launcher_config());
     }
 
+    /// Hotkeys that couldn't be registered: duplicates, or combinations another app owns.
+    pub fn failed_hotkeys(&self) -> Vec<Hotkey> {
+        self.hotkeys.failed()
+    }
+
+    /// Suspends all global hotkeys while a shortcut recorder is listening, so pressing an
+    /// existing hotkey records it instead of firing it. Main thread only.
+    pub fn set_hotkeys_paused(&self, paused: bool) {
+        self.hotkeys.set_paused(paused);
+    }
+
     /// Registers the shell's observer for the palette hotkey and app index changes.
     pub fn set_launcher_observer(&self, observer: Option<Arc<dyn LauncherObserver>>) {
         self.launcher.set_observer(observer.clone());
