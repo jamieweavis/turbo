@@ -3,6 +3,7 @@
 
 uniffi::setup_scaffolding!();
 
+mod caffeinate;
 mod clipboard;
 mod config;
 mod display;
@@ -18,6 +19,7 @@ mod windows;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use caffeinate::Caffeinate;
 use clipboard::ClipboardHistory;
 pub use clipboard::{ClipboardItem, ClipboardKind};
 pub use config::*;
@@ -69,6 +71,7 @@ pub struct Core {
     windows: Arc<WindowManager>,
     snippets: SnippetExpander,
     hyper_key: HyperKey,
+    caffeinate: Arc<Caffeinate>,
 }
 
 #[uniffi::export]
@@ -84,7 +87,8 @@ impl Core {
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
         let windows = Arc::new(WindowManager::new(config.launcher.windows.clone()));
         let launcher = Launcher::new(&data_dir, config.launcher.clone(), Arc::clone(&windows));
-        let hotkeys = HotkeyManager::new(Arc::clone(&windows));
+        let caffeinate = Arc::new(Caffeinate::new(config.launcher.caffeinate.clone()));
+        let hotkeys = HotkeyManager::new(Arc::clone(&windows), Arc::clone(&caffeinate));
         let clipboard = ClipboardHistory::new(&data_dir, config.launcher.clipboard.clone());
         let files = FileSearch::new(config.launcher.files.clone());
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
@@ -102,6 +106,7 @@ impl Core {
             windows,
             snippets,
             hyper_key,
+            caffeinate,
         }))
     }
 
@@ -174,8 +179,19 @@ impl Core {
         self.files.set_config(launcher.files.clone());
         self.windows.set_config(launcher.windows.clone());
         self.snippets.set_config(launcher.snippets.clone());
+        let caffeinate = self.caffeinate.set_config(launcher.caffeinate.clone());
         self.launcher.set_config(launcher);
-        Ok(())
+        caffeinate
+    }
+
+    /// Whether caffeinate is keeping the Mac awake.
+    pub fn caffeinate_active(&self) -> bool {
+        self.caffeinate.is_active()
+    }
+
+    /// Turns keeping the Mac awake on or off. It always ends when Jaycast quits.
+    pub fn set_caffeinate_active(&self, active: bool) -> Result<(), CoreError> {
+        self.caffeinate.set_active(active)
     }
 
     /// Registers the saved hotkeys. Call once at launch, on the main thread, after

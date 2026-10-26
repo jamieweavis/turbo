@@ -60,6 +60,10 @@ final class LauncherSettings {
                 assigned.append((.window(window.action), window.hotkey))
             }
         }
+        let caffeinate = config.caffeinate
+        if let hotkey = caffeinate.toggleHotkey { assigned.append((.caffeinate(.toggle), hotkey)) }
+        if let hotkey = caffeinate.onHotkey { assigned.append((.caffeinate(.on), hotkey)) }
+        if let hotkey = caffeinate.offHotkey { assigned.append((.caffeinate(.off), hotkey)) }
         return assigned
     }
 
@@ -192,6 +196,11 @@ enum HotkeySlot: Equatable {
     case palette, clipboard, files
     case app(Int)
     case window(WindowAction)
+    case caffeinate(CaffeinateHotkey)
+}
+
+enum CaffeinateHotkey {
+    case toggle, on, off
 }
 
 /// Receives the core's launcher callbacks (hotkeys on the main thread, app index changes and
@@ -202,19 +211,22 @@ final class LauncherObserverBridge: LauncherObserver {
     private let onCommandFinished: @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void
     private let onShowMode: @MainActor @Sendable (PaletteMode) -> Void
     private let onClipboardChanged: @MainActor @Sendable () -> Void
+    private let onCaffeinateChanged: @MainActor @Sendable (Bool) -> Void
 
     init(
         onTogglePalette: @escaping @MainActor @Sendable () -> Void,
         onAppsChanged: @escaping @MainActor @Sendable () -> Void,
         onCommandFinished: @escaping @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void,
         onShowMode: @escaping @MainActor @Sendable (PaletteMode) -> Void,
-        onClipboardChanged: @escaping @MainActor @Sendable () -> Void
+        onClipboardChanged: @escaping @MainActor @Sendable () -> Void,
+        onCaffeinateChanged: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         self.onTogglePalette = onTogglePalette
         self.onAppsChanged = onAppsChanged
         self.onCommandFinished = onCommandFinished
         self.onShowMode = onShowMode
         self.onClipboardChanged = onClipboardChanged
+        self.onCaffeinateChanged = onCaffeinateChanged
     }
 
     func togglePalette() {
@@ -238,6 +250,12 @@ final class LauncherObserverBridge: LauncherObserver {
     func clipboardChanged() {
         DispatchQueue.main.async { [onClipboardChanged] in
             MainActor.assumeIsolated { onClipboardChanged() }
+        }
+    }
+
+    func caffeinateChanged(active: Bool) {
+        DispatchQueue.main.async { [onCaffeinateChanged] in
+            MainActor.assumeIsolated { onCaffeinateChanged(active) }
         }
     }
 

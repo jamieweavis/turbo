@@ -1,4 +1,4 @@
-//! Global hotkeys (the palette, palette modes, per-app and window hotkeys) and the app
+//! Global hotkeys (the palette, palette modes, per-app, window and caffeinate hotkeys) and the app
 //! focus-or-hide toggle.
 //!
 //! Hotkeys go through Carbon's `RegisterEventHotKey`, which is still the supported way to
@@ -16,6 +16,7 @@ use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfigurat
 use objc2_foundation::NSString;
 
 use super::{LauncherObserver, PaletteMode};
+use crate::caffeinate::{Caffeinate, CaffeinateCommand};
 use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
 use crate::windows::WindowManager;
@@ -33,6 +34,7 @@ struct Inner {
     /// What each registered hotkey id does.
     targets: Mutex<HashMap<u32, Target>>,
     windows: Arc<WindowManager>,
+    caffeinate: Arc<Caffeinate>,
 }
 
 /// Carbon's refs: only touched on the main thread (`apply` and `Drop` check), but kept in
@@ -58,15 +60,17 @@ enum Target {
     Mode(PaletteMode),
     App(String),
     Window(WindowAction),
+    Caffeinate(CaffeinateCommand),
 }
 
 impl HotkeyManager {
-    pub fn new(windows: Arc<WindowManager>) -> Self {
+    pub fn new(windows: Arc<WindowManager>, caffeinate: Arc<Caffeinate>) -> Self {
         Self {
             inner: Arc::new(Inner {
                 observer: Mutex::new(None),
                 targets: Mutex::new(HashMap::new()),
                 windows,
+                caffeinate,
             }),
             carbon: Mutex::new(Carbon {
                 handler: ptr::null_mut(),
@@ -185,6 +189,16 @@ impl Inner {
                     eprintln!("jaycast: window hotkey {action:?}: {error}");
                 }
             }
+            Some(Target::Caffeinate(command)) => {
+                let active = command.resolve(self.caffeinate.is_active());
+                if let Err(error) = self.caffeinate.set_active(active) {
+                    eprintln!("jaycast: caffeinate hotkey {command:?}: {error}");
+                }
+                let observer = self.observer.lock().unwrap().clone();
+                if let Some(observer) = observer {
+                    observer.caffeinate_changed(self.caffeinate.is_active());
+                }
+            }
             None => {}
         }
     }
@@ -239,6 +253,19 @@ fn plan(config: &LauncherConfig) -> Plan {
                 .iter()
                 .filter(|_| config.windows.hotkeys_enabled)
                 .map(|binding| (binding.hotkey.clone(), Target::Window(binding.action))),
+        )
+        .chain(
+            [
+                (&config.caffeinate.toggle_hotkey, CaffeinateCommand::Toggle),
+                (&config.caffeinate.on_hotkey, CaffeinateCommand::On),
+                (&config.caffeinate.off_hotkey, CaffeinateCommand::Off),
+            ]
+            .into_iter()
+            .filter_map(|(hotkey, command)| {
+                hotkey
+                    .clone()
+                    .map(|hotkey| (hotkey, Target::Caffeinate(command)))
+            }),
         );
 
     let mut seen = Vec::new();
@@ -570,6 +597,26 @@ mod tests {
     }
 
     #[test]
+    fn caffeinate_hotkeys_come_after_windows() {
+        let mut config = without_mode_hotkeys();
+        config.caffeinate.toggle_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Option]));
+        config.caffeinate.off_hotkey = Some(hotkey(8, &[Modifier::Control, Modifier::Command]));
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![
+                Target::Palette,
+                Target::Caffeinate(CaffeinateCommand::Toggle),
+                Target::Caffeinate(CaffeinateCommand::Off),
+            ]
+        );
+    }
+
+    #[test]
     fn default_hotkeys_dont_collide() {
         assert!(plan(&LauncherConfig::default()).duplicates.is_empty());
     }
@@ -665,7 +712,10 @@ mod tests {
     #[test]
     fn apply_off_the_main_thread_is_ignored() {
         // Test threads are never the main thread, so this must not touch Carbon.
-        let manager = HotkeyManager::new(Arc::new(WindowManager::new(Default::default())));
+        let manager = HotkeyManager::new(
+            Arc::new(WindowManager::new(Default::default())),
+            Arc::new(Caffeinate::new(Default::default())),
+        );
         manager.apply(&LauncherConfig::default());
         assert!(manager.failed().is_empty());
         assert!(manager.carbon.lock().unwrap().handler.is_null());

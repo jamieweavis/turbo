@@ -37,7 +37,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, keyboard, mouse, monitor
+    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, keyboard, mouse, monitor, caffeinate
 
     var id: Self { self }
 
@@ -54,6 +54,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "Keyboard"
         case .mouse: "Mouse"
         case .monitor: "Monitor"
+        case .caffeinate: "Caffeinate"
         }
     }
 
@@ -70,6 +71,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "keyboard"
         case .mouse: "computermouse"
         case .monitor: "display"
+        case .caffeinate: "cup.and.saucer"
         }
     }
 }
@@ -102,6 +104,7 @@ struct SettingsView: View {
                 case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: model.isInputRunning)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
+                case .caffeinate: CaffeinatePane(state: model.caffeinate, settings: model.launcher)
                 }
             }
             .navigationTitle(pane.title)

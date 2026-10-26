@@ -32,6 +32,8 @@ struct StatusMenu: View {
 
             keyboard
 
+            caffeinate
+
             if !model.accessibility.isGranted {
                 MenuRow(title: "Grant Accessibility…", systemImage: "hand.raised") {
                     dismiss()
@@ -99,6 +101,32 @@ struct StatusMenu: View {
                 Text(hyperKey.config.key.title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var caffeinate: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Caffeinate")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                MenuToggle(
+                    title: "Keep awake",
+                    systemImage: "cup.and.saucer",
+                    isOn: Binding(get: { model.caffeinate.isActive }, set: { model.caffeinate.setActive($0) })
+                )
+
+                if let error = model.caffeinate.error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else if let hotkey = model.launcher.config.caffeinate.toggleHotkey {
+                    Text(hotkey.title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

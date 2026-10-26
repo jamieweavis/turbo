@@ -6,7 +6,7 @@ struct JaycastApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Jaycast", systemImage: "sparkle.magnifyingglass") {
+        MenuBarExtra {
             if let model = appDelegate.model {
                 StatusMenu(
                     model: model,
@@ -20,6 +20,10 @@ struct JaycastApp: App {
                 }
                 .padding(14)
             }
+        } label: {
+            // The cup shows at a glance that the Mac is being kept awake.
+            Image(systemName: appDelegate.model?.caffeinate.isActive == true ? "cup.and.saucer.fill" : "sparkle.magnifyingglass")
+                .accessibilityLabel("Jaycast")
         }
         .menuBarExtraStyle(.window)
     }

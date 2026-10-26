@@ -149,6 +149,9 @@ pub trait LauncherObserver: Send + Sync {
     /// Clipboard history changed (a new copy, or items expired). Called from a background
     /// thread.
     fn clipboard_changed(&self);
+    /// A caffeinate hotkey turned keeping the Mac awake on or off. Called on the main
+    /// thread.
+    fn caffeinate_changed(&self, active: bool);
 }
 
 /// Calculator results go above everything; a quicklink or command whose keyword was typed

@@ -34,6 +34,7 @@ pub struct LauncherConfig {
     pub files: FileSearchConfig,
     pub windows: WindowConfig,
     pub snippets: SnippetsConfig,
+    pub caffeinate: CaffeinateConfig,
 }
 
 impl Default for LauncherConfig {
@@ -51,6 +52,7 @@ impl Default for LauncherConfig {
             files: FileSearchConfig::default(),
             windows: WindowConfig::default(),
             snippets: SnippetsConfig::default(),
+            caffeinate: CaffeinateConfig::default(),
         }
     }
 }
@@ -226,6 +228,29 @@ impl Default for SnippetsConfig {
         Self {
             expansion: true,
             snippets: Vec::new(),
+        }
+    }
+}
+
+/// Keeping the Mac awake. Whether it's on isn't saved: like `caffeinate`, it ends when
+/// Jaycast quits.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct CaffeinateConfig {
+    /// Keep the display on too, not just the system awake.
+    pub keep_display_on: bool,
+    pub toggle_hotkey: Option<Hotkey>,
+    pub on_hotkey: Option<Hotkey>,
+    pub off_hotkey: Option<Hotkey>,
+}
+
+impl Default for CaffeinateConfig {
+    fn default() -> Self {
+        Self {
+            keep_display_on: true,
+            toggle_hotkey: None,
+            on_hotkey: None,
+            off_hotkey: None,
         }
     }
 }
