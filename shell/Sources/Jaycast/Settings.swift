@@ -19,7 +19,11 @@ final class SettingsWindowController {
         model.accessibility.refresh()
         let window = self.window ?? makeWindow()
         self.window = window
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        // Activation is only a request: when another app is frontmost (as it is behind the
+        // non-activating palette) the system may refuse it, so raise the window regardless.
         NSApp.activate()
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
     }
 

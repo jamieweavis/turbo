@@ -142,9 +142,12 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.quickLook = quickLook
         panel.onCancel = { [weak self] in self?.model.cancel() }
         panel.onClose = { [weak self] in self?.hide() }
+        // Open settings while the palette is still key, so the activation request comes
+        // from a key window; the palette hides when settings takes key.
         panel.onShowSettings = { [weak self] in
-            self?.hide()
-            self?.onShowSettings?()
+            guard let self else { return }
+            self.onShowSettings?()
+            if self.panel.isVisible { self.hide() }
         }
         panel.onKey = { [weak self] key in self?.model.handle(key) ?? false }
 
