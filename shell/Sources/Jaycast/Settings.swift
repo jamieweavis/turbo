@@ -3,14 +3,12 @@ import ServiceManagement
 import SwiftUI
 
 /// A plain AppKit window rather than a SwiftUI `Settings` scene, which is unreliable for
-/// menu-bar-only (accessory) apps. While it's open the app becomes a regular one, since an
-/// accessory app can't be activated: the window gets focus, a ⌘⇥ entry and the menu bar.
+/// menu-bar-only (accessory) apps.
 @MainActor
 final class SettingsWindowController {
     private let model: AppModel
     private let onShowOnboarding: () -> Void
     private var window: NSWindow?
-    private var closeObserver: (any NSObjectProtocol)?
 
     init(model: AppModel, onShowOnboarding: @escaping () -> Void) {
         self.model = model
@@ -21,12 +19,7 @@ final class SettingsWindowController {
         model.accessibility.refresh()
         let window = self.window ?? makeWindow()
         self.window = window
-        if window.isMiniaturized { window.deminiaturize(nil) }
-        NSApp.setActivationPolicy(.regular)
-        // Plain `activate()` is only a request, and it's refused when another app is
-        // frontmost, as it is behind the non-activating palette when ⌘, opens settings.
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        RegularAppWindows.show(window)
     }
 
     private func makeWindow() -> NSWindow {
@@ -42,11 +35,6 @@ final class SettingsWindowController {
         window.setContentSize(NSSize(width: 720, height: 560))
         window.center()
         window.setFrameAutosaveName("Settings")
-        closeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { _ = NSApp.setActivationPolicy(.accessory) }
-        }
         return window
     }
 }

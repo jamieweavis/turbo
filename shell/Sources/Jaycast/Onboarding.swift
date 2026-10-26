@@ -15,8 +15,7 @@ final class OnboardingWindowController: NSObject {
     func show() {
         let window = self.window ?? makeWindow()
         self.window = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        RegularAppWindows.show(window)
     }
 
     private func makeWindow() -> NSWindow {
