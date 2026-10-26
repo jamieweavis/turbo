@@ -4,16 +4,13 @@
 //! that posts the events. The thread sleeps on a condition variable whenever nothing is
 //! animating, so smooth scrolling costs no CPU at rest.
 
-// TODO(step 1): remove once the event tap calls `SmoothScroller::feed`.
-#![allow(dead_code)]
-
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use objc2_core_graphics::{
-    CGDisplayCopyDisplayMode, CGDisplayMode, CGEvent, CGEventField, CGEventTapLocation,
-    CGMainDisplayID, CGMomentumScrollPhase, CGScrollEventUnit, CGScrollPhase,
+    CGDisplayCopyDisplayMode, CGDisplayMode, CGEvent, CGEventField, CGEventFlags,
+    CGEventTapLocation, CGMainDisplayID, CGMomentumScrollPhase, CGScrollEventUnit, CGScrollPhase,
 };
 
 use super::SYNTHETIC_EVENT_MARKER;
@@ -187,6 +184,9 @@ fn make_event(frame: &Frame) -> Option<objc2_core_foundation::CFRetained<CGEvent
         momentum.0 as i64,
     );
     set(CGEventField::EventSourceUserData, SYNTHETIC_EVENT_MARKER);
+    // No modifiers: the tap has already applied the user's horizontal/precise modifier, and
+    // a held Shift would make AppKit swap the axes a second time.
+    CGEvent::set_flags(e, CGEventFlags(0));
     Some(event)
 }
 

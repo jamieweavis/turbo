@@ -18,7 +18,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | # | Step | Status |
 |---|---|---|
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
-| 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | 🚧 In progress |
+| 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | 🧪 Built, awaiting hands-on testing |
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ⏳ |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ⏳ |
 | 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
@@ -28,15 +28,15 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 ### Step 1: Mouse
 
 - [x] Shared core API: `Core` object, persisted JSON config, `MouseConfig` types, error type (`a599e9c`)
-- [ ] Event tap on its own thread; re-enables itself if macOS disables it; ignores our own synthetic events
-- [ ] Button remapping: middle/back/forward buttons; click, double-click and hold triggers;
+- [x] Event tap on its own thread; re-enables itself if macOS disables it; ignores our own synthetic events
+- [x] Button remapping: middle/back/forward buttons; click, double-click and hold triggers;
       actions for back/forward, Mission Control, App Exposé, Show Desktop, Launchpad, Spaces,
       custom keyboard shortcut
-- [ ] Scroll modifiers: reverse wheel direction (independent of the trackpad), modifier for
+- [x] Scroll modifiers: reverse wheel direction (independent of the trackpad), modifier for
       horizontal, zoom and precise scrolling
 - [x] Smooth scrolling: pure, unit-tested physics (acceleration, momentum) + emitter that posts
       continuous scroll events with proper phases at display rate; only for wheel mice (`61fb54d`)
-- [ ] Shell: Settings window with a Mouse pane; input starts once Accessibility is granted;
+- [x] Shell: Settings window with a Mouse pane; input starts once Accessibility is granted;
       menu toggle to turn mouse fixes on/off
 
 ### Step 2: Monitor
@@ -76,6 +76,12 @@ Raycast extension support.
 
 ## Log
 
+- **Step 1**: built by three parallel agents (event tap + buttons + scroll routing; smooth-scroll
+  physics + emitter; Swift settings UI), integrated on main. 50 Rust tests. The live tap is confirmed
+  running (`CGGetEventTapList`: enabled). Not yet checked by hand: scroll feel, every action, the
+  binding editor and shortcut recorder. Notes: Launchpad opens Apps.app (Launchpad is gone in macOS
+  26); Dock actions use the private `CoreDockSendNotification`; smoothed events carry no modifier
+  flags so AppKit doesn't re-apply Shift-to-horizontal. Tuning constants are first guesses.
 - **Step 0** (`27275b5`): Cargo workspace + UniFFI bindings generated at build time, SwiftPM menu
   bar app, Accessibility onboarding, justfile. Signed with the Apple Development identity so the
   Accessibility grant survives rebuilds.

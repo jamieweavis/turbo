@@ -6,6 +6,9 @@
 //! - `scroll_physics` (pure, unit-tested) and `smooth_scroll` (posts the animated events):
 //!   smooth scrolling. `scroll` hands wheel ticks to [`smooth_scroll::SmoothScroller::feed`].
 
+mod actions;
+mod buttons;
+mod scroll;
 mod scroll_physics;
 mod smooth_scroll;
 mod tap;
