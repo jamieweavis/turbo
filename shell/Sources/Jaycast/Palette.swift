@@ -134,7 +134,9 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // The window shadow follows the rectangular frame, not the rounded glass, and shows as
+        // a square outline at the corners; the glass draws its own edge.
+        panel.hasShadow = false
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
