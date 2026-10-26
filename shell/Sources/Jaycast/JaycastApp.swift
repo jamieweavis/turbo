@@ -7,27 +7,74 @@ struct JaycastApp: App {
 
     var body: some Scene {
         MenuBarExtra("Jaycast", systemImage: "sparkle.magnifyingglass") {
-            StatusMenu(
-                permission: appDelegate.accessibility,
-                onShowOnboarding: { appDelegate.showOnboarding() }
-            )
+            if let model = appDelegate.model {
+                StatusMenu(
+                    model: model,
+                    onShowOnboarding: { appDelegate.showOnboarding() },
+                    onShowSettings: { appDelegate.showSettings() }
+                )
+            } else {
+                Text("Jaycast couldn't start")
+                Button("Quit Jaycast") { NSApp.terminate(nil) }
+            }
         }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let accessibility = AccessibilityPermission()
-    private lazy var onboarding = OnboardingWindowController(permission: accessibility)
+    /// Nil only if the core failed to start, in which case the app explains and quits.
+    let model: AppModel?
+    private let startupError: (any Error)?
+    private var onboarding: OnboardingWindowController?
+    private var settings: SettingsWindowController?
+
+    override init() {
+        do {
+            model = try AppModel()
+            startupError = nil
+        } catch {
+            model = nil
+            startupError = error
+        }
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        accessibility.refresh()
-        if !accessibility.isGranted {
+        guard let model else {
+            let alert = NSAlert()
+            alert.messageText = "Jaycast couldn't start"
+            alert.informativeText = startupError?.userMessage ?? ""
+            alert.alertStyle = .critical
+            NSApp.activate()
+            alert.runModal()
+            NSApp.terminate(nil)
+            return
+        }
+
+        model.start()
+        if !model.accessibility.isGranted {
             showOnboarding()
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.stopInput()
+    }
+
     func showOnboarding() {
+        guard let model else { return }
+        let onboarding = self.onboarding ?? OnboardingWindowController(permission: model.accessibility)
+        self.onboarding = onboarding
         onboarding.show()
+    }
+
+    func showSettings() {
+        guard let model else { return }
+        let settings = self.settings ?? SettingsWindowController(model: model) { [weak self] in
+            self?.showOnboarding()
+        }
+        self.settings = settings
+        settings.show()
     }
 }
