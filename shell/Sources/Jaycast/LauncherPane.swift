@@ -17,16 +17,16 @@ struct LauncherPane: View {
         @Bindable var settings = settings
         let rows = rows()
 
-        VStack(spacing: 0) {
-            Form {
-                if let error = settings.saveError {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            if let error = settings.saveError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+            }
 
-                Section {
+            // Plain controls rather than a Form: a Form above the table sizes to its ideal
+            // height, which overflows the window and shoves everything under the title bar.
+            GroupBox {
+                VStack(spacing: 8) {
                     LabeledContent("Open launcher") {
                         HStack(spacing: 6) {
                             if let hotkey = settings.config.hotkey, let problem = settings.problem(with: hotkey, in: .palette) {
@@ -37,13 +37,13 @@ struct LauncherPane: View {
                             HotkeyField(hotkey: $settings.config.hotkey)
                         }
                     }
+                    Divider()
                     Toggle("Show calculator and conversion results", isOn: $settings.config.calculator)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .help("Type maths, units or currencies, like “12% of 80” or “5 km in miles”. Press ↩ to copy the answer.")
                 }
+                .padding(6)
             }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
-            .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
                 TextField("Search", text: $filter, prompt: Text("Search apps and commands"))
@@ -60,8 +60,6 @@ struct LauncherPane: View {
                 .labelsHidden()
                 .fixedSize()
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
 
             Table(rows, sortOrder: $sortOrder) {
                 TableColumn("") { row in
@@ -113,15 +111,14 @@ struct LauncherPane: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 20)
+            .frame(minHeight: 120, maxHeight: .infinity)
 
             Text("Untick an item to hide it from search; its hotkey still works. Aliases are extra names to find it by, separated by commas — typing one exactly puts it first. An app's hotkey brings it to the front, or hides it if it's already in front.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(20)
         .onAppear { settings.refreshApps() }
     }
 
