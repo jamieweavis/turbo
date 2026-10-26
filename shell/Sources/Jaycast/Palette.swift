@@ -35,6 +35,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             self.show(mode: self.model.mode)
         }
         model.onQuickLook = { [weak self] url in self?.toggleQuickLook(url) }
+        model.onShowSettings = { [weak self] in self?.showSettings() }
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -123,6 +124,11 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    private func showSettings() {
+        onShowSettings?()
+        if panel.isVisible { hide() }
+    }
+
     private func makePanel() -> PalettePanel {
         let panel = PalettePanel(
             contentRect: NSRect(x: 0, y: 0, width: PaletteLayout.width(for: .search), height: PaletteLayout.searchHeight),
@@ -134,6 +140,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        // Always the dark, tinted look, whatever the system appearance.
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.hasShadow = true
         panel.isMovable = false
         panel.hidesOnDeactivate = false
@@ -144,11 +152,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.onClose = { [weak self] in self?.hide() }
         // Open settings while the palette is still key, so the activation request comes
         // from a key window; the palette hides when settings takes key.
-        panel.onShowSettings = { [weak self] in
-            guard let self else { return }
-            self.onShowSettings?()
-            if self.panel.isVisible { self.hide() }
-        }
+        panel.onShowSettings = { [weak self] in self?.showSettings() }
         panel.onKey = { [weak self] key in self?.model.handle(key) ?? false }
 
         let hosting = NSHostingView(rootView: PaletteView(model: model))
@@ -267,8 +271,12 @@ enum PaletteKey {
 
 /// Sizes shared by the views and the controller's size calculation.
 enum PaletteLayout {
-    static let searchHeight: CGFloat = 60
-    static let rowHeight: CGFloat = 44
+    static let searchHeight: CGFloat = 64
+    static let rowHeight: CGFloat = 42
+    /// The "Suggestions"/"Results" label above the search results.
+    static let sectionHeaderHeight: CGFloat = 28
+    /// The settings button and primary action floating over the bottom of the results.
+    static let actionBarHeight: CGFloat = 56
     /// Calculator results get a taller row for their large answer.
     static let calculatorRowHeight: CGFloat = 64
     static let messageHeight: CGFloat = 36
@@ -279,9 +287,13 @@ enum PaletteLayout {
     /// Clipboard history shows a list and a preview side by side, at a fixed size.
     static let clipboardSize = CGSize(width: 820, height: 470)
     /// Emoji fill a fixed-size grid, so the palette doesn't jump while typing.
-    static let emojiSize = CGSize(width: 680, height: 480)
+    static let emojiSize = CGSize(width: 720, height: 540)
     static let emojiColumns = 8
-    static let emojiCellHeight: CGFloat = 60
+    static let emojiSpacing: CGFloat = 10
+    static let emojiPadding: CGFloat = 16
+    /// Square tiles: the width each of the flexible columns gets.
+    static let emojiCellHeight = (emojiSize.width - emojiPadding * 2 - emojiSpacing * CGFloat(emojiColumns - 1))
+        / CGFloat(emojiColumns)
     static let colorColumns = 5
     static let colorCellHeight: CGFloat = 124
     /// Colour rows shown before the grid scrolls; the half row hints there's more.
@@ -306,7 +318,7 @@ enum PaletteLayout {
             var height = searchHeight + message
             if !model.results.isEmpty {
                 let rows = model.results.prefix(maxVisibleRows).reduce(0) { $0 + rowHeight(for: $1) }
-                height += 1 + listPadding * 2 + rows
+                height += sectionHeaderHeight + rows + actionBarHeight
             }
             return CGSize(width: width(for: .search), height: height)
         case .clipboard:
@@ -370,6 +382,8 @@ final class PaletteModel {
     /// Shows the palette again, e.g. to report a paste that failed after it closed.
     @ObservationIgnored var onReopen: (() -> Void)?
     @ObservationIgnored var onQuickLook: ((URL) -> Void)?
+    /// The action bar's settings button.
+    @ObservationIgnored var onShowSettings: (() -> Void)?
     /// Shows the colour picker's magnifier (after the palette has closed).
     @ObservationIgnored var onPickColor: (() -> Void)?
     /// A Keep Awake command turned it on or off here.
@@ -447,6 +461,20 @@ final class PaletteModel {
 
     var selectedResult: SearchResult? {
         results.indices.contains(selection) ? results[selection] : nil
+    }
+
+    /// The hotkey set for an app or system action in settings, shown on its row.
+    func hotkey(for result: SearchResult) -> Hotkey? {
+        let config = settings.config
+        if result.id.hasPrefix("app:") {
+            let bundleId = result.id.dropFirst("app:".count)
+            return config.appHotkeys.first { $0.bundleId == bundleId }?.hotkey
+        }
+        if result.id.hasPrefix("system:") {
+            let action = result.id.dropFirst("system:".count)
+            return config.actionHotkeys.first { $0.action == action }?.hotkey
+        }
+        return nil
     }
 
     // MARK: Showing and modes
@@ -791,7 +819,7 @@ private struct PaletteView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: model.mode.symbol)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 19, weight: .regular))
                     .foregroundStyle(.secondary)
                 if let title = model.mode.chipTitle {
                     Text(title)
@@ -830,7 +858,6 @@ private struct PaletteView: View {
             switch model.mode {
             case .search:
                 if !model.results.isEmpty {
-                    Divider().padding(.horizontal, 14)
                     ResultsList(model: model)
                 }
             case .clipboard:
@@ -848,13 +875,16 @@ private struct PaletteView: View {
                 }
             case .emoji:
                 if !model.emoji.isEmpty {
-                    Divider().padding(.horizontal, 14)
                     EmojiModeView(model: model)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .glassEffect(.regular, in: .rect(cornerRadius: PaletteLayout.cornerRadius))
+        .glassEffect(.regular.tint(.black.opacity(0.35)), in: .rect(cornerRadius: PaletteLayout.cornerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: PaletteLayout.cornerRadius)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+        }
     }
 }
 
@@ -887,11 +917,11 @@ extension PaletteMode {
 
     var placeholder: String {
         switch self {
-        case .search: "Search apps and actions, or calculate"
+        case .search: "Search for apps and commands…"
         case .clipboard: "Search clipboard history"
         case .files: "Search files"
         case .colors: "Search picked colours"
-        case .emoji: "Search emoji"
+        case .emoji: "Search emoji…"
         }
     }
 }
@@ -930,13 +960,19 @@ private struct MessageRow: View {
 
 private struct ResultsList: View {
     let model: PaletteModel
+    @State private var hasMoreBelow = false
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Text(model.query.trimmingCharacters(in: .whitespaces).isEmpty ? "Suggestions" : "Results")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .frame(height: PaletteLayout.sectionHeaderHeight, alignment: .center)
                     ForEach(Array(model.results.enumerated()), id: \.element.id) { index, result in
-                        ResultRow(result: result, isSelected: index == model.selection)
+                        ResultRow(result: result, hotkey: model.hotkey(for: result), isSelected: index == model.selection)
                             .id(result.id)
                             .contentShape(.rect)
                             .onContinuousHover { phase in
@@ -948,10 +984,28 @@ private struct ResultsList: View {
                             }
                     }
                 }
-                .padding(.vertical, PaletteLayout.listPadding)
                 .padding(.horizontal, 8)
+                .padding(.bottom, PaletteLayout.listPadding)
             }
             .scrollIndicators(.never)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                // The container stops at the action bar. The panel is sized to the rows, so the bottom padding alone always overflows.
+                let hidden = geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height
+                return hidden > PaletteLayout.listPadding + 1
+            } action: { _, moreBelow in
+                hasMoreBelow = moreBelow
+            }
+            // Rows scrolling under the action bar fade out, but only while there's more to scroll to.
+            .mask {
+                VStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, hasMoreBelow ? .clear : .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: PaletteLayout.actionBarHeight)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                ActionBar(model: model)
+            }
             .onChange(of: model.selection) {
                 if let id = model.selectedResult?.id {
                     proxy.scrollTo(id)
@@ -963,6 +1017,7 @@ private struct ResultsList: View {
 
 private struct ResultRow: View {
     let result: SearchResult
+    let hotkey: Hotkey?
     let isSelected: Bool
 
     var body: some View {
@@ -971,27 +1026,22 @@ private struct ResultRow: View {
                 calculation
             } else {
                 icon
-                    .frame(width: 28, height: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(result.title)
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(1)
-                    if !result.subtitle.isEmpty {
-                        Text(result.kind == .snippet ? result.subtitle.oneLine : result.subtitle)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    .frame(width: 24, height: 24)
+                Text(result.title)
+                    .font(.system(size: 14))
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                if let hotkey {
+                    Keycaps(keys: hotkey.keycaps)
                 }
             }
-            Spacer(minLength: 0)
-            if isSelected {
-                Text(hint.label)
-                    .font(.caption)
+            Spacer(minLength: 16)
+            if result.kind != .calculator, !result.subtitle.isEmpty {
+                Text(result.kind == .snippet ? result.subtitle.oneLine : result.subtitle)
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
-                Text(hint.key)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
         .padding(.horizontal, 10)
@@ -1020,23 +1070,6 @@ private struct ResultRow: View {
         .padding(.leading, 4)
     }
 
-    /// What ⏎ will do with this result.
-    private var hint: (label: String, key: String) {
-        if result.completion != nil {
-            return ("Complete", "⇥")
-        }
-        if result.id.hasPrefix("mode:") {
-            return ("Show", "↩")
-        }
-        switch result.kind {
-        case .application, .quicklink, .settingsPane: return ("Open", "↩")
-        case .calculator: return ("Copy", "↩")
-        case .systemAction, .command: return ("Run", "↩")
-        case .windowAction: return ("Apply", "↩")
-        case .snippet: return ("Paste", "↩")
-        }
-    }
-
     @ViewBuilder
     private var icon: some View {
         if let path = result.path {
@@ -1046,15 +1079,113 @@ private struct ResultRow: View {
         } else if result.kind == .windowAction,
                   let action = windowActionForResult(resultId: result.id),
                   action.region != nil {
-            WindowActionIcon(action: action, width: 19)
-                .frame(width: 26, height: 26)
+            WindowActionIcon(action: action, width: 17)
+                .frame(width: 24, height: 24)
                 .background(.primary.opacity(0.08), in: .rect(cornerRadius: 6))
         } else {
             Image(systemName: result.symbol ?? "gearshape")
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 26, height: 26)
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 24, height: 24)
                 .background(.primary.opacity(0.08), in: .rect(cornerRadius: 6))
         }
+    }
+}
+
+/// The settings button and the selection's primary action, floating over the bottom of the
+/// results.
+private struct ActionBar: View {
+    let model: PaletteModel
+
+    var body: some View {
+        FloatingActionBar(onShowSettings: model.onShowSettings, actions: actions)
+    }
+
+    private var actions: [FloatingAction] {
+        guard let result = model.selectedResult else { return [] }
+        let action = result.primaryAction
+        return [FloatingAction(label: action.label, keys: [action.key]) { model.openSelected() }]
+    }
+}
+
+struct FloatingAction {
+    let label: String
+    let keys: [String]
+    let perform: () -> Void
+}
+
+/// A settings button on the left and the selection's actions in a capsule on the right,
+/// floating over the bottom of a scrolling list or grid.
+struct FloatingActionBar: View {
+    let onShowSettings: (() -> Void)?
+    let actions: [FloatingAction]
+
+    var body: some View {
+        HStack {
+            Button {
+                onShowSettings?()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
+            .help("Settings (⌘,)")
+            Spacer()
+            if !actions.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(Array(actions.enumerated()), id: \.offset) { index, action in
+                        Button(action: action.perform) {
+                            HStack(spacing: 8) {
+                                Text(action.label)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(index == 0 ? .primary : .secondary)
+                                Keycaps(keys: action.keys)
+                            }
+                            .padding(.leading, index == 0 ? 14 : 8)
+                            .padding(.trailing, 8)
+                            .frame(height: 36)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .glassEffect(.regular.interactive(), in: .capsule)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: PaletteLayout.actionBarHeight)
+    }
+}
+
+/// Keys drawn as small outlined caps: ⌥ T, ⌘ K.
+struct Keycaps: View {
+    let keys: [String]
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                Text(key)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, key.count > 1 ? 5 : 0)
+                    .frame(minWidth: 20, minHeight: 20)
+                    .background(.primary.opacity(0.06), in: .rect(cornerRadius: 5))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5).strokeBorder(.primary.opacity(0.18))
+                    }
+            }
+        }
+    }
+}
+
+extension Hotkey {
+    /// One cap per modifier, in menu order, then the key.
+    @MainActor
+    var keycaps: [String] {
+        Modifier.allCases.filter(modifiers.contains).map(\.symbol) + [KeyNames.name(for: keyCode)]
     }
 }
 
@@ -1062,6 +1193,25 @@ extension SearchResult {
     /// Window actions and snippets act on the frontmost app, so the palette closes first.
     var actsOnFrontApp: Bool {
         kind == .windowAction || kind == .snippet
+    }
+
+    /// What ⏎ will do with this result, for the action bar.
+    var primaryAction: (label: String, key: String) {
+        if completion != nil {
+            return ("Complete", "⇥")
+        }
+        if id.hasPrefix("mode:") {
+            return ("Show", "↩")
+        }
+        switch kind {
+        case .application: return ("Open Application", "↩")
+        case .settingsPane: return ("Open Settings", "↩")
+        case .quicklink: return ("Open Link", "↩")
+        case .calculator: return ("Copy Answer", "↩")
+        case .systemAction, .command: return ("Run Command", "↩")
+        case .windowAction: return ("Apply", "↩")
+        case .snippet: return ("Paste Snippet", "↩")
+        }
     }
 }
 

@@ -594,37 +594,67 @@ struct EmojiModeView: View {
     private var browser: EmojiBrowser { model.emoji }
 
     var body: some View {
-        VStack(spacing: 0) {
-            PaletteGrid(
-                sections: browser.sections.map { GridSection(title: $0.title, items: $0.emojis) },
-                columns: PaletteLayout.emojiColumns,
-                cellHeight: PaletteLayout.emojiCellHeight,
-                selection: browser.selection,
-                onHover: { model.hover($0) },
-                onTap: { index in
-                    browser.selection = index
-                    model.insertSelectedEmoji(paste: true)
-                }
-            ) { emoji, isSelected in
-                Text(emoji.emoji)
-                    .font(.system(size: 34))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .scaleEffect(isSelected ? 1.12 : 1)
-                    .background {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.1))
-                        }
-                    }
-                    .animation(.snappy(duration: 0.15), value: isSelected)
+        PaletteGrid(
+            sections: browser.sections.map { GridSection(title: $0.title, items: $0.emojis, showsCount: true) },
+            columns: PaletteLayout.emojiColumns,
+            cellHeight: PaletteLayout.emojiCellHeight,
+            spacing: PaletteLayout.emojiSpacing,
+            padding: PaletteLayout.emojiPadding,
+            selection: browser.selection,
+            onHover: { model.hover($0) },
+            onTap: { index in
+                browser.selection = index
+                model.insertSelectedEmoji(paste: true)
             }
-            Divider()
-            FooterHints(leading: selectedName, hints: [("↩", "Paste"), ("⌘↩", "Copy")])
+        ) { emoji, isSelected in
+            EmojiCell(emoji: emoji, isSelected: isSelected)
+        }
+        // Tiles scrolling under the action bar fade out.
+        .mask {
+            VStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: PaletteLayout.actionBarHeight)
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            FloatingActionBar(onShowSettings: model.onShowSettings, actions: actions)
         }
     }
 
-    private var selectedName: String? {
-        guard let emoji = browser.selected else { return nil }
-        return [emoji.name, emoji.shortcode.map { ":\($0):" }].compactMap(\.self).joined(separator: "  ")
+    private var actions: [FloatingAction] {
+        guard browser.selected != nil else { return [] }
+        // The panel doesn't activate, so the frontmost app is the one the paste lands in.
+        let target = NSWorkspace.shared.frontmostApplication
+            .flatMap { $0 == .current ? nil : $0.localizedName }
+        return [
+            FloatingAction(label: target.map { "Paste to \($0)" } ?? "Paste", keys: ["↩"]) {
+                model.insertSelectedEmoji(paste: true)
+            },
+            FloatingAction(label: "Copy", keys: ["⌘", "↩"]) {
+                model.insertSelectedEmoji(paste: false)
+            },
+        ]
+    }
+}
+
+/// An emoji on its own tile, outlined when selected.
+private struct EmojiCell: View {
+    let emoji: EmojiInfo
+    let isSelected: Bool
+
+    var body: some View {
+        Text(emoji.emoji)
+            .font(.system(size: 40))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.primary.opacity(isSelected ? 0.14 : 0.05), in: .rect(cornerRadius: 14))
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 14).strokeBorder(.primary.opacity(0.85), lineWidth: 2)
+                }
+            }
+            .help([emoji.name, emoji.shortcode.map { ":\($0):" }].compactMap(\.self).joined(separator: "  "))
+            .animation(.snappy(duration: 0.15), value: isSelected)
     }
 }
 
@@ -672,6 +702,8 @@ struct GridNavigation {
 struct GridSection<Item> {
     let title: String?
     let items: [Item]
+    /// Shows the number of items after the title: "Pinned 9".
+    var showsCount = false
 }
 
 /// A scrolling grid of sections for the palette, selected by flat index across sections.
@@ -680,6 +712,8 @@ struct PaletteGrid<Item, Cell: View>: View {
     let sections: [GridSection<Item>]
     let columns: Int
     let cellHeight: CGFloat
+    var spacing = PaletteLayout.gridSpacing
+    var padding = PaletteLayout.gridPadding
     let selection: Int
     let onHover: (Int) -> Void
     let onTap: (Int) -> Void
@@ -689,8 +723,8 @@ struct PaletteGrid<Item, Cell: View>: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: PaletteLayout.gridSpacing), count: columns),
-                    spacing: PaletteLayout.gridSpacing
+                    columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: columns),
+                    spacing: spacing
                 ) {
                     ForEach(Array(sectionOffsets.enumerated()), id: \.offset) { sectionIndex, offset in
                         let section = sections[sectionIndex]
@@ -708,18 +742,26 @@ struct PaletteGrid<Item, Cell: View>: View {
                             }
                         } header: {
                             if let title = section.title {
-                                Text(title)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 6)
-                                    .frame(height: PaletteLayout.gridHeaderHeight, alignment: .bottom)
+                                HStack(spacing: 6) {
+                                    Text(title)
+                                        .foregroundStyle(.secondary)
+                                    if section.showsCount {
+                                        Text("\(section.items.count)")
+                                            .monospacedDigit()
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 2)
+                                .frame(height: PaletteLayout.gridHeaderHeight, alignment: .bottom)
+                                .padding(.bottom, 2)
                             }
                         }
                     }
                 }
                 .padding(.vertical, PaletteLayout.listPadding)
-                .padding(.horizontal, PaletteLayout.gridPadding)
+                .padding(.horizontal, padding)
             }
             .scrollIndicators(.never)
             .onChange(of: selection) {
@@ -758,9 +800,9 @@ private struct FooterHints: View {
             }
             Spacer(minLength: 0)
             ForEach(hints, id: \.key) { hint in
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Text(hint.label).foregroundStyle(.secondary)
-                    Text(hint.key).fontWeight(.semibold).foregroundStyle(.secondary)
+                    Keycaps(keys: hint.key.map(String.init))
                 }
             }
         }
