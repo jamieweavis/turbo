@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::NSString;
 
-use super::{LauncherObserver, PaletteMode, system};
+use super::{LauncherObserver, PICK_COLOR_ID, PaletteMode, settings_panes, system};
 use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
 use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
@@ -63,6 +63,25 @@ enum Target {
     Window(WindowAction),
     KeepAwake(KeepAwakeCommand),
     PickColor,
+    /// A System Settings pane, by id.
+    Settings(String),
+}
+
+impl Target {
+    /// What a launcher item's hotkey (`ItemSettings::hotkey`) does, from its result id.
+    fn for_item(id: &str) -> Option<Self> {
+        let (kind, rest) = id.split_once(':')?;
+        match kind {
+            "mode" => super::mode_for_id(rest).map(Target::Mode),
+            "app" => Some(Target::App(rest.to_owned())),
+            "system" => Some(Target::System(rest.to_owned())),
+            "settings" => Some(Target::Settings(rest.to_owned())),
+            "window" => crate::windows::action_for_id(rest).map(Target::Window),
+            "keep-awake" => super::keep_awake_command_for_id(rest).map(Target::KeepAwake),
+            _ if id == PICK_COLOR_ID => Some(Target::PickColor),
+            _ => None,
+        }
+    }
 }
 
 impl HotkeyManager {
@@ -212,6 +231,11 @@ impl Inner {
                     observer.pick_color();
                 }
             }
+            Some(Target::Settings(pane)) => {
+                if let Err(error) = settings_panes::open(&pane) {
+                    eprintln!("jaycast: settings hotkey {pane}: {error}");
+                }
+            }
             None => {}
         }
     }
@@ -292,6 +316,12 @@ fn plan(config: &LauncherConfig) -> Plan {
                 .hotkey
                 .iter()
                 .map(|hotkey| (hotkey.clone(), Target::PickColor)),
+        )
+        .chain(
+            config
+                .items
+                .iter()
+                .filter_map(|item| Some((item.hotkey.clone()?, Target::for_item(&item.id)?))),
         );
 
     let mut seen = Vec::new();
@@ -600,6 +630,44 @@ mod tests {
         config.files.hotkey = None;
         config.windows.hotkeys.clear();
         config
+    }
+
+    #[test]
+    fn item_hotkeys_open_modes_and_settings_panes() {
+        use crate::config::ItemSettings;
+        let mut config = without_mode_hotkeys();
+        config.hotkey = None;
+        let item = |id: &str, key_code| ItemSettings {
+            id: id.into(),
+            hotkey: Some(hotkey(key_code, &[Modifier::Option])),
+            ..ItemSettings::default()
+        };
+        config.items = vec![
+            item("mode:emoji", 0x0E),
+            item("settings:sound", 0x01),
+            item("unknown:thing", 0x02),
+            ItemSettings {
+                id: "mode:colors".into(),
+                ..ItemSettings::default()
+            },
+        ];
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![
+                Target::Mode(PaletteMode::Emoji),
+                Target::Settings("sound".into())
+            ]
+        );
+        assert_eq!(Target::for_item(PICK_COLOR_ID), Some(Target::PickColor));
+        assert_eq!(
+            Target::for_item("keep-awake:on"),
+            Some(Target::KeepAwake(KeepAwakeCommand::On))
+        );
     }
 
     #[test]

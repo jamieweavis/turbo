@@ -37,7 +37,7 @@ use hyper::HyperKey;
 use input::InputEngine;
 use keep_awake::KeepAwake;
 pub use launcher::{
-    AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult,
+    AppInfo, LauncherItem, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult,
     SystemActionInfo, system_actions,
 };
 use launcher::{HotkeyManager, Launcher};
@@ -380,6 +380,12 @@ impl Core {
     /// Every indexed app, sorted by name.
     pub fn installed_apps(&self) -> Vec<AppInfo> {
         self.launcher.apps()
+    }
+
+    /// Every app and built-in command, for setting hotkeys, aliases and whether each shows in
+    /// search.
+    pub fn launcher_items(&self) -> Vec<LauncherItem> {
+        self.launcher.items()
     }
 
     /// Starts the event taps (mouse, brightness keys, snippet expansion and the Hyper key).

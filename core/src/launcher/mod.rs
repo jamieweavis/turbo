@@ -34,7 +34,7 @@ use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::{NSString, NSURL};
 
-use crate::config::LauncherConfig;
+use crate::config::{LauncherConfig, WindowAction};
 use crate::error::CoreError;
 use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
 use crate::windows::{self, WindowManager};
@@ -228,6 +228,23 @@ pub fn system_actions() -> Vec<SystemActionInfo> {
         .collect()
 }
 
+/// An app or built-in command, as listed in the launcher settings to set its hotkey, aliases
+/// and whether it shows in search.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct LauncherItem {
+    /// The search result id, used as `ItemSettings::id`.
+    pub id: String,
+    pub title: String,
+    /// "Application", "Jaycast", "System", "System Settings" or "Window".
+    pub category: String,
+    /// The bundle to draw the icon from (apps, settings panes).
+    pub path: Option<String>,
+    /// An SF Symbol, for items without a bundle.
+    pub symbol: Option<String>,
+    /// Set for window actions, whose hotkeys live in the window settings.
+    pub window_action: Option<WindowAction>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AppInfo {
     pub bundle_id: String,
@@ -268,6 +285,63 @@ pub(crate) const KEYWORD_SCORE: i32 = 10_000;
 const SECONDARY_MATCH_WEIGHT: i32 = 3;
 const SECONDARY_MATCH_DIVISOR: i32 = 4;
 
+/// The user's per-item settings, prepared for search.
+#[derive(Default)]
+struct Prefs {
+    disabled: std::collections::HashSet<String>,
+    /// Result id → its aliases.
+    aliases: HashMap<String, Vec<Alias>>,
+}
+
+struct Alias {
+    prepared: Prepared,
+    folded: Vec<char>,
+}
+
+impl Prefs {
+    fn new(config: &LauncherConfig) -> Self {
+        let mut prefs = Self::default();
+        for item in &config.items {
+            if !item.enabled {
+                prefs.disabled.insert(item.id.clone());
+            }
+            let aliases: Vec<Alias> = item
+                .aliases
+                .iter()
+                .map(|alias| alias.trim())
+                .filter(|alias| !alias.is_empty())
+                .map(|alias| Alias {
+                    prepared: Prepared::new(alias),
+                    folded: fuzzy::fold_query(alias),
+                })
+                .collect();
+            if !aliases.is_empty() {
+                prefs.aliases.insert(item.id.clone(), aliases);
+            }
+        }
+        prefs
+    }
+
+    fn is_enabled(&self, id: &str) -> bool {
+        !self.disabled.contains(id)
+    }
+
+    /// The best alias score for `id`: a full-weight match, or above every fuzzy match when
+    /// the query is the alias itself.
+    fn alias_score(&self, query: &[char], id: &str) -> Option<i32> {
+        self.aliases
+            .get(id)?
+            .iter()
+            .filter_map(|alias| {
+                if alias.folded == query {
+                    return Some(KEYWORD_SCORE);
+                }
+                fuzzy::score(query, &alias.prepared).map(|m| m.score)
+            })
+            .max()
+    }
+}
+
 pub(crate) struct Launcher {
     index: RwLock<Arc<Index>>,
     system: Vec<SystemEntry>,
@@ -276,6 +350,7 @@ pub(crate) struct Launcher {
     observer: Mutex<Option<Arc<dyn LauncherObserver>>>,
     watcher: Mutex<Option<apps::Watcher>>,
     config: RwLock<Arc<LauncherConfig>>,
+    prefs: RwLock<Arc<Prefs>>,
     calculator: Calculator,
     windows: Arc<WindowManager>,
     keep_awake: Arc<KeepAwake>,
@@ -458,6 +533,7 @@ impl Launcher {
             store,
             observer: Mutex::new(None),
             watcher: Mutex::new(None),
+            prefs: RwLock::new(Arc::new(Prefs::new(&config))),
             config: RwLock::new(Arc::new(config)),
             calculator: Calculator::new(data_dir),
             windows,
@@ -492,6 +568,7 @@ impl Launcher {
 
     /// Quicklinks, commands, snippets and the calculator switch come from here.
     pub fn set_config(&self, config: LauncherConfig) {
+        *self.prefs.write().unwrap() = Arc::new(Prefs::new(&config));
         *self.config.write().unwrap() = Arc::new(config);
     }
 
@@ -510,11 +587,13 @@ impl Launcher {
             extra.extend(extensions::results(query, &config));
             extra.extend(crate::snippets::results(query, &config.snippets));
         }
+        let prefs = Arc::clone(&self.prefs.read().unwrap());
         let usage = self.usage.lock().unwrap();
         rank(
             &fuzzy::fold_query(query),
             &index,
             &self.system,
+            &prefs,
             extra,
             &usage,
             now(),
@@ -604,6 +683,35 @@ impl Launcher {
         index.apps.iter().map(|app| app.info.clone()).collect()
     }
 
+    /// Every app and built-in command, for the launcher settings: apps by name, then the
+    /// commands in palette order.
+    pub fn items(&self) -> Vec<LauncherItem> {
+        let index = Arc::clone(&self.index.read().unwrap());
+        let apps = index.apps.iter().map(|app| LauncherItem {
+            id: app_result_id(&app.info.bundle_id),
+            title: app.info.name.clone(),
+            category: "Application".into(),
+            path: Some(app.info.path.clone()),
+            symbol: None,
+            window_action: None,
+        });
+        let commands = self.system.iter().map(|entry| LauncherItem {
+            id: entry.id.clone(),
+            title: entry.title.clone(),
+            category: match entry.kind {
+                ResultKind::SettingsPane => "System Settings".into(),
+                _ => entry.subtitle.into(),
+            },
+            path: entry.path.clone(),
+            symbol: entry.path.is_none().then(|| entry.symbol.clone()),
+            window_action: entry
+                .id
+                .strip_prefix("window:")
+                .and_then(windows::action_for_id),
+        });
+        apps.chain(commands).collect()
+    }
+
     /// Saves synchronously: the file is a few KB and opens happen once per palette use, so
     /// a background writer isn't worth it.
     fn record(&self, id: &str, query: &str) {
@@ -641,13 +749,14 @@ fn rank(
     query: &[char],
     index: &Index,
     system: &[SystemEntry],
+    prefs: &Prefs,
     extra: Vec<(i32, SearchResult)>,
     usage: &Usage,
     now: f64,
     limit: usize,
 ) -> Vec<SearchResult> {
     if query.is_empty() {
-        return most_used(index, system, usage, now, limit);
+        return most_used(index, system, prefs, usage, now, limit);
     }
 
     struct Scored {
@@ -658,7 +767,12 @@ fn rank(
     let mut scored = Vec::new();
 
     for app in &index.apps {
-        let Some(score) = best_score(query, &app.title, app.alias.iter()) else {
+        let id = app_result_id(&app.info.bundle_id);
+        if !prefs.is_enabled(&id) {
+            continue;
+        }
+        let score = best_score(query, &app.title, app.alias.iter());
+        let Some(score) = score.max(prefs.alias_score(query, &id)) else {
             continue;
         };
         let result = app_result(app);
@@ -669,7 +783,11 @@ fn rank(
         });
     }
     for entry in system {
-        let Some(score) = best_score(query, &entry.title_match, entry.keywords.iter()) else {
+        if !prefs.is_enabled(&entry.id) {
+            continue;
+        }
+        let score = best_score(query, &entry.title_match, entry.keywords.iter());
+        let Some(score) = score.max(prefs.alias_score(query, &entry.id)) else {
             continue;
         };
         scored.push(Scored {
@@ -716,6 +834,7 @@ pub(crate) fn best_score<'a>(
 fn most_used(
     index: &Index,
     system: &[SystemEntry],
+    prefs: &Prefs,
     usage: &Usage,
     now: f64,
     limit: usize,
@@ -723,6 +842,7 @@ fn most_used(
     let mut results: Vec<SearchResult> = usage
         .most_frecent(now)
         .into_iter()
+        .filter(|(id, _)| prefs.is_enabled(id))
         .filter_map(|(id, _)| match index.by_id.get(&id) {
             Some(&i) => Some(app_result(&index.apps[i])),
             None => system.iter().find(|e| e.id == id).map(SystemEntry::result),
@@ -734,7 +854,7 @@ fn most_used(
             break;
         }
         let id = app_result_id(&app.info.bundle_id);
-        if !results.iter().any(|r| r.id == id) {
+        if prefs.is_enabled(&id) && !results.iter().any(|r| r.id == id) {
             results.push(app_result(app));
         }
     }
@@ -837,6 +957,7 @@ mod tests {
             &fuzzy::fold_query(query),
             index,
             &[lock_screen()],
+            &Prefs::default(),
             Vec::new(),
             usage,
             NOW,
@@ -915,6 +1036,7 @@ mod tests {
                 &fuzzy::fold_query(query),
                 &Index::default(),
                 &entries,
+                &Prefs::default(),
                 Vec::new(),
                 &Usage::default(),
                 NOW,
@@ -949,6 +1071,7 @@ mod tests {
                 &fuzzy::fold_query(query),
                 &Index::default(),
                 &entries,
+                &Prefs::default(),
                 Vec::new(),
                 &Usage::default(),
                 NOW,
@@ -983,6 +1106,7 @@ mod tests {
                 &fuzzy::fold_query(query),
                 &Index::default(),
                 &entries,
+                &Prefs::default(),
                 Vec::new(),
                 &Usage::default(),
                 NOW,
@@ -1002,6 +1126,72 @@ mod tests {
         );
     }
 
+    fn prefs(items: Vec<crate::config::ItemSettings>) -> Prefs {
+        Prefs::new(&LauncherConfig {
+            items,
+            ..LauncherConfig::default()
+        })
+    }
+
+    #[test]
+    fn user_aliases_find_items_and_win_when_typed_exactly() {
+        let index = index(NAMES);
+        let prefs = prefs(vec![crate::config::ItemSettings {
+            id: "app:test.VisualStudioCode".into(),
+            aliases: vec![" ide ".into(), "".into(), "te".into()],
+            ..Default::default()
+        }]);
+        let find = |query: &str| {
+            rank(
+                &fuzzy::fold_query(query),
+                &index,
+                &[lock_screen()],
+                &prefs,
+                Vec::new(),
+                &Usage::default(),
+                NOW,
+                8,
+            )
+        };
+        assert_eq!(titles(&find("ide")), vec!["Visual Studio Code"]);
+        // "te" fuzzily matches Terminal and TextEdit by title, but is this item's alias.
+        assert_eq!(titles(&find("te"))[0], "Visual Studio Code");
+    }
+
+    #[test]
+    fn disabled_items_never_show() {
+        let index = index(NAMES);
+        let disable = |id: &str| crate::config::ItemSettings {
+            id: id.into(),
+            enabled: false,
+            ..Default::default()
+        };
+        let prefs = prefs(vec![
+            disable("app:test.Safari"),
+            disable("system:lock-screen"),
+        ]);
+        let mut usage = Usage::default();
+        usage.record("system:lock-screen", &[], NOW);
+        let find = |query: &str| {
+            rank(
+                &fuzzy::fold_query(query),
+                &index,
+                &[lock_screen()],
+                &prefs,
+                Vec::new(),
+                &usage,
+                NOW,
+                20,
+            )
+        };
+        assert!(!titles(&find("saf")).contains(&"Safari"));
+        assert!(find("lock").is_empty());
+        let everything = find("");
+        let all = titles(&everything);
+        assert!(!all.contains(&"Safari") && !all.contains(&"Lock Screen"));
+        assert_eq!(all.len(), NAMES.len() - 1);
+    }
+
     #[test]
     fn aliases_match_at_a_discount() {
         let mut code = app("Visual Studio Code", "com.microsoft.VSCode");
@@ -1011,6 +1201,7 @@ mod tests {
             &fuzzy::fold_query("code"),
             &index,
             &[],
+            &Prefs::default(),
             Vec::new(),
             &Usage::default(),
             NOW,
@@ -1042,6 +1233,7 @@ mod tests {
             &fuzzy::fold_query("e"),
             &index,
             &[],
+            &Prefs::default(),
             Vec::new(),
             &Usage::default(),
             NOW,
@@ -1091,6 +1283,7 @@ mod tests {
                 &fuzzy::fold_query(query),
                 &index,
                 &[],
+                &Prefs::default(),
                 Vec::new(),
                 &usage,
                 NOW,

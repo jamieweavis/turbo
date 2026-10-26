@@ -40,6 +40,9 @@ pub struct LauncherConfig {
     #[serde(alias = "caffeinate")]
     pub keep_awake: KeepAwakeConfig,
     pub color_picker: ColorPickerConfig,
+    /// Per-item settings for apps and built-in commands; items without one are enabled with
+    /// no aliases.
+    pub items: Vec<ItemSettings>,
 }
 
 impl Default for LauncherConfig {
@@ -60,6 +63,34 @@ impl Default for LauncherConfig {
             snippets: SnippetsConfig::default(),
             keep_awake: KeepAwakeConfig::default(),
             color_picker: ColorPickerConfig::default(),
+            items: Vec::new(),
+        }
+    }
+}
+
+/// Settings for one launcher item (an app or built-in command), keyed by its search result id
+/// (`app:<bundle id>`, `system:<action id>`, `settings:<pane id>`, …).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct ItemSettings {
+    pub id: String,
+    /// Off hides the item from palette search; its hotkey still works.
+    pub enabled: bool,
+    /// Extra names the item is found by in search. Typing one exactly puts it first.
+    pub aliases: Vec<String>,
+    /// For items without a hotkey setting of their own (palette modes without one, settings
+    /// panes). Apps, system actions, window actions, Keep Awake and the colour picker keep
+    /// theirs in `app_hotkeys`, `action_hotkeys` and their own sections.
+    pub hotkey: Option<Hotkey>,
+}
+
+impl Default for ItemSettings {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            enabled: true,
+            aliases: Vec::new(),
+            hotkey: None,
         }
     }
 }

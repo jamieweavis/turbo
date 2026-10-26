@@ -1,7 +1,7 @@
 import AppKit
 import Observation
 
-/// The launcher settings the UI edits, and the installed apps to pick hotkeys for. Settings
+/// The launcher settings the UI edits, and the apps and commands to set hotkeys for. Settings
 /// changes are written through to the core, which saves them and re-registers the hotkeys.
 @MainActor
 @Observable
@@ -12,6 +12,8 @@ final class LauncherSettings {
         }
     }
     private(set) var apps: [AppInfo] = []
+    /// Every app and built-in command, for the Launcher pane's list.
+    private(set) var items: [LauncherItem] = []
     private(set) var saveError: String?
     /// Hotkeys the system wouldn't register (usually taken by another app).
     private(set) var failed: [Hotkey] = []
@@ -40,22 +42,7 @@ final class LauncherSettings {
 
     func refreshApps() {
         apps = core.installedApps()
-    }
-
-    func addHotkey(_ hotkey: Hotkey, for target: HotkeyTarget) {
-        switch target {
-        case .app(let app):
-            config.appHotkeys.append(AppHotkey(bundleId: app.bundleId, name: app.name, hotkey: hotkey))
-        case .action(let action):
-            config.actionHotkeys.append(ActionHotkey(action: action.id, hotkey: hotkey))
-        }
-    }
-
-    /// The system actions that can be given a hotkey; fixed for the app's lifetime.
-    let systemActions = Jaycast.systemActions()
-
-    func systemAction(withID id: String) -> SystemActionInfo? {
-        systemActions.first { $0.id == id }
+        items = core.launcherItems()
     }
 
     /// Every global hotkey in the config, with where it's set.
@@ -80,12 +67,138 @@ final class LauncherSettings {
         if let hotkey = keepAwake.onHotkey { assigned.append((.keepAwake(.on), hotkey)) }
         if let hotkey = keepAwake.offHotkey { assigned.append((.keepAwake(.off), hotkey)) }
         if let hotkey = config.colorPicker.hotkey { assigned.append((.colorPicker, hotkey)) }
+        for item in config.items {
+            if let hotkey = item.hotkey { assigned.append((.item(item.id), hotkey)) }
+        }
         return assigned
     }
 
     /// Whether `hotkey` is also set somewhere other than `slot`.
     func isDuplicate(_ hotkey: Hotkey, in slot: HotkeySlot) -> Bool {
         assignedHotkeys.contains { $0.slot != slot && $0.hotkey.matches(hotkey) }
+    }
+
+    // MARK: Items
+
+    func isEnabled(_ item: LauncherItem) -> Bool {
+        itemSettings(item.id)?.enabled ?? true
+    }
+
+    func setEnabled(_ enabled: Bool, for item: LauncherItem) {
+        updateItemSettings(item.id) { $0.enabled = enabled }
+    }
+
+    func aliases(for item: LauncherItem) -> [String] {
+        itemSettings(item.id)?.aliases ?? []
+    }
+
+    func setAliases(_ aliases: [String], for item: LauncherItem) {
+        updateItemSettings(item.id) { $0.aliases = aliases }
+    }
+
+    /// The item's hotkey, from wherever it's kept: apps, system actions, window actions, palette
+    /// modes, Keep Awake and the colour picker have their own settings; the rest are kept with
+    /// the item's other settings.
+    func hotkey(for item: LauncherItem) -> Hotkey? {
+        if let action = item.windowAction { return windowHotkey(for: action) }
+        if let bundleID = item.id.stripping(prefix: "app:") {
+            return config.appHotkeys.first { $0.bundleId == bundleID }?.hotkey
+        }
+        if let actionID = item.id.stripping(prefix: "system:") {
+            return config.actionHotkeys.first { $0.action == actionID }?.hotkey
+        }
+        switch item.id {
+        case "mode:clipboard": return config.clipboard.hotkey
+        case "mode:files": return config.files.hotkey
+        case "color:pick": return config.colorPicker.hotkey
+        case "keep-awake:toggle": return config.keepAwake.toggleHotkey
+        case "keep-awake:on": return config.keepAwake.onHotkey
+        case "keep-awake:off": return config.keepAwake.offHotkey
+        default: return itemSettings(item.id)?.hotkey
+        }
+    }
+
+    /// Sets or (with `nil`) clears the item's hotkey where `hotkey(for:)` reads it.
+    func setHotkey(_ hotkey: Hotkey?, for item: LauncherItem) {
+        if let action = item.windowAction {
+            setWindowHotkey(hotkey, for: action)
+        } else if let bundleID = item.id.stripping(prefix: "app:") {
+            let index = config.appHotkeys.firstIndex { $0.bundleId == bundleID }
+            switch (index, hotkey) {
+            case (let index?, let hotkey?): config.appHotkeys[index].hotkey = hotkey
+            case (let index?, nil): config.appHotkeys.remove(at: index)
+            case (nil, let hotkey?): config.appHotkeys.append(AppHotkey(bundleId: bundleID, name: item.title, hotkey: hotkey))
+            case (nil, nil): break
+            }
+        } else if let actionID = item.id.stripping(prefix: "system:") {
+            let index = config.actionHotkeys.firstIndex { $0.action == actionID }
+            switch (index, hotkey) {
+            case (let index?, let hotkey?): config.actionHotkeys[index].hotkey = hotkey
+            case (let index?, nil): config.actionHotkeys.remove(at: index)
+            case (nil, let hotkey?): config.actionHotkeys.append(ActionHotkey(action: actionID, hotkey: hotkey))
+            case (nil, nil): break
+            }
+        } else {
+            switch item.id {
+            case "mode:clipboard": config.clipboard.hotkey = hotkey
+            case "mode:files": config.files.hotkey = hotkey
+            case "color:pick": config.colorPicker.hotkey = hotkey
+            case "keep-awake:toggle": config.keepAwake.toggleHotkey = hotkey
+            case "keep-awake:on": config.keepAwake.onHotkey = hotkey
+            case "keep-awake:off": config.keepAwake.offHotkey = hotkey
+            default: updateItemSettings(item.id) { $0.hotkey = hotkey }
+            }
+        }
+    }
+
+    /// Where the item's hotkey is set, matching `assignedHotkeys`.
+    func hotkeySlot(for item: LauncherItem) -> HotkeySlot {
+        if let action = item.windowAction { return .window(action) }
+        if let bundleID = item.id.stripping(prefix: "app:"),
+           let index = config.appHotkeys.firstIndex(where: { $0.bundleId == bundleID }) {
+            return .app(index)
+        }
+        if let actionID = item.id.stripping(prefix: "system:"),
+           let index = config.actionHotkeys.firstIndex(where: { $0.action == actionID }) {
+            return .action(index)
+        }
+        switch item.id {
+        case "mode:clipboard": return .clipboard
+        case "mode:files": return .files
+        case "color:pick": return .colorPicker
+        case "keep-awake:toggle": return .keepAwake(.toggle)
+        case "keep-awake:on": return .keepAwake(.on)
+        case "keep-awake:off": return .keepAwake(.off)
+        default: return .item(item.id)
+        }
+    }
+
+    /// App hotkeys for apps that aren't installed (any more), so they can still be cleared.
+    var missingAppItems: [LauncherItem] {
+        let ids = Set(items.map(\.id))
+        return config.appHotkeys
+            .filter { !ids.contains("app:\($0.bundleId)") }
+            .map { LauncherItem(id: "app:\($0.bundleId)", title: $0.name, category: "Application", path: nil, symbol: nil, windowAction: nil) }
+    }
+
+    private func itemSettings(_ id: String) -> ItemSettings? {
+        config.items.first { $0.id == id }
+    }
+
+    /// Changes the item's settings, dropping them once they're back to the defaults.
+    private func updateItemSettings(_ id: String, _ change: (inout ItemSettings) -> Void) {
+        var settings = itemSettings(id) ?? ItemSettings(id: id, enabled: true, aliases: [], hotkey: nil)
+        change(&settings)
+        let isDefault = settings.enabled && settings.aliases.isEmpty && settings.hotkey == nil
+        if let index = config.items.firstIndex(where: { $0.id == id }) {
+            if isDefault {
+                config.items.remove(at: index)
+            } else {
+                config.items[index] = settings
+            }
+        } else if !isDefault {
+            config.items.append(settings)
+        }
     }
 
     // MARK: Clipboard
@@ -215,6 +328,8 @@ enum HotkeySlot: Equatable {
     case window(WindowAction)
     case keepAwake(KeepAwakeHotkey)
     case colorPicker
+    /// Kept in the launcher item's settings (`ItemSettings.hotkey`).
+    case item(String)
 }
 
 enum KeepAwakeHotkey {
