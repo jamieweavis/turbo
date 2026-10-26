@@ -111,7 +111,9 @@ struct LauncherPane: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(minHeight: 120, maxHeight: .infinity)
+            // The table's ideal height is every row stacked; a small one keeps it from growing the
+            // window to fit them all.
+            .frame(minHeight: 120, idealHeight: 300, maxHeight: .infinity)
 
             Text("Untick an item to hide it from search; its hotkey still works. Aliases are extra names to find it by, separated by commas — typing one exactly puts it first. An app's hotkey brings it to the front, or hides it if it's already in front.")
                 .font(.caption)

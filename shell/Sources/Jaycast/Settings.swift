@@ -24,7 +24,11 @@ final class SettingsWindowController {
 
     private func makeWindow() -> NSWindow {
         let view = SettingsView(model: model, onShowOnboarding: onShowOnboarding)
-        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        let hosting = NSHostingController(rootView: view)
+        // Only the minimum size: following the panes' ideal sizes would resize the window
+        // whenever one is long (the Launcher pane's table), pushing content under the title bar.
+        hosting.sizingOptions = [.minSize]
+        let window = NSWindow(contentViewController: hosting)
         // Clear window so the SwiftUI glass background shows the desktop through it.
         window.isOpaque = false
         window.backgroundColor = .clear
