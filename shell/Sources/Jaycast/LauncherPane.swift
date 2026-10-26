@@ -118,7 +118,10 @@ struct LauncherPane: View {
             Text("Untick an item to hide it from search; its hotkey still works. Aliases are extra names to find it by, separated by commas — typing one exactly puts it first. An app's hotkey brings it to the front, or hides it if it's already in front.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                // Not fixedSize: the window's minimum size measures the pane at zero width,
+                // where a fixed-height caption wraps a word per line and is thousands of points
+                // tall, forcing the window taller than the screen.
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(20)
         .onAppear { settings.refreshApps() }
