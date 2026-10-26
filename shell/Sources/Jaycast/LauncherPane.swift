@@ -5,160 +5,214 @@ struct LauncherPane: View {
     let settings: LauncherSettings
 
     @State private var filter = ""
+    @State private var show = ItemFilter.all
+    /// A category to show alone, or nil for every category.
+    @State private var category: String?
+    /// Empty keeps the core's order: apps by name, then the commands grouped by category.
+    @State private var sortOrder: [KeyPathComparator<ItemRowModel>] = []
 
-    /// The list's sections, in order. Items come from the core grouped this way already.
     private static let categories = ["Application", "Jaycast", "System", "Window", "System Settings"]
 
     var body: some View {
         @Bindable var settings = settings
+        let rows = rows()
 
-        Form {
-            if let error = settings.saveError {
+        VStack(spacing: 0) {
+            Form {
+                if let error = settings.saveError {
+                    Section {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+
                 Section {
-                    Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
+                    LabeledContent("Open launcher") {
+                        HStack(spacing: 6) {
+                            if let hotkey = settings.config.hotkey, let problem = settings.problem(with: hotkey, in: .palette) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.yellow)
+                                    .help(problem)
+                            }
+                            HotkeyField(hotkey: $settings.config.hotkey)
+                        }
+                    }
+                    Toggle("Show calculator and conversion results", isOn: $settings.config.calculator)
+                        .help("Type maths, units or currencies, like “12% of 80” or “5 km in miles”. Press ↩ to copy the answer.")
                 }
             }
+            .formStyle(.grouped)
+            .scrollDisabled(true)
+            .fixedSize(horizontal: false, vertical: true)
 
-            Section {
-                LabeledContent("Open launcher") {
-                    HStack(spacing: 6) {
-                        if let hotkey = settings.config.hotkey, let problem = settings.problem(with: hotkey, in: .palette) {
+            HStack(spacing: 8) {
+                TextField("Search", text: $filter, prompt: Text("Search apps and commands"))
+                    .textFieldStyle(.roundedBorder)
+                Picker("Show", selection: $show) {
+                    ForEach(ItemFilter.allCases) { Text($0.title).tag($0) }
+                }
+                .fixedSize()
+                Picker("Type", selection: $category) {
+                    Text("All Types").tag(String?.none)
+                    Divider()
+                    ForEach(Self.categories, id: \.self) { Text(Self.plural($0)).tag(Optional($0)) }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+
+            Table(rows, sortOrder: $sortOrder) {
+                TableColumn("") { row in
+                    Toggle("Show in search", isOn: Binding(
+                        get: { row.enabled },
+                        set: { settings.setEnabled($0, for: row.item) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .help(row.enabled ? "Shown in search" : "Hidden from search")
+                }
+                .width(18)
+
+                TableColumn("Name", value: \.title) { row in
+                    ItemNameCell(row: row)
+                }
+                .width(min: 140, ideal: 200)
+
+                TableColumn("Type", value: \.category) { row in
+                    Text(row.category)
+                        .foregroundStyle(.secondary)
+                }
+                .width(min: 70, ideal: 90)
+
+                TableColumn("Alias") { row in
+                    AliasField(aliases: row.aliases) { settings.setAliases($0, for: row.item) }
+                }
+                .width(min: 90, ideal: 120)
+
+                TableColumn("Hotkey") { row in
+                    HStack(spacing: 4) {
+                        HotkeyField(hotkey: Binding(
+                            get: { row.hotkey },
+                            set: { settings.setHotkey($0, for: row.item) }
+                        ))
+                        if let problem = row.problem {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.yellow)
                                 .help(problem)
                         }
-                        HotkeyField(hotkey: $settings.config.hotkey)
                     }
                 }
-            } footer: {
-                Text("Opens the palette from anywhere. The menu bar can always open it too.")
+                .width(min: 150, ideal: 160)
             }
-
-            Section {
-                Toggle("Show calculator and conversion results", isOn: $settings.config.calculator)
-            } footer: {
-                Text("Type maths, units or currencies, like “12% of 80” or “5 km in miles”. Press ↩ to copy the answer.")
-            }
-
-            Section {
-                TextField("Search", text: $filter, prompt: Text("Search apps and commands"))
-                    .labelsHidden()
-            } header: {
-                Text("Apps and Commands")
-            } footer: {
-                Text("Untick an item to hide it from search; its hotkey still works. Aliases are extra names to find it by, separated by commas — typing one exactly puts the item first. An app's hotkey brings it to the front, launching it if needed, and hides it if it's already in front.")
-            }
-
-            let items = filteredItems
-            ForEach(Self.categories, id: \.self) { category in
-                let rows = items.filter { $0.category == category }
-                if !rows.isEmpty {
-                    Section {
-                        ForEach(rows, id: \.id) { item in
-                            ItemRow(settings: settings, item: item)
-                        }
-                    } header: {
-                        ItemColumnsHeader(title: category == "Application" ? "Applications" : category)
-                    }
-                }
-            }
-            if items.isEmpty {
-                Section {
+            .alternatingRowBackgrounds()
+            .overlay {
+                if rows.isEmpty {
                     Text(settings.items.isEmpty ? "Indexing apps…" : "No matches")
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
                 }
             }
+            .padding(.horizontal, 20)
+
+            Text("Untick an item to hide it from search; its hotkey still works. Aliases are extra names to find it by, separated by commas — typing one exactly puts it first. An app's hotkey brings it to the front, or hides it if it's already in front.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
         }
-        .formStyle(.grouped)
         .onAppear { settings.refreshApps() }
     }
 
-    private var filteredItems: [LauncherItem] {
-        let all = settings.items + settings.missingAppItems
+    /// The filtered, sorted rows, each with everything it shows looked up once, so a row's
+    /// cells don't each search the config.
+    private func rows() -> [ItemRowModel] {
         let filter = filter.trimmingCharacters(in: .whitespaces)
-        guard !filter.isEmpty else { return all }
-        return all.filter { item in
-            item.title.localizedCaseInsensitiveContains(filter)
-                || settings.aliases(for: item).contains { $0.localizedCaseInsensitiveContains(filter) }
+        let rows = (settings.items + settings.missingAppItems).compactMap { item -> ItemRowModel? in
+            if let category, item.category != category { return nil }
+            let enabled = settings.isEnabled(item)
+            let aliases = settings.aliases(for: item)
+            let hotkey = settings.hotkey(for: item)
+            switch show {
+            case .all: break
+            case .enabled: if !enabled { return nil }
+            case .disabled: if enabled { return nil }
+            case .withHotkey: if hotkey == nil { return nil }
+            case .withAlias: if aliases.isEmpty { return nil }
+            }
+            if !filter.isEmpty,
+               !item.title.localizedCaseInsensitiveContains(filter),
+               !aliases.contains(where: { $0.localizedCaseInsensitiveContains(filter) }) {
+                return nil
+            }
+            return ItemRowModel(
+                item: item,
+                enabled: enabled,
+                aliases: aliases,
+                hotkey: hotkey,
+                problem: hotkey.flatMap { settings.problem(with: $0, in: settings.hotkeySlot(for: item)) }
+            )
+        }
+        return sortOrder.isEmpty ? rows : rows.sorted(using: sortOrder)
+    }
+
+    private static func plural(_ category: String) -> String {
+        category == "Application" ? "Applications" : category
+    }
+}
+
+private enum ItemFilter: CaseIterable, Identifiable {
+    case all, enabled, disabled, withHotkey, withAlias
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .enabled: "Shown in Search"
+        case .disabled: "Hidden from Search"
+        case .withHotkey: "With Hotkey"
+        case .withAlias: "With Alias"
         }
     }
 }
 
-/// Column widths shared by the list's header and rows, so they line up as a grid.
-private enum ItemColumns {
-    static let alias: CGFloat = 130
-    static let hotkey: CGFloat = 150
-}
-
-private struct ItemColumnsHeader: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Text(title)
-            Spacer()
-            Text("Alias")
-                .frame(width: ItemColumns.alias, alignment: .leading)
-            Text("Hotkey")
-                .frame(width: ItemColumns.hotkey, alignment: .leading)
-        }
-    }
-}
-
-/// One app or command: whether it shows in search, its aliases and its hotkey.
-private struct ItemRow: View {
-    let settings: LauncherSettings
+/// One app or command in the Launcher pane's table.
+private struct ItemRowModel: Identifiable {
     let item: LauncherItem
+    let enabled: Bool
+    let aliases: [String]
+    let hotkey: Hotkey?
+    /// Why the hotkey won't work, if it won't.
+    let problem: String?
+
+    var id: String { item.id }
+    var title: String { item.title }
+    var category: String { item.category }
+}
+
+private struct ItemNameCell: View {
+    let row: ItemRowModel
 
     var body: some View {
-        let enabled = settings.isEnabled(item)
-        let hotkey = settings.hotkey(for: item)
-
-        HStack(spacing: 10) {
-            Toggle("Show in search", isOn: Binding(
-                get: { enabled },
-                set: { settings.setEnabled($0, for: item) }
-            ))
-            .toggleStyle(.checkbox)
-            .labelsHidden()
-            .help(enabled ? "Shown in search" : "Hidden from search")
-
+        HStack(spacing: 8) {
             Group {
-                if item.path != nil || item.symbol == nil {
-                    AppIconView(path: item.path)
+                if row.item.path != nil || row.item.symbol == nil {
+                    AppIconView(path: row.item.path)
                 } else {
-                    ActionIconView(symbol: item.symbol)
+                    ActionIconView(symbol: row.item.symbol)
                 }
             }
-            .opacity(enabled ? 1 : 0.5)
-            Text(item.title)
+            .opacity(row.enabled ? 1 : 0.5)
+            Text(row.title)
                 .lineLimit(1)
-                .foregroundStyle(enabled ? .primary : .secondary)
-            if item.category == "Application", item.path == nil {
+                .foregroundStyle(row.enabled ? .primary : .secondary)
+            if row.category == "Application", row.item.path == nil {
                 Text("Not installed")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer(minLength: 4)
-
-            AliasField(aliases: settings.aliases(for: item)) { settings.setAliases($0, for: item) }
-                .frame(width: ItemColumns.alias)
-
-            HStack(spacing: 6) {
-                HotkeyField(hotkey: Binding(
-                    get: { hotkey },
-                    set: { settings.setHotkey($0, for: item) }
-                ))
-                if let hotkey, let problem = settings.problem(with: hotkey, in: settings.hotkeySlot(for: item)) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                        .help(problem)
-                }
-            }
-            .frame(width: ItemColumns.hotkey, alignment: .leading)
         }
     }
 }
