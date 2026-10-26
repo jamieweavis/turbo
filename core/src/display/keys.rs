@@ -122,8 +122,6 @@ impl BrightnessKeyTap {
         let _ = worker.thread.join();
     }
 
-    // Not reported through `Core` yet; kept so the tap mirrors the mouse tap's interface.
-    #[allow(dead_code)]
     pub fn is_running(&self) -> bool {
         self.worker.lock().unwrap().is_some()
     }

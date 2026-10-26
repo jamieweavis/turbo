@@ -133,8 +133,6 @@ impl DisplayManager {
         *self.config.lock().unwrap() = config;
     }
 
-    // TODO(step 2): drop the allow once keys.rs reads `brightness_keys` from here.
-    #[allow(dead_code)]
     pub fn config(&self) -> MonitorConfig {
         self.config.lock().unwrap().clone()
     }
@@ -169,8 +167,6 @@ impl DisplayManager {
     /// value, or `None` if this display can't be controlled, so the key should pass through.
     /// Must not block: the key tap calls it on its hot path. Notifies the observer with
     /// `from_keys: true`.
-    // TODO(step 2): drop the allow once keys.rs calls this.
-    #[allow(dead_code)]
     pub fn adjust(&self, display_id: u32, delta: f64) -> Option<f64> {
         if !self.config.lock().unwrap().enabled {
             return None;
@@ -312,8 +308,6 @@ impl Drop for DisplayManager {
 
 /// One brightness-key step from `current`: snaps to the grid of `delta`-sized steps (as
 /// macOS does, so 16 presses always cover the range) and moves one step along it.
-// TODO(step 2): drop the allow once keys.rs calls `adjust`.
-#[allow(dead_code)]
 fn step(current: f64, delta: f64) -> f64 {
     let size = delta.abs();
     if size < f64::EPSILON {

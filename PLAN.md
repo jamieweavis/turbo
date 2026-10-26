@@ -19,7 +19,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 |---|---|---|
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
-| 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | 🚧 In progress |
+| 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | 🧪 Built, awaiting hands-on testing |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ⏳ |
 | 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
 | 5 | Clipboard history, file search | ⏳ |
@@ -43,11 +43,11 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 - [x] Shared core API: `MonitorConfig`, `DisplayInfo`, `DisplayObserver` callback, `Core`
       display methods; brightness keys start/stop with the other event taps
-- [ ] Enumerate external displays; read/write brightness over DDC/CI (`ddc-macos`), coalesced
+- [x] Enumerate external displays; read/write brightness over DDC/CI (`ddc-macos`), coalesced
       background writes, hotplug
-- [ ] Brightness keys control the display under the cursor (pass through on the built-in display
+- [x] Brightness keys control the display under the cursor (pass through on the built-in display
       or displays without DDC)
-- [ ] Shell: menu bar popover with per-display sliders, on-screen indicator for key changes,
+- [x] Shell: menu bar popover with per-display sliders, on-screen indicator for key changes,
       Monitor settings pane
 
 ### Step 3: Launcher core
@@ -80,6 +80,16 @@ Raycast extension support.
 
 ## Log
 
+- **Step 2**: built by three parallel agents (DDC display manager; brightness-key tap; Swift
+  popover, HUD and Monitor pane), integrated on main. 72 Rust tests; both event taps confirmed
+  live. DDC verified once on the DELL U2723QE (read 100/100 in 48 ms), after which the monitor
+  started answering every request with a DDC null message — probably from concurrent access
+  (two test managers, and MonitorControl was running at the time). Workers keep re-reading with
+  backoff, so it recovers on its own once the monitor answers again. Notes: Jaycast draws its own
+  brightness HUD by default (the private `OSDManager` exists on macOS 27 but showed nothing;
+  opt in with `defaults write com.jamieweavis.jaycast UseSystemOSD -bool YES`). Brightness
+  changed with the monitor's own buttons isn't re-read until restart or hotplug. F14/F15 keys
+  aren't handled.
 - **Step 1**: built by three parallel agents (event tap + buttons + scroll routing; smooth-scroll
   physics + emitter; Swift settings UI), integrated on main. 50 Rust tests. The live tap is confirmed
   running (`CGGetEventTapList`: enabled). Not yet checked by hand: scroll feel, every action, the

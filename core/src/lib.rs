@@ -115,8 +115,9 @@ impl Core {
         self.brightness_keys.stop();
     }
 
+    /// True only when both event taps are running.
     pub fn is_input_running(&self) -> bool {
-        self.input.is_running()
+        self.input.is_running() && self.brightness_keys.is_running()
     }
 }
 
