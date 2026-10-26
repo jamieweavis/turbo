@@ -22,7 +22,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
 | 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
-| 5 | Clipboard history, file search | 🚧 In progress |
+| 5 | Clipboard history, file search | 🧪 Built, awaiting hands-on testing |
 | 6 | Window management, snippets / text expansion | ⏳ |
 
 ### Step 1: Mouse
@@ -77,10 +77,10 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 - [x] Shared core API: palette modes (search / clipboard / files) with entries in search and
       their own hotkeys (clipboard ⌥⌘V by default), `ClipboardConfig`, `FileSearchConfig`,
       `ClipboardItem`, `FileResult`, `Core` clipboard and file methods
-- [ ] Clipboard history: monitor, SQLite store, text/links/images/files, ignore concealed copies
+- [x] Clipboard history: monitor, SQLite store, text/links/images/files, ignore concealed copies
       and password managers, retention, pinning, paste into the frontmost app
-- [ ] File search through Spotlight, scoped to chosen folders
-- [ ] Shell: clipboard and file modes in the palette (preview, actions, Quick Look), Clipboard
+- [x] File search through Spotlight, scoped to chosen folders
+- [x] Shell: clipboard and file modes in the palette (preview, actions, Quick Look), Clipboard
       and File Search settings
 
 ### Step 6: Window management, snippets
@@ -96,6 +96,13 @@ Raycast extension support.
 
 ## Log
 
+- **Step 5**: built by three parallel agents (clipboard history; Spotlight file search; Swift
+  palette modes + settings), integrated on main. 217 Rust tests. Clipboard: polls the change
+  count every 400 ms, SQLite (WAL) + PNG files in `clipboard/` (0700/0600), dedupes by SHA-256,
+  skips concealed/transient copies and ignored apps, prunes by count/age (pinned kept), pastes
+  with ⌘V 100 ms after writing. File search: MDQuery on file names (`*word*`cd) in the chosen
+  folders, ~0.25 s per query, ranked by match quality, recency and depth; unindexed folders
+  return nothing. Palette: clipboard (list + preview) and files modes with their own hotkeys.
 - **Step 4**: built by three parallel agents (calculator; quicklinks + commands; Swift UI),
   integrated on main. 183 Rust tests. Calculator: own lexer/parser, units, currency (ECB rates
   from api.frankfurter.dev via Foundation, cached in `currency-rates.json`, refreshed every 12 h;
