@@ -22,7 +22,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
 | 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
-| 5 | Clipboard history, file search | 🧪 Built, awaiting hands-on testing |
+| 5 | Clipboard history, file search | ✅ Done |
 | 6 | Window management, snippets / text expansion | 🧪 Built, awaiting hands-on testing |
 
 ### Step 1: Mouse
