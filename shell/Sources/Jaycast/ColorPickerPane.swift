@@ -14,6 +14,8 @@ final class ColorPickerState {
     /// Held while the magnifier is showing; also stops a second hotkey press starting another.
     @ObservationIgnored private var sampler: NSColorSampler?
     @ObservationIgnored private var clearCopied: Task<Void, Never>?
+    /// Called with a freshly picked colour and the text copied for it.
+    @ObservationIgnored var onPicked: ((PickedColor, String) -> Void)?
 
     init(core: Core) {
         self.core = core
@@ -32,12 +34,15 @@ final class ColorPickerState {
                 guard let color = color?.usingColorSpace(.sRGB) else { return }
                 func byte(_ component: CGFloat) -> UInt8 { UInt8((min(max(component, 0), 1) * 255).rounded()) }
                 self.perform {
-                    let text = try self.core.recordPickedColor(
+                    let picked = PickedColor(
                         red: byte(color.redComponent),
                         green: byte(color.greenComponent),
-                        blue: byte(color.blueComponent)
+                        blue: byte(color.blueComponent),
+                        pickedAt: Date.now.timeIntervalSince1970
                     )
+                    let text = try self.core.recordPickedColor(red: picked.red, green: picked.green, blue: picked.blue)
                     self.showCopied(text)
+                    self.onPicked?(picked, text)
                 }
                 self.refresh()
             }

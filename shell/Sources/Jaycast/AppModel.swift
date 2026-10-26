@@ -16,6 +16,7 @@ final class AppModel {
     @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
     @ObservationIgnored private let commandOutput = CommandOutputWindows()
+    @ObservationIgnored private let pill = Pill()
     private(set) var isInputRunning = false
     private(set) var inputError: String?
 
@@ -33,6 +34,7 @@ final class AppModel {
         palette = PaletteWindowController(core: core, settings: launcher)
         palette.model.onPickColor = { [colorPicker] in colorPicker.pick() }
         palette.model.onColorsChanged = { [colorPicker] in colorPicker.refresh() }
+        colorPicker.onPicked = { [pill] color, text in pill.show(.color(color, text: text)) }
     }
 
     /// Starts input as soon as Accessibility is granted (now or later) and stops it if revoked.
@@ -57,7 +59,10 @@ final class AppModel {
             onClipboardChanged: { [palette] in
                 if palette.isVisible { palette.model.refresh(ifShowing: .clipboard) }
             },
-            onCaffeinateChanged: { [caffeinate] _ in caffeinate.refresh() },
+            onCaffeinateChanged: { [caffeinate, pill] active in
+                caffeinate.refresh()
+                pill.show(.caffeinate(active))
+            },
             onPickColor: { [colorPicker] in colorPicker.pick() }
         ))
         // Hotkeys don't need Accessibility, so they work before it's granted.
