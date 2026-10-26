@@ -1,4 +1,5 @@
-//! Global hotkeys (the palette and per-app hotkeys) and the app focus-or-hide toggle.
+//! Global hotkeys (the palette, palette modes, per-app and window hotkeys) and the app
+//! focus-or-hide toggle.
 //!
 //! Hotkeys go through Carbon's `RegisterEventHotKey`, which is still the supported way to
 //! claim a system-wide key combination and, unlike an event tap, needs no Accessibility
@@ -15,8 +16,9 @@ use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfigurat
 use objc2_foundation::NSString;
 
 use super::{LauncherObserver, PaletteMode};
-use crate::config::{Hotkey, LauncherConfig, Modifier};
+use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
+use crate::windows::WindowManager;
 
 /// Registers the palette and per-app hotkeys. Hotkeys don't need Accessibility.
 /// `new` and `apply` must be called on the main thread.
@@ -30,6 +32,7 @@ struct Inner {
     observer: Mutex<Option<Arc<dyn LauncherObserver>>>,
     /// What each registered hotkey id does.
     targets: Mutex<HashMap<u32, Target>>,
+    windows: Arc<WindowManager>,
 }
 
 /// Carbon's refs: only touched on the main thread (`apply` and `Drop` check), but kept in
@@ -54,14 +57,16 @@ enum Target {
     Palette,
     Mode(PaletteMode),
     App(String),
+    Window(WindowAction),
 }
 
 impl HotkeyManager {
-    pub fn new() -> Self {
+    pub fn new(windows: Arc<WindowManager>) -> Self {
         Self {
             inner: Arc::new(Inner {
                 observer: Mutex::new(None),
                 targets: Mutex::new(HashMap::new()),
+                windows,
             }),
             carbon: Mutex::new(Carbon {
                 handler: ptr::null_mut(),
@@ -175,6 +180,11 @@ impl Inner {
                     eprintln!("jaycast: app hotkey for {bundle_id}: {error}");
                 }
             }
+            Some(Target::Window(action)) => {
+                if let Err(error) = self.windows.perform(action) {
+                    eprintln!("jaycast: window hotkey {action:?}: {error}");
+                }
+            }
             None => {}
         }
     }
@@ -221,6 +231,14 @@ fn plan(config: &LauncherConfig) -> Plan {
                 .app_hotkeys
                 .iter()
                 .map(|app| (app.hotkey.clone(), Target::App(app.bundle_id.clone()))),
+        )
+        .chain(
+            config
+                .windows
+                .hotkeys
+                .iter()
+                .filter(|_| config.windows.hotkeys_enabled)
+                .map(|binding| (binding.hotkey.clone(), Target::Window(binding.action))),
         );
 
     let mut seen = Vec::new();
@@ -494,7 +512,7 @@ extern "C" fn hotkey_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AppHotkey, KEY_SPACE};
+    use crate::config::{AppHotkey, KEY_SPACE, WindowHotkey};
 
     fn hotkey(key_code: u16, modifiers: &[Modifier]) -> Hotkey {
         Hotkey {
@@ -521,12 +539,39 @@ mod tests {
         );
     }
 
-    /// The defaults minus the clipboard/file hotkeys, so plans only hold what a test lists.
+    /// The defaults minus the clipboard/file/window hotkeys, so plans only hold what a test
+    /// lists.
     fn without_mode_hotkeys() -> LauncherConfig {
         let mut config = LauncherConfig::default();
         config.clipboard.hotkey = None;
         config.files.hotkey = None;
+        config.windows.hotkeys.clear();
         config
+    }
+
+    #[test]
+    fn window_hotkeys_come_last_and_can_be_switched_off() {
+        let mut config = without_mode_hotkeys();
+        config.windows.hotkeys = vec![WindowHotkey {
+            action: WindowAction::LeftHalf,
+            hotkey: hotkey(0x7B, &[Modifier::Control, Modifier::Option]),
+        }];
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(
+            targets,
+            vec![Target::Palette, Target::Window(WindowAction::LeftHalf)]
+        );
+        config.windows.hotkeys_enabled = false;
+        assert_eq!(plan(&config).hotkeys.len(), 1);
+    }
+
+    #[test]
+    fn default_hotkeys_dont_collide() {
+        assert!(plan(&LauncherConfig::default()).duplicates.is_empty());
     }
 
     #[test]
@@ -620,7 +665,7 @@ mod tests {
     #[test]
     fn apply_off_the_main_thread_is_ignored() {
         // Test threads are never the main thread, so this must not touch Carbon.
-        let manager = HotkeyManager::new();
+        let manager = HotkeyManager::new(Arc::new(WindowManager::new(Default::default())));
         manager.apply(&LauncherConfig::default());
         assert!(manager.failed().is_empty());
         assert!(manager.carbon.lock().unwrap().handler.is_null());

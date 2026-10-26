@@ -842,6 +842,9 @@ private struct ResultRow: View {
         case .application, .quicklink: return ("Open", "↩")
         case .calculator: return ("Copy", "↩")
         case .systemAction, .command: return ("Run", "↩")
+        // TODO(step 6): close the palette before opening these.
+        case .windowAction: return ("Apply", "↩")
+        case .snippet: return ("Paste", "↩")
         }
     }
 

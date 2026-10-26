@@ -31,6 +31,8 @@ pub struct LauncherConfig {
     pub commands: Vec<ShellCommand>,
     pub clipboard: ClipboardConfig,
     pub files: FileSearchConfig,
+    pub windows: WindowConfig,
+    pub snippets: SnippetsConfig,
 }
 
 impl Default for LauncherConfig {
@@ -46,6 +48,8 @@ impl Default for LauncherConfig {
             commands: Vec::new(),
             clipboard: ClipboardConfig::default(),
             files: FileSearchConfig::default(),
+            windows: WindowConfig::default(),
+            snippets: SnippetsConfig::default(),
         }
     }
 }
@@ -110,6 +114,121 @@ impl Default for FileSearchConfig {
                 .to_vec(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct WindowConfig {
+    /// Register the window hotkeys. The actions stay in palette search either way.
+    pub hotkeys_enabled: bool,
+    /// Points left between snapped windows and between windows and the screen edges.
+    pub gap: u32,
+    pub hotkeys: Vec<WindowHotkey>,
+}
+
+impl Default for WindowConfig {
+    fn default() -> Self {
+        use WindowAction::*;
+        let control_option = || vec![Modifier::Control, Modifier::Option];
+        let all_three = || vec![Modifier::Control, Modifier::Option, Modifier::Command];
+        let bind = |action, key_code, modifiers| WindowHotkey {
+            action,
+            hotkey: Hotkey {
+                key_code,
+                modifiers,
+            },
+        };
+        Self {
+            hotkeys_enabled: true,
+            gap: 0,
+            hotkeys: vec![
+                bind(LeftHalf, KEY_LEFT_ARROW, control_option()),
+                bind(RightHalf, KEY_RIGHT_ARROW, control_option()),
+                bind(TopHalf, KEY_UP_ARROW, control_option()),
+                bind(BottomHalf, KEY_DOWN_ARROW, control_option()),
+                bind(TopLeft, KEY_U, control_option()),
+                bind(TopRight, KEY_I, control_option()),
+                bind(BottomLeft, KEY_J, control_option()),
+                bind(BottomRight, KEY_K, control_option()),
+                bind(LeftThird, KEY_D, control_option()),
+                bind(CenterThird, KEY_F, control_option()),
+                bind(RightThird, KEY_G, control_option()),
+                bind(LeftTwoThirds, KEY_E, control_option()),
+                bind(RightTwoThirds, KEY_T, control_option()),
+                bind(Maximize, KEY_RETURN, control_option()),
+                bind(Center, KEY_C, control_option()),
+                bind(Restore, KEY_DELETE, control_option()),
+                bind(NextDisplay, KEY_RIGHT_ARROW, all_three()),
+                bind(PreviousDisplay, KEY_LEFT_ARROW, all_three()),
+            ],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct WindowHotkey {
+    pub action: WindowAction,
+    pub hotkey: Hotkey,
+}
+
+/// Moves or resizes the focused window of the frontmost app. Positions are within the
+/// display's visible frame (below the menu bar, beside the Dock).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Enum)]
+pub enum WindowAction {
+    /// Repeating a half cycles its width (or height) through 1/2, 2/3 and 1/3.
+    LeftHalf,
+    RightHalf,
+    TopHalf,
+    BottomHalf,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    LeftThird,
+    CenterThird,
+    RightThird,
+    LeftTwoThirds,
+    RightTwoThirds,
+    Maximize,
+    /// Maximised, inset to leave a margin of the desktop showing.
+    AlmostMaximize,
+    /// Same size, centred.
+    Center,
+    /// Back to the frame it had before Jaycast first moved it.
+    Restore,
+    /// Same relative position and size on the next display.
+    NextDisplay,
+    PreviousDisplay,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct SnippetsConfig {
+    /// Expand a snippet's keyword as soon as it's typed in any app (needs Accessibility).
+    /// Snippets stay in palette search either way.
+    pub expansion: bool,
+    pub snippets: Vec<Snippet>,
+}
+
+impl Default for SnippetsConfig {
+    fn default() -> Self {
+        Self {
+            expansion: true,
+            snippets: Vec::new(),
+        }
+    }
+}
+
+/// Text inserted by keyword or from the palette. Placeholders: `{clipboard}`, `{date}`,
+/// `{time}`, `{datetime}` (the user's locale formats) and `{cursor}` (where the caret ends up).
+/// `{{` and `}}` are literal braces.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+pub struct Snippet {
+    pub id: String,
+    pub name: String,
+    /// Typed anywhere to expand, e.g. `;addr`. May be empty (then palette only).
+    pub keyword: String,
+    pub text: String,
 }
 
 fn default_quicklinks() -> Vec<Quicklink> {
@@ -179,6 +298,23 @@ pub enum CommandOutput {
 pub const KEY_SPACE: u16 = 0x31;
 /// `kVK_ANSI_V`.
 pub const KEY_V: u16 = 0x09;
+pub const KEY_C: u16 = 0x08;
+pub const KEY_D: u16 = 0x02;
+pub const KEY_E: u16 = 0x0E;
+pub const KEY_F: u16 = 0x03;
+pub const KEY_G: u16 = 0x05;
+pub const KEY_I: u16 = 0x22;
+pub const KEY_J: u16 = 0x26;
+pub const KEY_K: u16 = 0x28;
+pub const KEY_T: u16 = 0x11;
+pub const KEY_U: u16 = 0x20;
+pub const KEY_RETURN: u16 = 0x24;
+/// `kVK_Delete` (backspace).
+pub const KEY_DELETE: u16 = 0x33;
+pub const KEY_LEFT_ARROW: u16 = 0x7B;
+pub const KEY_RIGHT_ARROW: u16 = 0x7C;
+pub const KEY_DOWN_ARROW: u16 = 0x7D;
+pub const KEY_UP_ARROW: u16 = 0x7E;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Record)]
 pub struct Hotkey {

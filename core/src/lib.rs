@@ -11,6 +11,8 @@ mod files;
 mod input;
 mod launcher;
 mod pasteboard;
+mod snippets;
+mod windows;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -26,6 +28,8 @@ use files::FileSearch;
 use input::InputEngine;
 pub use launcher::{AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult};
 use launcher::{HotkeyManager, Launcher};
+use snippets::SnippetExpander;
+use windows::WindowManager;
 
 /// Basic facts about the core, shown in the shell so the FFI is exercised end to end.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -54,6 +58,8 @@ pub struct Core {
     hotkeys: HotkeyManager,
     clipboard: Arc<ClipboardHistory>,
     files: FileSearch,
+    windows: Arc<WindowManager>,
+    snippets: SnippetExpander,
 }
 
 #[uniffi::export]
@@ -67,10 +73,12 @@ impl Core {
         let input = InputEngine::new(config.mouse.clone());
         let displays = DisplayManager::new(config.monitor.clone());
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
-        let launcher = Launcher::new(&data_dir, config.launcher.clone());
-        let hotkeys = HotkeyManager::new();
+        let windows = Arc::new(WindowManager::new(config.launcher.windows.clone()));
+        let launcher = Launcher::new(&data_dir, config.launcher.clone(), Arc::clone(&windows));
+        let hotkeys = HotkeyManager::new(Arc::clone(&windows));
         let clipboard = ClipboardHistory::new(&data_dir, config.launcher.clipboard.clone());
         let files = FileSearch::new(config.launcher.files.clone());
+        let snippets = SnippetExpander::new(config.launcher.snippets.clone());
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
@@ -81,6 +89,8 @@ impl Core {
             hotkeys,
             clipboard,
             files,
+            windows,
+            snippets,
         }))
     }
 
@@ -138,6 +148,8 @@ impl Core {
         launcher::apply_config(&self.hotkeys, &launcher);
         self.clipboard.set_config(launcher.clipboard.clone());
         self.files.set_config(launcher.files.clone());
+        self.windows.set_config(launcher.windows.clone());
+        self.snippets.set_config(launcher.snippets.clone());
         self.launcher.set_config(launcher);
         Ok(())
     }
@@ -166,7 +178,8 @@ impl Core {
         self.hotkeys.set_observer(observer);
     }
 
-    /// Best matches for `query` (apps and system actions). Cheap enough for every keystroke.
+    /// Best matches for `query` (apps, system and window actions, snippets, …). Cheap enough
+    /// for every keystroke.
     pub fn search(&self, query: String, limit: u32) -> Vec<SearchResult> {
         self.launcher.search(&query, limit as usize)
     }
@@ -220,19 +233,22 @@ impl Core {
         self.launcher.apps()
     }
 
-    /// Starts the event taps (mouse and brightness keys). Fails with `PermissionDenied`
-    /// without Accessibility. Calling it while already running is a no-op.
+    /// Starts the event taps (mouse, brightness keys and snippet expansion). Fails with
+    /// `PermissionDenied` without Accessibility. Calling it while already running is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
         self.input.start()?;
-        self.brightness_keys.start()
+        self.brightness_keys.start()?;
+        self.snippets.start()
     }
 
     pub fn stop_input(&self) {
         self.input.stop();
         self.brightness_keys.stop();
+        self.snippets.stop();
     }
 
-    /// True only when both event taps are running.
+    /// True only when the mouse and brightness key taps are running (the snippet tap only
+    /// runs while expansion is on).
     pub fn is_input_running(&self) -> bool {
         self.input.is_running() && self.brightness_keys.is_running()
     }

@@ -23,7 +23,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
 | 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
 | 5 | Clipboard history, file search | 🧪 Built, awaiting hands-on testing |
-| 6 | Window management, snippets / text expansion | ⏳ |
+| 6 | Window management, snippets / text expansion | 🚧 In progress |
 
 ### Step 1: Mouse
 
@@ -85,8 +85,14 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ### Step 6: Window management, snippets
 
-- [ ] Snap halves/thirds/quarters, maximise, move between displays
-- [ ] Snippets with placeholders and keyword expansion while typing
+- [x] Shared core API: `WindowConfig` (hotkeys, default ⌃⌥ arrows etc.; gap), `WindowAction`,
+      `SnippetsConfig`/`Snippet`, window and snippet results in search, window hotkeys,
+      snippet tap started with the other event taps
+- [ ] Window management through Accessibility: halves (repeat cycles 1/2 → 2/3 → 1/3),
+      quarters, thirds, maximise, almost maximise, centre, restore, next/previous display
+- [ ] Snippets with placeholders (`{clipboard}`, `{date}`, `{time}`, `{cursor}`, …) from the
+      palette, and keyword expansion while typing
+- [ ] Shell: window and snippet results in the palette, Windows and Snippets settings
 
 ## Not in v1
 

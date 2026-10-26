@@ -8,6 +8,9 @@
 //! - `hotkeys`: global hotkeys (palette + per-app) and the focus-or-hide app toggle.
 //! - `calc`: calculator, unit and currency conversion (`Calculator::evaluate`).
 //! - `extensions`: quicklinks and shell commands (`extensions::results` / `open`).
+//!
+//! Window actions (`crate::windows`) and snippets (`crate::snippets`) are listed and opened
+//! from here, but implemented in their own modules.
 
 mod apps;
 mod calc;
@@ -29,6 +32,7 @@ use objc2_foundation::{NSString, NSURL};
 
 use crate::config::LauncherConfig;
 use crate::error::CoreError;
+use crate::windows::{self, WindowManager};
 use apps::App;
 use calc::Calculator;
 use fuzzy::Prepared;
@@ -39,7 +43,7 @@ pub(crate) use hotkeys::HotkeyManager;
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct SearchResult {
     /// Opaque; pass back to `Core::open_result`. Apps use `app:<bundle id>`, system actions
-    /// `system:<action id>`.
+    /// `system:<action id>`, window actions `window:<action id>`, snippets `snippet:<id>`.
     pub id: String,
     pub title: String,
     pub subtitle: String,
@@ -62,6 +66,10 @@ pub enum ResultKind {
     Calculator,
     Quicklink,
     Command,
+    /// Acts on the frontmost app's focused window: the shell closes the palette first.
+    WindowAction,
+    /// Types into the frontmost app: the shell closes the palette first.
+    Snippet,
 }
 
 /// What opening a result did, so the palette can confirm it.
@@ -161,6 +169,7 @@ pub(crate) struct Launcher {
     watcher: Mutex<Option<apps::Watcher>>,
     config: RwLock<Arc<LauncherConfig>>,
     calculator: Calculator,
+    windows: Arc<WindowManager>,
 }
 
 #[derive(Default)]
@@ -200,6 +209,7 @@ struct SystemEntry {
     keywords: Vec<Prepared>,
     symbol: String,
     needs_confirmation: bool,
+    kind: ResultKind,
 }
 
 impl SystemEntry {
@@ -212,6 +222,20 @@ impl SystemEntry {
             keywords: action.keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: action.symbol.to_owned(),
             needs_confirmation: action.needs_confirmation,
+            kind: ResultKind::SystemAction,
+        }
+    }
+
+    fn window(&(_, id, title, keywords, symbol): &windows::ActionEntry) -> Self {
+        Self {
+            id: format!("window:{id}"),
+            title: title.to_owned(),
+            subtitle: "Window",
+            title_match: Prepared::new(title),
+            keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
+            symbol: symbol.to_owned(),
+            needs_confirmation: false,
+            kind: ResultKind::WindowAction,
         }
     }
 
@@ -224,6 +248,7 @@ impl SystemEntry {
             keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: symbol.to_owned(),
             needs_confirmation: false,
+            kind: ResultKind::SystemAction,
         }
     }
 
@@ -232,7 +257,7 @@ impl SystemEntry {
             id: self.id.clone(),
             title: self.title.clone(),
             subtitle: self.subtitle.into(),
-            kind: ResultKind::SystemAction,
+            kind: self.kind,
             path: None,
             symbol: Some(self.symbol.clone()),
             needs_confirmation: self.needs_confirmation,
@@ -244,7 +269,7 @@ impl SystemEntry {
 impl Launcher {
     /// Starts indexing on a background thread; `data_dir` holds the usage history (and the
     /// currency rate cache).
-    pub fn new(data_dir: &Path, config: LauncherConfig) -> Arc<Self> {
+    pub fn new(data_dir: &Path, config: LauncherConfig, windows: Arc<WindowManager>) -> Arc<Self> {
         let store = UsageStore::new(data_dir);
         let launcher = Arc::new(Self {
             index: RwLock::new(Arc::new(Index::default())),
@@ -252,6 +277,7 @@ impl Launcher {
                 .iter()
                 .map(SystemEntry::mode)
                 .chain(system::actions().iter().map(SystemEntry::new))
+                .chain(windows::ACTIONS.iter().map(SystemEntry::window))
                 .collect(),
             usage: Mutex::new(store.load()),
             store,
@@ -259,6 +285,7 @@ impl Launcher {
             watcher: Mutex::new(None),
             config: RwLock::new(Arc::new(config)),
             calculator: Calculator::new(data_dir),
+            windows,
         });
 
         let weak = Arc::downgrade(&launcher);
@@ -287,7 +314,7 @@ impl Launcher {
         *self.observer.lock().unwrap() = observer;
     }
 
-    /// Quicklinks, commands and the calculator switch come from here.
+    /// Quicklinks, commands, snippets and the calculator switch come from here.
     pub fn set_config(&self, config: LauncherConfig) {
         *self.config.write().unwrap() = Arc::new(config);
     }
@@ -305,6 +332,7 @@ impl Launcher {
                 extra.push((CALCULATOR_SCORE, calculation.result()));
             }
             extra.extend(extensions::results(query, &config));
+            extra.extend(crate::snippets::results(query, &config.snippets));
         }
         let usage = self.usage.lock().unwrap();
         rank(
@@ -345,6 +373,22 @@ impl Launcher {
             launch(&app.info.path)?;
         } else if let Some(action) = id.strip_prefix("system:") {
             system::perform(action)?;
+        } else if let Some(action) = id.strip_prefix("window:") {
+            let action = windows::action_for_id(action).ok_or_else(|| CoreError::Other {
+                message: format!("unknown window action {action}"),
+            })?;
+            self.windows.perform(action)?;
+        } else if let Some(snippet_id) = id.strip_prefix("snippet:") {
+            let config = Arc::clone(&self.config.read().unwrap());
+            let snippet = config
+                .snippets
+                .snippets
+                .iter()
+                .find(|s| s.id == snippet_id)
+                .ok_or_else(|| CoreError::Other {
+                    message: format!("no snippet with id {snippet_id}"),
+                })?;
+            crate::snippets::insert(snippet)?;
         } else {
             return Err(CoreError::Other {
                 message: format!("unknown result {id}"),
@@ -392,7 +436,7 @@ impl Launcher {
 }
 
 /// Scores every app and system action against `query` (folded), merges in `extra`
-/// (calculator, quicklinks, commands; already scored) and returns the best.
+/// (calculator, quicklinks, commands, snippets; already scored) and returns the best.
 fn rank(
     query: &[char],
     index: &Index,
