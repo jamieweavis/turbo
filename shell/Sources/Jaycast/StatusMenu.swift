@@ -10,8 +10,6 @@ struct StatusMenu: View {
     private let core = coreInfo()
 
     var body: some View {
-        @Bindable var mouse = model.mouse
-
         VStack(alignment: .leading, spacing: 12) {
             MenuRow(title: "Open Launcher", systemImage: "magnifyingglass", detail: model.launcher.config.hotkey?.title) {
                 dismiss()
@@ -30,17 +28,7 @@ struct StatusMenu: View {
                 Divider()
             }
 
-            Toggle(isOn: $mouse.config.smoothScroll.enabled) {
-                Label("Smooth scrolling", systemImage: "arrow.up.and.down")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $mouse.config.buttonsEnabled) {
-                Label("Mouse buttons", systemImage: "computermouse")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .toggleStyle(.switch)
+            mouse
 
             if !model.accessibility.isGranted {
                 MenuRow(title: "Grant Accessibility…", systemImage: "hand.raised") {
@@ -79,6 +67,20 @@ struct StatusMenu: View {
         }
         .padding(14)
         .frame(width: 300)
+    }
+
+    private var mouse: some View {
+        @Bindable var mouse = model.mouse
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Mouse")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            MenuToggle(title: "Smooth scrolling", systemImage: "arrow.up.and.down", isOn: $mouse.config.smoothScroll.enabled)
+            MenuToggle(title: "Reverse direction", systemImage: "arrow.up.arrow.down", isOn: $mouse.config.scrollModifiers.reverseDirection)
+            MenuToggle(title: "Buttons", systemImage: "computermouse", isOn: $mouse.config.buttonsEnabled)
+        }
     }
 
     private var displays: some View {
@@ -134,6 +136,21 @@ struct DisplayBrightnessRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// A full-width switch row, matching `MenuRow`'s label layout.
+private struct MenuToggle: View {
+    let title: String
+    let systemImage: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            Label(title, systemImage: systemImage)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.switch)
     }
 }
 
