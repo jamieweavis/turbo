@@ -134,9 +134,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        // The window shadow follows the rectangular frame, not the rounded glass, and shows as
-        // a square outline at the corners; the glass draws its own edge.
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.isMovable = false
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -156,6 +154,12 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         let hosting = NSHostingView(rootView: PaletteView(model: model))
         // The controller sizes the window; SwiftUI must never resize it to fit its content.
         hosting.sizingOptions = []
+        // The glass's backdrop covers the whole frame, faintly tinting the corners outside its
+        // rounded shape (and squaring off the window shadow); clip it to the rounded shape.
+        hosting.wantsLayer = true
+        hosting.layer?.cornerRadius = PaletteLayout.cornerRadius
+        hosting.layer?.cornerCurve = .continuous
+        hosting.layer?.masksToBounds = true
         panel.contentView = hosting
         return panel
     }
