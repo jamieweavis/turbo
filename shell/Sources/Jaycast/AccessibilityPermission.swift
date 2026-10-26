@@ -5,8 +5,9 @@ import Observation
 /// Tracks whether Jaycast is trusted for Accessibility, which the event tap,
 /// window management and text expansion all need.
 ///
-/// macOS posts no notification when the user flips the switch in System Settings,
-/// so while someone is watching (the onboarding window), this polls once a second.
+/// macOS posts no notification when the user flips the switch in System Settings, so this
+/// polls once a second for the app's lifetime. `AXIsProcessTrusted` is a cheap check, and
+/// polling also catches the grant being revoked while the event tap is running.
 @MainActor
 @Observable
 final class AccessibilityPermission {
@@ -14,7 +15,10 @@ final class AccessibilityPermission {
     @ObservationIgnored private var pollTimer: Timer?
 
     func refresh() {
-        isGranted = AXIsProcessTrusted()
+        // Assign only on change: @Observable notifies on every set, and observers start or
+        // stop the event tap in response.
+        let trusted = AXIsProcessTrusted()
+        if trusted != isGranted { isGranted = trusted }
     }
 
     /// Shows the system prompt, which adds Jaycast to the Accessibility list.
@@ -34,10 +38,5 @@ final class AccessibilityPermission {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
-    }
-
-    func stopWatching() {
-        pollTimer?.invalidate()
-        pollTimer = nil
     }
 }

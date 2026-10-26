@@ -20,7 +20,7 @@ final class AppModel {
 
     /// Starts input as soon as Accessibility is granted (now or later) and stops it if revoked.
     func start() {
-        accessibility.refresh()
+        accessibility.startWatching()
         Task {
             for await granted in Observations({ [accessibility] in accessibility.isGranted }) {
                 updateInput(granted: granted)

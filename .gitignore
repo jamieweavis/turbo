@@ -6,3 +6,4 @@
 /shell/Sources/Jaycast/Generated/
 /shell/Sources/JaycastCoreFFI/include/
 .DS_Store
+/.claude/worktrees/

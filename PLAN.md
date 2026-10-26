@@ -27,15 +27,15 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ### Step 1: Mouse
 
-- [ ] Shared core API: `Core` object, persisted JSON config, `MouseConfig` types, error type
+- [x] Shared core API: `Core` object, persisted JSON config, `MouseConfig` types, error type (`a599e9c`)
 - [ ] Event tap on its own thread; re-enables itself if macOS disables it; ignores our own synthetic events
 - [ ] Button remapping: middle/back/forward buttons; click, double-click and hold triggers;
       actions for back/forward, Mission Control, App Exposé, Show Desktop, Launchpad, Spaces,
       custom keyboard shortcut
 - [ ] Scroll modifiers: reverse wheel direction (independent of the trackpad), modifier for
       horizontal, zoom and precise scrolling
-- [ ] Smooth scrolling: pure, unit-tested physics (acceleration, momentum) + emitter that posts
-      continuous scroll events with proper phases at display rate; only for wheel mice
+- [x] Smooth scrolling: pure, unit-tested physics (acceleration, momentum) + emitter that posts
+      continuous scroll events with proper phases at display rate; only for wheel mice (`61fb54d`)
 - [ ] Shell: Settings window with a Mouse pane; input starts once Accessibility is granted;
       menu toggle to turn mouse fixes on/off
 

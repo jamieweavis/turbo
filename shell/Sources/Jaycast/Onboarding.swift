@@ -4,7 +4,7 @@ import SwiftUI
 /// A plain AppKit window rather than a SwiftUI `Window` scene: scenes are unreliable
 /// for menu-bar-only (accessory) apps, which have no Dock icon to reopen them from.
 @MainActor
-final class OnboardingWindowController: NSObject, NSWindowDelegate {
+final class OnboardingWindowController: NSObject {
     private let permission: AccessibilityPermission
     private var window: NSWindow?
 
@@ -15,13 +15,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     func show() {
         let window = self.window ?? makeWindow()
         self.window = window
-        permission.startWatching()
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        permission.stopWatching()
     }
 
     private func makeWindow() -> NSWindow {
@@ -32,7 +27,6 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.title = "Welcome to Jaycast"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.delegate = self
         window.center()
         return window
     }
