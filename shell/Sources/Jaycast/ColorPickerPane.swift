@@ -132,6 +132,8 @@ struct ColorPickerPane: View {
         let format = settings.config.colorPicker.format
 
         Form {
+            PaneHeaderSection(pane: .colorPicker)
+
             if let error = picker.error ?? settings.saveError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

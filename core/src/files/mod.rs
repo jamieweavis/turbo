@@ -228,6 +228,7 @@ mod tests {
         assert!(search.search("   ", 10).unwrap().is_empty());
 
         let search = FileSearch::new(FileSearchConfig {
+            enabled: true,
             hotkey: None,
             scopes: Vec::new(),
         });
@@ -246,6 +247,7 @@ mod tests {
     #[ignore]
     fn live_search_timings() {
         let search = FileSearch::new(FileSearchConfig {
+            enabled: true,
             hotkey: None,
             scopes: ["~/Desktop", "~/Documents", "~/Downloads"]
                 .map(String::from)

@@ -15,6 +15,8 @@ struct ClipboardPane: View {
         @Bindable var settings = settings
 
         Form {
+            PaneHeaderSection(pane: .clipboard)
+
             if let error = settings.saveError ?? clearError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -23,7 +25,6 @@ struct ClipboardPane: View {
             }
 
             Section {
-                Toggle("Keep clipboard history", isOn: $settings.config.clipboard.enabled)
                 LabeledContent("Open clipboard history") {
                     HStack(spacing: 6) {
                         if let hotkey = settings.config.clipboard.hotkey,
@@ -35,8 +36,6 @@ struct ClipboardPane: View {
                         HotkeyField(hotkey: $settings.config.clipboard.hotkey)
                     }
                 }
-            } footer: {
-                Text("Turning history off stops watching the clipboard entirely.")
             }
 
             Section {
@@ -126,6 +125,8 @@ struct FileSearchPane: View {
         @Bindable var settings = settings
 
         Form {
+            PaneHeaderSection(pane: .files)
+
             if let error = settings.saveError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

@@ -285,10 +285,32 @@ pub(crate) const KEYWORD_SCORE: i32 = 10_000;
 const SECONDARY_MATCH_WEIGHT: i32 = 3;
 const SECONDARY_MATCH_DIVISOR: i32 = 4;
 
+/// The search results of each feature that's turned off: result ids, or id prefixes ending
+/// in `:` for every result of a kind.
+fn disabled_features(config: &LauncherConfig) -> Vec<&'static str> {
+    let features: [(bool, &[&'static str]); 8] = [
+        (config.quicklinks_enabled, &["quicklink:"]),
+        (config.commands_enabled, &["command:"]),
+        (config.snippets.enabled, &["snippet:"]),
+        (config.clipboard.enabled, &["mode:clipboard"]),
+        (config.files.enabled, &["mode:files"]),
+        (config.windows.enabled, &["window:"]),
+        (config.keep_awake.enabled, &["keep-awake:"]),
+        (config.color_picker.enabled, &[PICK_COLOR_ID, "mode:colors"]),
+    ];
+    features
+        .into_iter()
+        .filter(|(enabled, _)| !enabled)
+        .flat_map(|(_, ids)| ids.iter().copied())
+        .collect()
+}
+
 /// The user's per-item settings, prepared for search.
 #[derive(Default)]
 struct Prefs {
     disabled: std::collections::HashSet<String>,
+    /// Result ids, or id prefixes ending in `:`, of the features turned off.
+    disabled_features: Vec<&'static str>,
     /// Result id → its aliases.
     aliases: HashMap<String, Vec<Alias>>,
 }
@@ -300,7 +322,10 @@ struct Alias {
 
 impl Prefs {
     fn new(config: &LauncherConfig) -> Self {
-        let mut prefs = Self::default();
+        let mut prefs = Self {
+            disabled_features: disabled_features(config),
+            ..Self::default()
+        };
         for item in &config.items {
             if !item.enabled {
                 prefs.disabled.insert(item.id.clone());
@@ -324,6 +349,10 @@ impl Prefs {
 
     fn is_enabled(&self, id: &str) -> bool {
         !self.disabled.contains(id)
+            && !self
+                .disabled_features
+                .iter()
+                .any(|feature| id == *feature || feature.ends_with(':') && id.starts_with(feature))
     }
 
     /// The best alias score for `id`: a full-weight match, or above every fuzzy match when
@@ -588,6 +617,7 @@ impl Launcher {
             extra.extend(crate::snippets::results(query, &config.snippets));
         }
         let prefs = Arc::clone(&self.prefs.read().unwrap());
+        extra.retain(|(_, result)| prefs.is_enabled(&result.id));
         let usage = self.usage.lock().unwrap();
         rank(
             &fuzzy::fold_query(query),
@@ -1131,6 +1161,22 @@ mod tests {
             items,
             ..LauncherConfig::default()
         })
+    }
+
+    #[test]
+    fn features_turned_off_leave_their_items_out() {
+        let mut config = LauncherConfig::default();
+        config.windows.enabled = false;
+        config.color_picker.enabled = false;
+        config.quicklinks_enabled = false;
+        let prefs = Prefs::new(&config);
+        assert!(!prefs.is_enabled("window:left-half"));
+        assert!(!prefs.is_enabled(PICK_COLOR_ID));
+        assert!(!prefs.is_enabled("mode:colors"));
+        assert!(!prefs.is_enabled("quicklink:google"));
+        assert!(prefs.is_enabled("mode:clipboard"));
+        assert!(prefs.is_enabled("command:deploy"));
+        assert!(prefs.is_enabled("app:com.apple.Safari"));
     }
 
     #[test]

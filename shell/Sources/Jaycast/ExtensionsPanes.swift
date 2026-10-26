@@ -20,6 +20,8 @@ struct QuicklinksPane: View {
 
     var body: some View {
         Form {
+            PaneHeaderSection(pane: .quicklinks)
+
             SaveErrorSection(error: settings.saveError)
 
             Section {
@@ -124,6 +126,8 @@ struct CommandsPane: View {
 
     var body: some View {
         Form {
+            PaneHeaderSection(pane: .commands)
+
             SaveErrorSection(error: settings.saveError)
 
             Section {

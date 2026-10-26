@@ -5,6 +5,8 @@ struct MonitorPane: View {
 
     var body: some View {
         Form {
+            PaneHeaderSection(pane: .monitor)
+
             if let error = settings.saveError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -13,7 +15,6 @@ struct MonitorPane: View {
             }
 
             Section {
-                Toggle("Enable external display brightness", isOn: $settings.config.enabled)
                 Toggle(isOn: $settings.config.brightnessKeys) {
                     Text("Brightness keys control the display under the cursor")
                     Text("The built-in display, and displays without DDC/CI, keep the keys' normal behaviour.")

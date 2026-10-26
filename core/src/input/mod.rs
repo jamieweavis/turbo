@@ -27,12 +27,12 @@ pub(crate) struct InputEngine {
 impl InputEngine {
     pub fn new(config: MouseConfig) -> Self {
         Self {
-            tap: tap::EventTap::new(config),
+            tap: tap::EventTap::new(config.effective()),
         }
     }
 
     pub fn set_config(&self, config: MouseConfig) {
-        self.tap.set_config(config);
+        self.tap.set_config(config.effective());
     }
 
     pub fn start(&self) -> Result<(), CoreError> {

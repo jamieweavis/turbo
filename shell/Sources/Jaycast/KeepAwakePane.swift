@@ -38,6 +38,8 @@ struct KeepAwakePane: View {
         @Bindable var settings = settings
 
         Form {
+            PaneHeaderSection(pane: .keepAwake)
+
             if let error = state.error ?? settings.saveError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

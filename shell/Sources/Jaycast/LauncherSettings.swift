@@ -49,26 +49,30 @@ final class LauncherSettings {
     var assignedHotkeys: [(slot: HotkeySlot, hotkey: Hotkey)] {
         var assigned: [(slot: HotkeySlot, hotkey: Hotkey)] = []
         if let hotkey = config.hotkey { assigned.append((.palette, hotkey)) }
-        if let hotkey = config.clipboard.hotkey { assigned.append((.clipboard, hotkey)) }
-        if let hotkey = config.files.hotkey { assigned.append((.files, hotkey)) }
+        if config.clipboard.enabled, let hotkey = config.clipboard.hotkey { assigned.append((.clipboard, hotkey)) }
+        if config.files.enabled, let hotkey = config.files.hotkey { assigned.append((.files, hotkey)) }
         for (index, app) in config.appHotkeys.enumerated() {
             assigned.append((.app(index), app.hotkey))
         }
         for (index, action) in config.actionHotkeys.enumerated() {
             assigned.append((.action(index), action.hotkey))
         }
-        if config.windows.hotkeysEnabled {
+        if config.windows.enabled, config.windows.hotkeysEnabled {
             for window in config.windows.hotkeys {
                 assigned.append((.window(window.action), window.hotkey))
             }
         }
         let keepAwake = config.keepAwake
-        if let hotkey = keepAwake.toggleHotkey { assigned.append((.keepAwake(.toggle), hotkey)) }
-        if let hotkey = keepAwake.onHotkey { assigned.append((.keepAwake(.on), hotkey)) }
-        if let hotkey = keepAwake.offHotkey { assigned.append((.keepAwake(.off), hotkey)) }
-        if let hotkey = config.colorPicker.hotkey { assigned.append((.colorPicker, hotkey)) }
+        if keepAwake.enabled {
+            if let hotkey = keepAwake.toggleHotkey { assigned.append((.keepAwake(.toggle), hotkey)) }
+            if let hotkey = keepAwake.onHotkey { assigned.append((.keepAwake(.on), hotkey)) }
+            if let hotkey = keepAwake.offHotkey { assigned.append((.keepAwake(.off), hotkey)) }
+        }
+        if config.colorPicker.enabled, let hotkey = config.colorPicker.hotkey { assigned.append((.colorPicker, hotkey)) }
         for item in config.items {
-            if let hotkey = item.hotkey { assigned.append((.item(item.id), hotkey)) }
+            if let hotkey = item.hotkey, isEnabled(LauncherFeature(itemID: item.id)) {
+                assigned.append((.item(item.id), hotkey))
+            }
         }
         return assigned
     }
@@ -78,14 +82,89 @@ final class LauncherSettings {
         assignedHotkeys.contains { $0.slot != slot && $0.hotkey.matches(hotkey) }
     }
 
-    // MARK: Items
+    // MARK: Features
 
-    func isEnabled(_ item: LauncherItem) -> Bool {
-        itemSettings(item.id)?.enabled ?? true
+    /// Whether a feature is on; nil (an item that isn't part of one) always is.
+    func isEnabled(_ feature: LauncherFeature?) -> Bool {
+        switch feature {
+        case nil: true
+        case .quicklinks: config.quicklinksEnabled
+        case .commands: config.commandsEnabled
+        case .snippets: config.snippets.enabled
+        case .clipboard: config.clipboard.enabled
+        case .files: config.files.enabled
+        case .windows: config.windows.enabled
+        case .keepAwake: config.keepAwake.enabled
+        case .colorPicker: config.colorPicker.enabled
+        }
     }
 
+    /// Turns a feature on or off. Turning one on whose launcher items were all hidden shows
+    /// them again, so it never comes back on with nothing in search.
+    func setEnabled(_ enabled: Bool, for feature: LauncherFeature) {
+        var config = config
+        set(feature, enabled: enabled, in: &config)
+        self.config = config
+    }
+
+    private func set(_ feature: LauncherFeature, enabled: Bool, in config: inout LauncherConfig) {
+        switch feature {
+        case .quicklinks: config.quicklinksEnabled = enabled
+        case .commands: config.commandsEnabled = enabled
+        case .snippets: config.snippets.enabled = enabled
+        case .clipboard: config.clipboard.enabled = enabled
+        case .files: config.files.enabled = enabled
+        case .windows: config.windows.enabled = enabled
+        case .keepAwake: config.keepAwake.enabled = enabled
+        case .colorPicker: config.colorPicker.enabled = enabled
+        }
+        let ids = itemIDs(of: feature)
+        if enabled, !ids.contains(where: { Self.isShown($0, in: config) }) {
+            for id in ids {
+                Self.updateItemSettings(id, in: &config) { $0.enabled = true }
+            }
+        }
+    }
+
+    /// The launcher items (palette modes, commands) that belong to a feature.
+    private func itemIDs(of feature: LauncherFeature) -> [String] {
+        items.map(\.id).filter { LauncherFeature(itemID: $0) == feature }
+    }
+
+    /// The item's own setting, ignoring its feature's.
+    private static func isShown(_ id: String, in config: LauncherConfig) -> Bool {
+        config.items.first { $0.id == id }?.enabled ?? true
+    }
+
+    // MARK: Items
+
+    /// Shown in search: the item's own setting, and its feature's.
+    func isEnabled(_ item: LauncherItem) -> Bool {
+        isEnabled(LauncherFeature(itemID: item.id)) && itemSettings(item.id)?.enabled ?? true
+    }
+
+    /// Kept in step with the item's feature: ticking an item of a feature that's off turns
+    /// the feature on, and unticking a feature's last shown item turns the feature off instead,
+    /// leaving the item shown for when the feature is turned back on.
     func setEnabled(_ enabled: Bool, for item: LauncherItem) {
-        updateItemSettings(item.id) { $0.enabled = enabled }
+        guard let feature = LauncherFeature(itemID: item.id) else {
+            updateItemSettings(item.id) { $0.enabled = enabled }
+            return
+        }
+        var config = config
+        if enabled {
+            Self.updateItemSettings(item.id, in: &config) { $0.enabled = true }
+            set(feature, enabled: true, in: &config)
+        } else {
+            let others = itemIDs(of: feature).filter { $0 != item.id }
+            if others.contains(where: { Self.isShown($0, in: config) }) {
+                Self.updateItemSettings(item.id, in: &config) { $0.enabled = false }
+            } else {
+                set(feature, enabled: false, in: &config)
+            }
+        }
+        // One save, so the feature and its items change together.
+        self.config = config
     }
 
     func aliases(for item: LauncherItem) -> [String] {
@@ -185,9 +264,13 @@ final class LauncherSettings {
         config.items.first { $0.id == id }
     }
 
-    /// Changes the item's settings, dropping them once they're back to the defaults.
     private func updateItemSettings(_ id: String, _ change: (inout ItemSettings) -> Void) {
-        var settings = itemSettings(id) ?? ItemSettings(id: id, enabled: true, aliases: [], hotkey: nil)
+        Self.updateItemSettings(id, in: &config, change)
+    }
+
+    /// Changes the item's settings, dropping them once they're back to the defaults.
+    private static func updateItemSettings(_ id: String, in config: inout LauncherConfig, _ change: (inout ItemSettings) -> Void) {
+        var settings = config.items.first { $0.id == id } ?? ItemSettings(id: id, enabled: true, aliases: [], hotkey: nil)
         change(&settings)
         let isDefault = settings.enabled && settings.aliases.isEmpty && settings.hotkey == nil
         if let index = config.items.firstIndex(where: { $0.id == id }) {
@@ -316,6 +399,26 @@ final class LauncherSettings {
             refreshFailed()
         } catch {
             saveError = error.userMessage
+        }
+    }
+}
+
+/// A launcher feature that can be turned off as a whole, from its settings pane's switch.
+enum LauncherFeature {
+    case quicklinks, commands, snippets, clipboard, files, windows, keepAwake, colorPicker
+
+    /// The feature a search result belongs to, matching the core's `disabled_features`.
+    init?(itemID id: String) {
+        switch id {
+        case "mode:clipboard": self = .clipboard
+        case "mode:files": self = .files
+        case "mode:colors", "color:pick": self = .colorPicker
+        case _ where id.hasPrefix("window:"): self = .windows
+        case _ where id.hasPrefix("keep-awake:"): self = .keepAwake
+        case _ where id.hasPrefix("quicklink:"): self = .quicklinks
+        case _ where id.hasPrefix("command:"): self = .commands
+        case _ where id.hasPrefix("snippet:"): self = .snippets
+        default: return nil
         }
     }
 }

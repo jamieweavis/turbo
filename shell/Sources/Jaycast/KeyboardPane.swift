@@ -35,6 +35,8 @@ struct KeyboardPane: View {
 
     var body: some View {
         Form {
+            PaneHeaderSection(pane: .keyboard)
+
             if let error = settings.saveError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -43,30 +45,23 @@ struct KeyboardPane: View {
             }
 
             Section {
-                Toggle("Hyper key", isOn: $settings.config.enabled)
-
-                Group {
-                    Picker("Key", selection: $settings.config.key) {
-                        ForEach(HyperKeySource.allCases) { Text($0.title).tag($0) }
-                    }
-
-                    Toggle(isOn: $settings.config.includeShift) {
-                        Text("Include Shift")
-                        Text(settings.config.includeShift
-                            ? "Hyper is ⌃⌥⇧⌘."
-                            : "Hyper is ⌃⌥⌘, and Shift can be added on top.")
-                    }
-
-                    Picker(selection: $settings.config.quickPress) {
-                        ForEach(QuickPress.allCases) { Text($0.title).tag($0) }
-                    } label: {
-                        Text("Quick press")
-                        Text("Pressing and releasing the key on its own.")
-                    }
+                Picker("Key", selection: $settings.config.key) {
+                    ForEach(HyperKeySource.allCases) { Text($0.title).tag($0) }
                 }
-                .disabled(!settings.config.enabled)
-            } header: {
-                Text("Hyper Key")
+
+                Toggle(isOn: $settings.config.includeShift) {
+                    Text("Include Shift")
+                    Text(settings.config.includeShift
+                        ? "Hyper is ⌃⌥⇧⌘."
+                        : "Hyper is ⌃⌥⌘, and Shift can be added on top.")
+                }
+
+                Picker(selection: $settings.config.quickPress) {
+                    ForEach(QuickPress.allCases) { Text($0.title).tag($0) }
+                } label: {
+                    Text("Quick press")
+                    Text("Pressing and releasing the key on its own.")
+                }
             } footer: {
                 if settings.config.enabled && !isInputRunning {
                     Text("The Hyper key works once Accessibility is granted.")

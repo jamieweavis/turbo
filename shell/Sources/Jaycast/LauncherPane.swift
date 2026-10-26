@@ -18,6 +18,8 @@ struct LauncherPane: View {
         let rows = rows()
 
         VStack(alignment: .leading, spacing: 12) {
+            PaneHeader(pane: .launcher)
+
             if let error = settings.saveError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)

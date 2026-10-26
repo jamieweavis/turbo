@@ -145,10 +145,12 @@ fn insert_expanding(text: String) -> Result<(), CoreError> {
     Ok(())
 }
 
-/// True when the expander has something to do: expansion is on and some snippet has a
-/// keyword.
+/// True when the expander has something to do: snippets and expansion are on and some
+/// snippet has a keyword.
 fn wants_tap(config: &SnippetsConfig) -> bool {
-    config.expansion && config.snippets.iter().any(|s| !s.keyword.trim().is_empty())
+    config.enabled
+        && config.expansion
+        && config.snippets.iter().any(|s| !s.keyword.trim().is_empty())
 }
 
 /// A keyboard event tap that watches what's typed and replaces a snippet keyword with the
@@ -236,6 +238,7 @@ mod tests {
 
     fn config(snippets: Vec<Snippet>) -> SnippetsConfig {
         SnippetsConfig {
+            enabled: true,
             expansion: true,
             snippets,
         }
@@ -342,6 +345,10 @@ mod tests {
     #[test]
     fn tap_runs_only_with_expansion_and_a_keyword() {
         assert!(wants_tap(&sample()));
+        assert!(!wants_tap(&SnippetsConfig {
+            enabled: false,
+            ..sample()
+        }));
         assert!(!wants_tap(&SnippetsConfig {
             expansion: false,
             ..sample()

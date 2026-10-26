@@ -8,6 +8,8 @@ struct MousePane: View {
 
     var body: some View {
         Form {
+            PaneHeaderSection(pane: .mouse)
+
             if let error = settings.saveError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

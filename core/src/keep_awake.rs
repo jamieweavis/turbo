@@ -82,7 +82,7 @@ impl KeepAwake {
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
-        let assertion = if saved.active {
+        let assertion = if saved.active && config.enabled {
             create(config.keep_display_on)
                 .inspect_err(|error| eprintln!("jaycast: couldn't restore Keep Awake: {error}"))
                 .ok()
@@ -127,7 +127,11 @@ impl KeepAwake {
     }
 
     /// Applied live: switching "keep display on" while active swaps the assertion.
+    /// Turning Keep Awake off as a feature also stops keeping the Mac awake.
     pub fn set_config(&self, config: KeepAwakeConfig) -> Result<(), CoreError> {
+        if !config.enabled {
+            self.set_active(false)?;
+        }
         let mut state = self.state.lock().unwrap();
         if state.keep_display_on == config.keep_display_on {
             return Ok(());

@@ -13,6 +13,8 @@ struct WindowsPane: View {
         @Bindable var settings = settings
 
         Form {
+            PaneHeaderSection(pane: .windows)
+
             SaveErrorSection(error: settings.saveError)
 
             Section {
@@ -130,6 +132,8 @@ struct SnippetsPane: View {
         @Bindable var settings = settings
 
         Form {
+            PaneHeaderSection(pane: .snippets)
+
             SaveErrorSection(error: settings.saveError)
 
             Section {

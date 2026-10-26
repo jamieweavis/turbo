@@ -30,7 +30,11 @@ pub struct LauncherConfig {
     pub action_hotkeys: Vec<ActionHotkey>,
     /// Show a calculator / unit / currency result when the query is an expression.
     pub calculator: bool,
+    /// Off leaves quicklinks out of search, keeping them for when it's back on.
+    pub quicklinks_enabled: bool,
     pub quicklinks: Vec<Quicklink>,
+    /// Off leaves commands out of search, keeping them for when it's back on.
+    pub commands_enabled: bool,
     pub commands: Vec<ShellCommand>,
     pub clipboard: ClipboardConfig,
     pub files: FileSearchConfig,
@@ -55,7 +59,9 @@ impl Default for LauncherConfig {
             app_hotkeys: Vec::new(),
             action_hotkeys: Vec::new(),
             calculator: true,
+            quicklinks_enabled: true,
             quicklinks: default_quicklinks(),
+            commands_enabled: true,
             commands: Vec::new(),
             clipboard: ClipboardConfig::default(),
             files: FileSearchConfig::default(),
@@ -98,7 +104,7 @@ impl Default for ItemSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct ClipboardConfig {
-    /// Record clipboard history. Off also stops monitoring entirely.
+    /// Off stops watching the clipboard, and leaves out the history's hotkey and search item.
     pub enabled: bool,
     /// Opens the palette in clipboard history.
     pub hotkey: Option<Hotkey>,
@@ -140,6 +146,8 @@ impl Default for ClipboardConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct FileSearchConfig {
+    /// Off leaves out the file search hotkey and search item.
+    pub enabled: bool,
     /// Opens the palette in file search.
     pub hotkey: Option<Hotkey>,
     /// Folders searched (`~` allowed). Spotlight indexes more, but results stay in these.
@@ -149,6 +157,7 @@ pub struct FileSearchConfig {
 impl Default for FileSearchConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             hotkey: None,
             scopes: ["~/Desktop", "~/Documents", "~/Downloads"]
                 .map(String::from)
@@ -160,6 +169,8 @@ impl Default for FileSearchConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct WindowConfig {
+    /// Off leaves out the window actions' hotkeys and search items.
+    pub enabled: bool,
     /// Register the window hotkeys. The actions stay in palette search either way.
     pub hotkeys_enabled: bool,
     /// Points left between snapped windows and between windows and the screen edges.
@@ -182,6 +193,7 @@ impl Default for WindowConfig {
             },
         };
         Self {
+            enabled: true,
             hotkeys_enabled: true,
             gap: 0,
             almost_maximize_percent: 90,
@@ -255,6 +267,9 @@ pub enum WindowAction {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct SnippetsConfig {
+    /// Off stops expansion and leaves snippets out of search, keeping them for when it's
+    /// back on.
+    pub enabled: bool,
     /// Expand a snippet's keyword as soon as it's typed in any app (needs Accessibility).
     /// Snippets stay in palette search either way.
     pub expansion: bool,
@@ -264,6 +279,7 @@ pub struct SnippetsConfig {
 impl Default for SnippetsConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             expansion: true,
             snippets: Vec::new(),
         }
@@ -274,6 +290,8 @@ impl Default for SnippetsConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct KeepAwakeConfig {
+    /// Off lets the Mac sleep again and leaves out Keep Awake's hotkeys and search items.
+    pub enabled: bool,
     /// Keep the display on too, not just the system awake.
     pub keep_display_on: bool,
     pub toggle_hotkey: Option<Hotkey>,
@@ -284,6 +302,7 @@ pub struct KeepAwakeConfig {
 impl Default for KeepAwakeConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             keep_display_on: true,
             toggle_hotkey: None,
             on_hotkey: None,
@@ -294,13 +313,25 @@ impl Default for KeepAwakeConfig {
 
 /// Picking a colour from anywhere on screen. The history lives beside the config, in
 /// `colors.json`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct ColorPickerConfig {
+    /// Off leaves out the colour picker's hotkey and search items.
+    pub enabled: bool,
     /// Shows the magnifier to pick a colour.
     pub hotkey: Option<Hotkey>,
     /// How a picked colour is copied.
     pub format: ColorFormat,
+}
+
+impl Default for ColorPickerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hotkey: None,
+            format: ColorFormat::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
@@ -538,6 +569,8 @@ pub enum QuickPress {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct MouseConfig {
+    /// Off leaves the mouse alone entirely, keeping the settings for when it's back on.
+    pub enabled: bool,
     pub smooth_scroll: SmoothScrollConfig,
     pub scroll_modifiers: ScrollModifierConfig,
     /// Off leaves every mouse button alone, keeping the bindings for when it's back on.
@@ -548,6 +581,7 @@ pub struct MouseConfig {
 impl Default for MouseConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             smooth_scroll: SmoothScrollConfig::default(),
             scroll_modifiers: ScrollModifierConfig::default(),
             buttons_enabled: true,
@@ -568,6 +602,30 @@ impl Default for MouseConfig {
                     action: Action::MissionControl,
                 },
             ],
+        }
+    }
+}
+
+impl MouseConfig {
+    /// What the event tap acts on: with the mouse off, nothing.
+    pub fn effective(&self) -> Self {
+        if self.enabled {
+            return self.clone();
+        }
+        Self {
+            enabled: false,
+            smooth_scroll: SmoothScrollConfig {
+                enabled: false,
+                ..self.smooth_scroll.clone()
+            },
+            scroll_modifiers: ScrollModifierConfig {
+                reverse_direction: false,
+                horizontal: None,
+                zoom: None,
+                precise: None,
+            },
+            buttons_enabled: false,
+            buttons: self.buttons.clone(),
         }
     }
 }

@@ -84,6 +84,24 @@ impl Target {
     }
 }
 
+impl Target {
+    /// False when the target's feature is turned off, so its hotkey isn't registered.
+    fn is_enabled(&self, config: &LauncherConfig) -> bool {
+        match self {
+            Target::Mode(PaletteMode::Clipboard) => config.clipboard.enabled,
+            Target::Mode(PaletteMode::Files) => config.files.enabled,
+            Target::Mode(PaletteMode::Colors) | Target::PickColor => config.color_picker.enabled,
+            Target::Window(_) => config.windows.enabled,
+            Target::KeepAwake(_) => config.keep_awake.enabled,
+            Target::Palette
+            | Target::Mode(PaletteMode::Search | PaletteMode::Emoji)
+            | Target::App(_)
+            | Target::System(_)
+            | Target::Settings(_) => true,
+        }
+    }
+}
+
 impl HotkeyManager {
     pub fn new(windows: Arc<WindowManager>, keep_awake: Arc<KeepAwake>) -> Self {
         Self {
@@ -322,7 +340,8 @@ fn plan(config: &LauncherConfig) -> Plan {
                 .items
                 .iter()
                 .filter_map(|item| Some((item.hotkey.clone()?, Target::for_item(&item.id)?))),
-        );
+        )
+        .filter(|(_, target)| target.is_enabled(config));
 
     let mut seen = Vec::new();
     let mut hotkeys = Vec::new();
@@ -780,6 +799,23 @@ mod tests {
                 (3, Target::App("com.apple.Terminal".into())),
             ]
         );
+    }
+
+    #[test]
+    fn features_turned_off_register_no_hotkeys() {
+        let mut config = LauncherConfig::default();
+        config.files.hotkey = Some(hotkey(3, &[Modifier::Option, Modifier::Command]));
+        config.keep_awake.toggle_hotkey = Some(hotkey(14, &[Modifier::Control]));
+        config.clipboard.enabled = false;
+        config.files.enabled = false;
+        config.windows.enabled = false;
+        config.keep_awake.enabled = false;
+        let targets: Vec<Target> = plan(&config)
+            .hotkeys
+            .into_iter()
+            .map(|p| p.target)
+            .collect();
+        assert_eq!(targets, vec![Target::Palette]);
     }
 
     #[test]
