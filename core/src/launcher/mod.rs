@@ -15,7 +15,7 @@
 mod apps;
 mod calc;
 mod extensions;
-mod fuzzy;
+pub(crate) mod fuzzy;
 mod hotkeys;
 mod ranking;
 mod system;
@@ -499,7 +499,7 @@ fn rank(
 }
 
 /// The title's score, or a discounted alias/keyword score if that's better.
-fn best_score<'a>(
+pub(crate) fn best_score<'a>(
     query: &[char],
     title: &Prepared,
     secondary: impl Iterator<Item = &'a Prepared>,
