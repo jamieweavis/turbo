@@ -150,31 +150,14 @@ struct SettingsView: View {
 
     @State private var selection: SettingsPane? = .general
 
-    /// The same drawn screen as the Left Half action, rather than a symbol. As a template image,
-    /// so the sidebar tints it like the symbols.
-    private static let windowsIcon: NSImage = {
-        let renderer = ImageRenderer(content: WindowActionIcon(action: .leftHalf, width: 18).foregroundStyle(.black))
-        renderer.scale = 2
-        let image = renderer.nsImage ?? NSImage()
-        image.isTemplate = true
-        return image
-    }()
-
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $selection) { pane in
                 Label {
                     Text(pane.title)
                 } icon: {
-                    Group {
-                        if pane == .windows {
-                            Image(nsImage: Self.windowsIcon)
-                        } else {
-                            Image(systemName: pane.systemImage)
-                        }
-                    }
-                    // A turned-off feature's icon goes grey instead of the accent color.
-                    .foregroundStyle(isEnabled(pane)?.wrappedValue == false ? AnyShapeStyle(Color.primary.opacity(0.65)) : AnyShapeStyle(.tint))
+                    // A turned-off feature's icon goes grey instead of its colour.
+                    PaneIcon(pane: pane, size: 20, isOff: isEnabled(pane)?.wrappedValue == false)
                 }
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
@@ -287,24 +270,36 @@ private struct FeatureSwitch: View {
     }
 }
 
+/// The pane's white symbol on a rounded square of its colour, in the header and the sidebar.
+struct PaneIcon: View {
+    let pane: SettingsPane
+    let size: CGFloat
+    var isOff = false
+
+    var body: some View {
+        Group {
+            if pane == .windows {
+                // The same drawn screen as the Left Half action, rather than a symbol.
+                WindowActionIcon(action: .leftHalf, width: size * 0.6)
+            } else {
+                Image(systemName: pane.systemImage)
+                    .font(.system(size: size * 0.5, weight: .medium))
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(width: size, height: size)
+        .background((isOff ? Color.gray : pane.tint).gradient, in: .rect(cornerRadius: size * 0.23))
+    }
+}
+
 /// The pane's icon, title and description, at the top of its content.
 struct PaneHeader: View {
     let pane: SettingsPane
 
     var body: some View {
         VStack(spacing: 8) {
-            Group {
-                if pane == .windows {
-                    WindowActionIcon(action: .leftHalf, width: 34)
-                } else {
-                    Image(systemName: pane.systemImage)
-                        .font(.system(size: 28, weight: .medium))
-                }
-            }
-            .foregroundStyle(.white)
-            .frame(width: 56, height: 56)
-            .background(pane.tint.gradient, in: .rect(cornerRadius: 13))
-            .padding(.bottom, 4)
+            PaneIcon(pane: pane, size: 56)
+                .padding(.bottom, 4)
             Text(pane.title)
                 .font(.largeTitle.bold())
             Text(pane.subtitle)
@@ -313,7 +308,9 @@ struct PaneHeader: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
+        // Pulled up into the grouped form's top margin, which sits below the toolbar's safe area.
+        .padding(.top, -24)
+        .padding(.bottom, 12)
     }
 }
 
