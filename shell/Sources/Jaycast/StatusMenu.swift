@@ -11,18 +11,6 @@ struct StatusMenu: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            MenuRow(title: "Open Launcher", systemImage: "magnifyingglass", detail: model.launcher.config.hotkey?.title) {
-                dismiss()
-                model.palette.show()
-            }
-
-            MenuRow(title: "Clipboard History", systemImage: "doc.on.clipboard", detail: model.launcher.config.clipboard.hotkey?.title) {
-                dismiss()
-                model.palette.show(mode: .clipboard)
-            }
-
-            Divider()
-
             if model.displays.config.enabled, !model.displays.displays.isEmpty {
                 displays
                 Divider()
