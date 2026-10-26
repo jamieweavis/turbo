@@ -23,7 +23,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
 | 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
 | 5 | Clipboard history, file search | ✅ Done |
-| 6 | Window management, snippets / text expansion | 🧪 Built, awaiting hands-on testing |
+| 6 | Window management, snippets / text expansion | ✅ Done |
 
 ### Step 1: Mouse
 
