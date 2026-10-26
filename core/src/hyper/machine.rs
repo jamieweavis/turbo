@@ -101,7 +101,8 @@ mod tests {
 
     fn config(quick_press: QuickPress) -> HyperKeyConfig {
         HyperKeyConfig {
-            key: Some(crate::config::HyperKeySource::CapsLock),
+            enabled: true,
+            key: crate::config::HyperKeySource::CapsLock,
             include_shift: true,
             quick_press,
         }

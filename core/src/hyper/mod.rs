@@ -83,7 +83,7 @@ impl HyperKey {
     /// Runs the tap and remaps the key exactly when wanted. The tap starts first and stops
     /// last, so the remapped key is never left without anything turning it into Hyper.
     fn sync(&self, state: &State) -> Result<(), CoreError> {
-        match state.config.key {
+        match state.config.active_key() {
             Some(key) if state.started => {
                 self.tap.start()?;
                 remap::apply(Some(key))
@@ -112,13 +112,12 @@ impl Drop for HyperKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::HyperKeySource;
 
     /// Never starts the tap, so it leaves the real keyboard alone.
     #[test]
     fn nothing_runs_until_started() {
         let config = HyperKeyConfig {
-            key: Some(HyperKeySource::CapsLock),
+            enabled: true,
             ..HyperKeyConfig::default()
         };
         let hyper = HyperKey::new(config.clone());

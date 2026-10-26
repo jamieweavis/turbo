@@ -30,6 +30,8 @@ struct StatusMenu: View {
 
             mouse
 
+            keyboard
+
             if !model.accessibility.isGranted {
                 MenuRow(title: "Grant Accessibility…", systemImage: "hand.raised") {
                     dismiss()
@@ -80,6 +82,18 @@ struct StatusMenu: View {
             MenuToggle(title: "Smooth scrolling", systemImage: "arrow.up.and.down", isOn: $mouse.config.smoothScroll.enabled)
             MenuToggle(title: "Reverse direction", systemImage: "arrow.up.arrow.down", isOn: $mouse.config.scrollModifiers.reverseDirection)
             MenuToggle(title: "Buttons", systemImage: "computermouse", isOn: $mouse.config.buttonsEnabled)
+        }
+    }
+
+    private var keyboard: some View {
+        @Bindable var hyperKey = model.hyperKey
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Keyboard")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            MenuToggle(title: "Hyper key", systemImage: "command", isOn: $hyperKey.config.enabled)
         }
     }
 

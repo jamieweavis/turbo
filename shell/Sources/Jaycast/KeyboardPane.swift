@@ -43,13 +43,13 @@ struct KeyboardPane: View {
             }
 
             Section {
-                Picker("Hyper key", selection: $settings.config.key) {
-                    Text("None").tag(HyperKeySource?.none)
-                    Divider()
-                    ForEach(HyperKeySource.allCases) { Text($0.title).tag(HyperKeySource?.some($0)) }
-                }
+                Toggle("Hyper key", isOn: $settings.config.enabled)
 
                 Group {
+                    Picker("Key", selection: $settings.config.key) {
+                        ForEach(HyperKeySource.allCases) { Text($0.title).tag($0) }
+                    }
+
                     Toggle(isOn: $settings.config.includeShift) {
                         Text("Include Shift")
                         Text(settings.config.includeShift
@@ -64,11 +64,11 @@ struct KeyboardPane: View {
                         Text("Pressing and releasing the key on its own.")
                     }
                 }
-                .disabled(settings.config.key == nil)
+                .disabled(!settings.config.enabled)
             } header: {
                 Text("Hyper Key")
             } footer: {
-                if settings.config.key != nil && !isInputRunning {
+                if settings.config.enabled && !isInputRunning {
                     Text("The Hyper key works once Accessibility is granted.")
                         .foregroundStyle(.red)
                 } else {

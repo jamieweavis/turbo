@@ -362,23 +362,67 @@ impl Default for MonitorConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
-#[serde(default)]
+#[serde(from = "StoredHyperKeyConfig")]
 pub struct HyperKeyConfig {
-    /// The key that acts as ⌃⌥⇧⌘ while held. `None` turns the Hyper key off and leaves the
-    /// keyboard alone.
-    pub key: Option<HyperKeySource>,
+    /// Off leaves the keyboard alone, keeping the chosen key for when it's back on.
+    pub enabled: bool,
+    /// The key that acts as ⌃⌥⇧⌘ while held.
+    pub key: HyperKeySource,
     /// Hyper includes Shift (⌃⌥⇧⌘). Without it Hyper is ⌃⌥⌘, and Shift can be added on top.
     pub include_shift: bool,
     /// What pressing and releasing the key on its own does.
     pub quick_press: QuickPress,
 }
 
+impl HyperKeyConfig {
+    /// The key to turn into Hyper, if any.
+    pub fn active_key(&self) -> Option<HyperKeySource> {
+        self.enabled.then_some(self.key)
+    }
+}
+
 impl Default for HyperKeyConfig {
     fn default() -> Self {
         Self {
-            key: None,
+            enabled: false,
+            key: HyperKeySource::CapsLock,
             include_shift: true,
             quick_press: QuickPress::Nothing,
+        }
+    }
+}
+
+/// The on-disk shape, which also reads files from before `enabled` existed, when a `null`
+/// key meant off.
+#[derive(Deserialize)]
+#[serde(default)]
+struct StoredHyperKeyConfig {
+    enabled: Option<bool>,
+    key: Option<HyperKeySource>,
+    include_shift: bool,
+    quick_press: QuickPress,
+}
+
+impl Default for StoredHyperKeyConfig {
+    fn default() -> Self {
+        let defaults = HyperKeyConfig::default();
+        Self {
+            enabled: None,
+            key: None,
+            include_shift: defaults.include_shift,
+            quick_press: defaults.quick_press,
+        }
+    }
+}
+
+impl From<StoredHyperKeyConfig> for HyperKeyConfig {
+    fn from(stored: StoredHyperKeyConfig) -> Self {
+        let defaults = HyperKeyConfig::default();
+        Self {
+            enabled: stored.enabled.unwrap_or(stored.key.is_some()),
+            key: stored.key.unwrap_or(defaults.key),
+            include_shift: stored.include_shift,
+            quick_press: stored.quick_press,
         }
     }
 }
@@ -621,5 +665,29 @@ mod tests {
         assert!(!config.mouse.buttons_enabled);
         assert_eq!(config.mouse.smooth_scroll, SmoothScrollConfig::default());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn hyper_key_from_before_the_switch_keeps_its_state() {
+        let on: HyperKeyConfig = serde_json::from_str(r#"{"key":"RightOption"}"#).unwrap();
+        assert!(on.enabled);
+        assert_eq!(on.key, HyperKeySource::RightOption);
+        let off: HyperKeyConfig = serde_json::from_str(r#"{"key":null}"#).unwrap();
+        assert!(!off.enabled);
+        assert_eq!(off.key, HyperKeySource::CapsLock);
+    }
+
+    #[test]
+    fn hyper_key_round_trips() {
+        let config = HyperKeyConfig {
+            enabled: false,
+            key: HyperKeySource::LeftCommand,
+            ..HyperKeyConfig::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        assert_eq!(
+            serde_json::from_str::<HyperKeyConfig>(&json).unwrap(),
+            config
+        );
     }
 }
