@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 /// A plain AppKit window rather than a SwiftUI `Settings` scene, which is unreliable for
@@ -136,8 +137,20 @@ private struct GeneralPane: View {
     let model: AppModel
     let onShowOnboarding: () -> Void
 
+    // The login item registration itself is the source of truth, so nothing is persisted here.
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var launchAtLoginError: String?
+
     var body: some View {
         Form {
+            Section("Startup") {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
+                if let launchAtLoginError {
+                    Text(launchAtLoginError).foregroundStyle(.red)
+                }
+            }
+
             Section("Permissions") {
                 LabeledContent("Accessibility") {
                     if model.accessibility.isGranted {
@@ -161,5 +174,21 @@ private struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        let service = SMAppService.mainApp
+        guard enabled != (service.status == .enabled) else { return }
+        do {
+            if enabled {
+                try service.register()
+            } else {
+                try service.unregister()
+            }
+            launchAtLoginError = nil
+        } catch {
+            launchAtLoginError = error.localizedDescription
+            launchAtLogin = service.status == .enabled
+        }
     }
 }
