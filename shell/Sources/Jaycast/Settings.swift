@@ -91,12 +91,21 @@ struct SettingsView: View {
 
     @State private var selection: SettingsPane? = .general
 
+    /// The same drawn screen as the Left Half action, rather than a symbol. As a template image,
+    /// so the sidebar tints it like the symbols.
+    private static let windowsIcon: NSImage = {
+        let renderer = ImageRenderer(content: WindowActionIcon(action: .leftHalf, width: 18).foregroundStyle(.black))
+        renderer.scale = 2
+        let image = renderer.nsImage ?? NSImage()
+        image.isTemplate = true
+        return image
+    }()
+
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $selection) { pane in
                 if pane == .windows {
-                    // The same drawn screen as the Left Half action, rather than a symbol.
-                    Label { Text(pane.title) } icon: { WindowActionIcon(action: .leftHalf, width: 18) }
+                    Label { Text(pane.title) } icon: { Image(nsImage: Self.windowsIcon) }
                 } else {
                     Label(pane.title, systemImage: pane.systemImage)
                 }
