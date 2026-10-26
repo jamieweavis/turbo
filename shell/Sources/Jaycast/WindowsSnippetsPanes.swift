@@ -55,6 +55,16 @@ struct WindowsPane: View {
                 }
                 .disabled(!settings.config.windows.hotkeysEnabled)
             }
+
+            Section {
+                HStack {
+                    Spacer()
+                    Button("Restore Defaults") {
+                        settings.config.windows = defaultWindowConfig()
+                    }
+                    .disabled(settings.config.windows == defaultWindowConfig())
+                }
+            }
         }
         .formStyle(.grouped)
     }

@@ -46,6 +46,12 @@ pub fn core_info() -> CoreInfo {
     }
 }
 
+/// The default window hotkeys and gap, for the shell's "Restore Defaults".
+#[uniffi::export]
+pub fn default_window_config() -> WindowConfig {
+    WindowConfig::default()
+}
+
 /// The app's single core instance. The shell creates one at launch and keeps it.
 #[derive(uniffi::Object)]
 pub struct Core {
