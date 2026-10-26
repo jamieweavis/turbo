@@ -138,9 +138,44 @@ impl DisplayManager {
 
     pub fn set_config(&self, config: MonitorConfig) {
         let enabled = config.enabled;
-        *self.config.lock().unwrap() = config;
-        if !enabled {
-            self.dimmer.reset_all();
+        let was_enabled = std::mem::replace(&mut *self.config.lock().unwrap(), config).enabled;
+        if enabled == was_enabled {
+            return;
+        }
+        if enabled {
+            self.restore_all();
+        } else {
+            self.release_all();
+        }
+    }
+
+    /// Turning control off hands the displays back at full brightness. The cached
+    /// brightness is kept, so the sliders stay put and turning control on restores it.
+    fn release_all(&self) {
+        {
+            let state = self.state.lock().unwrap();
+            for entry in state.displays.iter().filter(|e| e.info.supports_ddc) {
+                if let Some(worker) = &entry.worker {
+                    worker.write(entry.max);
+                }
+            }
+        }
+        self.dimmer.reset_all();
+    }
+
+    /// Re-applies the cached brightness after control is turned back on.
+    fn restore_all(&self) {
+        let values: Vec<(u32, f64)> = {
+            let state = self.state.lock().unwrap();
+            state
+                .displays
+                .iter()
+                .filter(|e| e.info.supports_ddc)
+                .map(|e| (e.info.id, e.info.brightness))
+                .collect()
+        };
+        for (id, brightness) in values {
+            self.apply(id, |_| brightness);
         }
     }
 
