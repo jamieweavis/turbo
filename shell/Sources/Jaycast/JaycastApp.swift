@@ -21,7 +21,7 @@ struct JaycastApp: App {
                 .padding(14)
             }
         } label: {
-            Image(systemName: "sparkle.magnifyingglass")
+            Image(nsImage: MenuBarIcon.rocket)
                 .accessibilityLabel("Jaycast")
         }
         .menuBarExtraStyle(.window)
