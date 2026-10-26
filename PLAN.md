@@ -18,8 +18,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | # | Step | Status |
 |---|---|---|
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
-| 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | 🧪 Built, awaiting hands-on testing |
-| 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ⏳ |
+| 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
+| 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | 🚧 In progress |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ⏳ |
 | 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
 | 5 | Clipboard history, file search | ⏳ |
@@ -81,7 +81,8 @@ Raycast extension support.
   running (`CGGetEventTapList`: enabled). Not yet checked by hand: scroll feel, every action, the
   binding editor and shortcut recorder. Notes: Launchpad opens Apps.app (Launchpad is gone in macOS
   26); Dock actions use the private `CoreDockSendNotification`; smoothed events carry no modifier
-  flags so AppKit doesn't re-apply Shift-to-horizontal. Tuning constants are first guesses.
+  flags so AppKit doesn't re-apply Shift-to-horizontal. Tested by hand and approved; the momentum
+  setting was removed afterwards (momentum is always on).
 - **Step 0** (`27275b5`): Cargo workspace + UniFFI bindings generated at build time, SwiftPM menu
   bar app, Accessibility onboarding, justfile. Signed with the Apple Development identity so the
   Accessibility grant survives rebuilds.

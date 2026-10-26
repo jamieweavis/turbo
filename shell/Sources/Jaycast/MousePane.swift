@@ -53,11 +53,6 @@ struct MousePane: View {
                     Text("Acceleration")
                     Text("Fast turns of the wheel scroll progressively further.")
                 }
-
-                Toggle(isOn: $settings.config.smoothScroll.momentum) {
-                    Text("Momentum")
-                    Text("Keep gliding after the wheel stops, like a trackpad flick.")
-                }
             }
             .disabled(!settings.config.smoothScroll.enabled)
         }

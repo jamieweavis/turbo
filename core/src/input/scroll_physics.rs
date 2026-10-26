@@ -63,6 +63,7 @@ struct Params {
     /// Time constant (s) of momentum friction.
     friction: f64,
     acceleration: bool,
+    /// Always on in the app; tests turn it off to check the gesture phase on its own.
     momentum: bool,
 }
 
@@ -78,7 +79,7 @@ impl Params {
             glide,
             friction,
             acceleration: config.acceleration,
-            momentum: config.momentum,
+            momentum: true,
         }
     }
 }
@@ -366,12 +367,21 @@ mod tests {
 
     const FRAME: f64 = 1.0 / 120.0;
 
-    fn config(momentum: bool, acceleration: bool) -> SmoothScrollConfig {
+    fn config(acceleration: bool) -> SmoothScrollConfig {
         SmoothScrollConfig {
-            momentum,
             acceleration,
             ..SmoothScrollConfig::default()
         }
+    }
+
+    fn new_physics(momentum: bool, acceleration: bool) -> ScrollPhysics {
+        physics_with(&config(acceleration), momentum)
+    }
+
+    fn physics_with(config: &SmoothScrollConfig, momentum: bool) -> ScrollPhysics {
+        let mut physics = ScrollPhysics::new(config);
+        physics.params.momentum = momentum;
+        physics
     }
 
     /// Ticks at the given times (vertical lines each), then runs frames until idle.
@@ -408,7 +418,7 @@ mod tests {
 
     #[test]
     fn one_tick_delivers_exactly_its_distance() {
-        let mut physics = ScrollPhysics::new(&config(true, true));
+        let mut physics = new_physics(true, true);
         let frames = run(&mut physics, &[(0.0, 1.0)], false);
         assert_eq!(total_dy(&frames), PX_PER_LINE as i64);
         assert!(frames.len() > 5, "should be spread over several frames");
@@ -416,9 +426,9 @@ mod tests {
 
     #[test]
     fn distance_is_conserved_at_fractional_speeds_and_downward() {
-        let mut cfg = config(false, false);
+        let mut cfg = config(false);
         cfg.speed = 1.37;
-        let mut physics = ScrollPhysics::new(&cfg);
+        let mut physics = physics_with(&cfg, false);
         let frames = run(
             &mut physics,
             &[(0.0, -1.0), (0.03, -1.0), (0.2, -1.0)],
@@ -434,7 +444,7 @@ mod tests {
 
     #[test]
     fn deltas_ease_out() {
-        let mut physics = ScrollPhysics::new(&config(false, false));
+        let mut physics = new_physics(false, false);
         let frames = run(&mut physics, &[(0.0, 1.0)], false);
         let moving: Vec<i32> = frames.iter().map(|f| f.dy).filter(|&d| d != 0).collect();
         assert!(moving.first() > moving.last());
@@ -442,7 +452,7 @@ mod tests {
 
     #[test]
     fn phases_run_began_changed_ended() {
-        let mut physics = ScrollPhysics::new(&config(false, false));
+        let mut physics = new_physics(false, false);
         let frames = run(&mut physics, &[(0.0, 1.0)], false);
         assert_eq!(
             phases(&frames),
@@ -456,9 +466,9 @@ mod tests {
         let quick: Vec<(f64, f64)> = (0..10).map(|i| (i as f64 * 0.02, 1.0)).collect();
         let slow: Vec<(f64, f64)> = (0..10).map(|i| (i as f64 * 0.5, 1.0)).collect();
 
-        let mut physics = ScrollPhysics::new(&config(false, true));
+        let mut physics = new_physics(false, true);
         let fast_total = total_dy(&run(&mut physics, &quick, false));
-        let mut physics = ScrollPhysics::new(&config(false, true));
+        let mut physics = new_physics(false, true);
         let slow_total = total_dy(&run(&mut physics, &slow, false));
 
         assert_eq!(slow_total, 10 * PX_PER_LINE as i64);
@@ -471,7 +481,7 @@ mod tests {
     #[test]
     fn acceleration_off_is_linear() {
         let quick: Vec<(f64, f64)> = (0..10).map(|i| (i as f64 * 0.02, 1.0)).collect();
-        let mut physics = ScrollPhysics::new(&config(false, false));
+        let mut physics = new_physics(false, false);
         assert_eq!(
             total_dy(&run(&mut physics, &quick, false)),
             10 * PX_PER_LINE as i64
@@ -480,14 +490,14 @@ mod tests {
 
     #[test]
     fn acceleration_is_capped() {
-        let mut physics = ScrollPhysics::new(&config(false, true));
+        let mut physics = new_physics(false, true);
         physics.streak = 1_000;
         assert_eq!(physics.acceleration(), ACCEL_MAX);
     }
 
     #[test]
     fn reversing_cancels_the_current_motion() {
-        let mut physics = ScrollPhysics::new(&config(false, false));
+        let mut physics = new_physics(false, false);
         physics.feed(0.0, 1.0, 0.0, false);
         let mut up = 0;
         for i in 0..3 {
@@ -515,7 +525,7 @@ mod tests {
     #[test]
     fn fast_scrolling_glides_with_momentum_then_ends() {
         let quick: Vec<(f64, f64)> = (0..12).map(|i| (i as f64 * 0.015, 1.0)).collect();
-        let mut physics = ScrollPhysics::new(&config(true, true));
+        let mut physics = new_physics(true, true);
         let frames = run(&mut physics, &quick, false);
         assert_eq!(
             phases(&frames),
@@ -529,14 +539,14 @@ mod tests {
             ]
         );
 
-        let mut physics = ScrollPhysics::new(&config(false, true));
+        let mut physics = new_physics(false, true);
         let without = total_dy(&run(&mut physics, &quick, false));
         assert!(total_dy(&frames) > without, "momentum adds glide");
     }
 
     #[test]
     fn single_slow_tick_never_glides() {
-        let mut physics = ScrollPhysics::new(&config(true, true));
+        let mut physics = new_physics(true, true);
         let frames = run(&mut physics, &[(0.0, 1.0)], false);
         assert!(!frames.iter().any(|f| f.phase == Phase::MomentumBegan));
     }
@@ -544,7 +554,7 @@ mod tests {
     #[test]
     fn tick_during_momentum_ends_it_before_a_new_gesture() {
         let quick: Vec<(f64, f64)> = (0..12).map(|i| (i as f64 * 0.015, 1.0)).collect();
-        let mut physics = ScrollPhysics::new(&config(true, true));
+        let mut physics = new_physics(true, true);
         let mut frames = Vec::new();
         let mut now = 0.0;
         while !matches!(physics.state, State::Momentum { began: true }) {
@@ -565,7 +575,7 @@ mod tests {
 
     #[test]
     fn precise_ticks_are_small_immediate_and_never_glide() {
-        let mut physics = ScrollPhysics::new(&config(true, true));
+        let mut physics = new_physics(true, true);
         let ticks: Vec<(f64, f64)> = (0..10).map(|i| (i as f64 * 0.01, 1.0)).collect();
         let frames = run(&mut physics, &ticks, true);
         assert_eq!(total_dy(&frames), 10 * PRECISE_PX_PER_LINE as i64);
@@ -581,7 +591,7 @@ mod tests {
 
     #[test]
     fn horizontal_ticks_move_x_only() {
-        let mut physics = ScrollPhysics::new(&config(false, false));
+        let mut physics = new_physics(false, false);
         physics.feed(0.0, 0.0, -1.0, false);
         let mut frames = Vec::new();
         let mut now = 0.0;
@@ -598,7 +608,7 @@ mod tests {
 
     #[test]
     fn cancel_closes_the_open_phase() {
-        let mut physics = ScrollPhysics::new(&config(true, true));
+        let mut physics = new_physics(true, true);
         assert!(physics.cancel().is_empty());
 
         physics.feed(0.0, 1.0, 0.0, false);
@@ -616,7 +626,7 @@ mod tests {
     #[test]
     fn frame_rate_barely_changes_the_curve() {
         let at = |rate: f64| {
-            let mut physics = ScrollPhysics::new(&config(false, false));
+            let mut physics = new_physics(false, false);
             physics.feed(0.0, 4.0, 0.0, false);
             let mut sum = 0;
             let mut now = 0.0;

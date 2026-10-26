@@ -67,8 +67,6 @@ pub struct SmoothScrollConfig {
     pub speed: f64,
     /// Fast consecutive ticks scroll progressively further.
     pub acceleration: bool,
-    /// Keep gliding after the wheel stops, like a trackpad flick.
-    pub momentum: bool,
 }
 
 impl Default for SmoothScrollConfig {
@@ -78,7 +76,6 @@ impl Default for SmoothScrollConfig {
             smoothness: Smoothness::Regular,
             speed: 1.0,
             acceleration: true,
-            momentum: true,
         }
     }
 }
