@@ -19,7 +19,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 |---|---|---|
 | 0 | Skeleton: Rust core ↔ Swift shell, `just`, menu bar app, Accessibility onboarding | ✅ Done (`27275b5`) |
 | 1 | Mouse: event tap, button remapping, scroll modifiers, smooth scrolling, settings UI | ✅ Done |
-| 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | 🧪 Built, awaiting hands-on testing |
+| 2 | Monitor: DDC brightness for external displays, menu bar sliders, brightness keys + OSD | ✅ Done |
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ⏳ |
 | 4 | Calculator & conversions, quicklinks & shell commands | ⏳ |
 | 5 | Clipboard history, file search | ⏳ |
@@ -49,6 +49,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
       or displays without DDC)
 - [x] Shell: menu bar popover with per-display sliders, on-screen indicator for key changes,
       Monitor settings pane
+- [x] Minimum brightness is black: the bottom 25% of the range holds DDC at 0 and dims gamma
+      to black
 
 ### Step 3: Launcher core
 
@@ -75,7 +77,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ## Not in v1
 
-Click-and-drag mouse gestures, built-in / Apple display brightness, DDC volume, software dimming,
+Click-and-drag mouse gestures, built-in / Apple display brightness, DDC volume, software dimming
+for displays without DDC,
 Raycast extension support.
 
 ## Log
@@ -89,7 +92,8 @@ Raycast extension support.
   brightness HUD by default (the private `OSDManager` exists on macOS 27 but showed nothing;
   opt in with `defaults write com.jamieweavis.jaycast UseSystemOSD -bool YES`). Brightness
   changed with the monitor's own buttons isn't re-read until restart or hotplug. F14/F15 keys
-  aren't handled.
+  aren't handled. After hands-on approval, the bottom 25% of the range became gamma dimming so
+  minimum brightness is fully black (macOS restores gamma when the app exits).
 - **Step 1**: built by three parallel agents (event tap + buttons + scroll routing; smooth-scroll
   physics + emitter; Swift settings UI), integrated on main. 50 Rust tests. The live tap is confirmed
   running (`CGGetEventTapList`: enabled). Not yet checked by hand: scroll feel, every action, the

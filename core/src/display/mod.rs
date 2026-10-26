@@ -7,9 +7,11 @@
 //! DDC is slow (tens of ms per transaction) and flaky, so nothing here blocks a caller on
 //! it: a scan thread enumerates displays (at startup and, debounced, after every display
 //! reconfiguration), each DDC-capable display gets a [`ddc::Worker`], and brightness is
-//! served from a cache.
+//! served from a cache. The bottom of the range goes below the monitor's own minimum with
+//! gamma dimming (see [`dimming`]), so brightness 0 is black.
 
 mod ddc;
+mod dimming;
 mod keys;
 
 use std::ffi::c_void;
@@ -25,6 +27,7 @@ use objc2_core_graphics::{
 use crate::config::MonitorConfig;
 use crate::error::CoreError;
 use ddc::{Reading, SendMonitor, Worker};
+use dimming::Dimmer;
 
 pub(crate) use keys::BrightnessKeyTap;
 
@@ -68,6 +71,7 @@ pub(crate) struct DisplayManager {
     scan: Arc<ScanSignal>,
     /// The pointer registered with CoreGraphics, freed after unregistering in `Drop`.
     callback_info: *const ScanSignal,
+    dimmer: Dimmer,
 }
 
 // SAFETY: `callback_info` is only an opaque token handed back to CoreGraphics in `Drop`;
@@ -117,6 +121,7 @@ impl DisplayManager {
             state: Mutex::new(State::default()),
             scan: Arc::clone(&scan),
             callback_info,
+            dimmer: Dimmer::default(),
         });
 
         if scanning {
@@ -130,7 +135,11 @@ impl DisplayManager {
     }
 
     pub fn set_config(&self, config: MonitorConfig) {
+        let enabled = config.enabled;
         *self.config.lock().unwrap() = config;
+        if !enabled {
+            self.dimmer.reset_all();
+        }
     }
 
     pub fn config(&self) -> MonitorConfig {
@@ -176,18 +185,23 @@ impl DisplayManager {
         Some(value)
     }
 
-    /// Updates the cached brightness and queues the write. `None` for an unknown display or
-    /// one without DDC.
+    /// Updates the cached brightness, queues the DDC write and sets the gamma dimming.
+    /// `None` for an unknown display or one without DDC.
     fn apply(&self, display_id: u32, f: impl FnOnce(f64) -> f64) -> Option<f64> {
-        let mut state = self.state.lock().unwrap();
-        let entry = state
-            .displays
-            .iter_mut()
-            .find(|e| e.info.id == display_id && e.info.supports_ddc)?;
-        let worker = entry.worker.as_ref()?;
-        let value = f(entry.info.brightness);
-        entry.info.brightness = value;
-        worker.write(ddc::from_unit(value, entry.max));
+        let (value, split) = {
+            let mut state = self.state.lock().unwrap();
+            let entry = state
+                .displays
+                .iter_mut()
+                .find(|e| e.info.id == display_id && e.info.supports_ddc)?;
+            let worker = entry.worker.as_ref()?;
+            let value = f(entry.info.brightness);
+            let split = dimming::split(value);
+            entry.info.brightness = value;
+            worker.write(ddc::from_unit(split.ddc, entry.max));
+            (value, split)
+        };
+        self.dimmer.set(display_id, split.gamma);
         Some(value)
     }
 
@@ -259,6 +273,9 @@ impl DisplayManager {
         }
         // Workers join their threads on drop, which can wait on a DDC transaction; never do
         // that while holding the state lock their callbacks need.
+        for entry in &removed {
+            self.dimmer.forget(entry.info.id);
+        }
         drop(removed);
         if notify {
             self.notify_displays();
@@ -274,7 +291,8 @@ impl DisplayManager {
                 entry.reported = true;
                 if let Some(reading) = reading {
                     entry.info.supports_ddc = true;
-                    entry.info.brightness = ddc::to_unit(reading.current, reading.max);
+                    entry.info.brightness =
+                        dimming::from_ddc(ddc::to_unit(reading.current, reading.max));
                     entry.max = reading.max;
                 }
             }
