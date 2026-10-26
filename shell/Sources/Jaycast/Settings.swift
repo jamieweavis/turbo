@@ -25,6 +25,9 @@ final class SettingsWindowController {
     private func makeWindow() -> NSWindow {
         let view = SettingsView(model: model, onShowOnboarding: onShowOnboarding)
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        // Clear window so the SwiftUI glass background shows the desktop through it.
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.title = "Jaycast Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
@@ -111,8 +114,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle(pane.title)
+            .scrollContentBackground(.hidden)
         }
         .frame(minWidth: 680, minHeight: 460)
+        .containerBackground(.clear, for: .window)
+        .glassEffect(.regular, in: .rect)
     }
 }
 
