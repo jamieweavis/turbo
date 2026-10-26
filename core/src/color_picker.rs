@@ -101,6 +101,24 @@ impl ColorHistory {
         self.colors.lock().unwrap().clone()
     }
 
+    /// The colours whose Hex, RGB or HSL text contains `query`, ignoring case, spaces and
+    /// `#`; an empty query returns them all. Newest first.
+    pub fn search(&self, query: &str) -> Vec<PickedColor> {
+        let colors = self.colors();
+        let query = fold(query);
+        if query.is_empty() {
+            return colors;
+        }
+        colors
+            .into_iter()
+            .filter(|&color| {
+                [ColorFormat::Hex, ColorFormat::Rgb, ColorFormat::Hsl]
+                    .iter()
+                    .any(|&format| fold(&format_color(color, format)).contains(&query))
+            })
+            .collect()
+    }
+
     /// Records a pick and copies it as `format`, returning the copied text. Picking a colour
     /// already in the history moves it to the top.
     pub fn record(
@@ -149,6 +167,13 @@ fn insert(colors: &mut Vec<PickedColor>, color: PickedColor) {
     colors.retain(|c| !c.same_color(&color));
     colors.insert(0, color);
     colors.truncate(MAX_COLORS);
+}
+
+fn fold(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_whitespace() && *c != '#')
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn now() -> f64 {
@@ -224,6 +249,22 @@ mod tests {
         }
         assert_eq!(colors.len(), MAX_COLORS);
         assert_eq!(colors[0], color(255, 9, 9));
+    }
+
+    #[test]
+    fn searches_every_format() {
+        let history = ColorHistory {
+            path: PathBuf::new(),
+            colors: Mutex::new(vec![color(26, 43, 60), color(255, 0, 0)]),
+        };
+        let search = |query| history.search(query);
+        assert_eq!(search("").len(), 2);
+        assert_eq!(search("  ").len(), 2);
+        assert_eq!(search("#1a2b"), vec![color(26, 43, 60)]);
+        assert_eq!(search("FF0000"), vec![color(255, 0, 0)]);
+        assert_eq!(search("rgb(26, 43"), vec![color(26, 43, 60)]);
+        assert_eq!(search("hsl(0,100%"), vec![color(255, 0, 0)]);
+        assert!(search("abcdef").is_empty());
     }
 
     #[test]

@@ -61,7 +61,8 @@ final class ColorPickerState {
         refresh()
     }
 
-    private func refresh() {
+    /// Re-reads the history, e.g. after the palette deleted a colour.
+    func refresh() {
         history = core.colorHistory()
     }
 

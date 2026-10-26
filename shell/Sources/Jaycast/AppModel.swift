@@ -31,6 +31,8 @@ final class AppModel {
         caffeinate = CaffeinateState(core: core)
         colorPicker = ColorPickerState(core: core)
         palette = PaletteWindowController(core: core, settings: launcher)
+        palette.model.onPickColor = { [colorPicker] in colorPicker.pick() }
+        palette.model.onColorsChanged = { [colorPicker] in colorPicker.refresh() }
     }
 
     /// Starts input as soon as Accessibility is granted (now or later) and stops it if revoked.

@@ -5,7 +5,8 @@ import Quartz
 import SwiftUI
 
 /// The launcher palette: a floating Liquid Glass panel with a search field and results.
-/// It has three modes (search, clipboard history, file search) sharing the one field.
+/// It has four modes (search, clipboard history, file search, picked colours) sharing the
+/// one field.
 ///
 /// The panel is non-activating, so the frontmost app keeps looking active, but it still
 /// becomes key so typing goes to the search field. The controller solely owns the frame:
@@ -273,14 +274,15 @@ enum PaletteLayout {
             return CGSize(width: width(for: .search), height: height)
         case .clipboard:
             return clipboardSize
-        case .files:
+        case .files, .colors:
             var height = searchHeight + message
-            let rows = min(model.files.results.count, maxVisibleRows)
+            let count = model.mode == .files ? model.files.results.count : model.colors.colors.count
+            let rows = min(count, maxVisibleRows)
             if rows > 0 {
                 // A divider above the list and another above the footer.
                 height += 1 + listPadding * 2 + CGFloat(rows) * rowHeight + 1 + footerHeight
             }
-            return CGSize(width: width(for: .files), height: height)
+            return CGSize(width: width(for: model.mode), height: height)
         }
     }
 
@@ -314,11 +316,16 @@ final class PaletteModel {
 
     let clipboard: ClipboardBrowser
     let files: FileBrowser
+    let colors: ColorBrowser
 
     @ObservationIgnored var onClose: (() -> Void)?
     /// Shows the palette again, e.g. to report a paste that failed after it closed.
     @ObservationIgnored var onReopen: (() -> Void)?
     @ObservationIgnored var onQuickLook: ((URL) -> Void)?
+    /// Shows the colour picker's magnifier (after the palette has closed).
+    @ObservationIgnored var onPickColor: (() -> Void)?
+    /// A colour was deleted from the history here.
+    @ObservationIgnored var onColorsChanged: (() -> Void)?
     @ObservationIgnored private let core: Core
     @ObservationIgnored private let settings: LauncherSettings
     /// Where the mouse was when it last picked a row: rows scrolling under a still pointer
@@ -334,17 +341,19 @@ final class PaletteModel {
         self.settings = settings
         clipboard = ClipboardBrowser(core: core)
         files = FileBrowser(core: core)
+        colors = ColorBrowser(core: core)
     }
 
     var clipboardConfig: ClipboardConfig { settings.config.clipboard }
     var fileScopes: [String] { settings.config.files.scopes }
+    var colorFormat: ColorFormat { settings.config.colorPicker.format }
 
     /// The line between the search field and the results, if any.
     var message: PaletteMessage? {
         if let copied {
             return .copied(copied)
         }
-        if let error = error ?? clipboard.error ?? files.error {
+        if let error = error ?? clipboard.error ?? files.error ?? colors.error {
             return .error(error)
         }
         switch mode {
@@ -363,6 +372,12 @@ final class PaletteModel {
             }
             if files.results.isEmpty {
                 return files.isSearching ? .searching : .info(noFilesMessage)
+            }
+        case .colors:
+            if colors.colors.isEmpty {
+                return query.trimmingCharacters(in: .whitespaces).isEmpty
+                    ? .info("No colours yet. Pick one with Pick Colour.")
+                    : .noResults(query)
             }
         }
         return nil
@@ -424,6 +439,7 @@ final class PaletteModel {
         case .search: search()
         case .clipboard: clipboard.refresh(query: query)
         case .files: files.search(query)
+        case .colors: colors.refresh(query: query)
         }
     }
 
@@ -444,6 +460,7 @@ final class PaletteModel {
             selection = (selection + offset + results.count) % results.count
         case .clipboard: clipboard.move(by: offset)
         case .files: files.move(by: offset)
+        case .colors: colors.move(by: offset)
         }
     }
 
@@ -459,6 +476,7 @@ final class PaletteModel {
             }
         case .clipboard: clipboard.selection = index
         case .files: files.selection = index
+        case .colors: colors.selection = index
         }
     }
 
@@ -471,6 +489,8 @@ final class PaletteModel {
             pasteSelected(paste: clipboardConfig.pasteOnOpen)
         case .files:
             openSelectedFile()
+        case .colors:
+            copySelectedColor()
         }
     }
 
@@ -492,6 +512,10 @@ final class PaletteModel {
         case (.files, .quickLook):
             guard let file = files.selected else { return false }
             onQuickLook?(URL(fileURLWithPath: file.path))
+        case (.colors, .alternateOpen):
+            pickColor()
+        case (.colors, .delete):
+            deleteSelectedColor()
         default:
             return false
         }
@@ -530,6 +554,8 @@ final class PaletteModel {
                 showCopied(text)
             case .showMode(let mode):
                 enter(mode)
+            case .pickColor:
+                pickColor()
             }
         } catch {
             confirming = nil
@@ -537,15 +563,16 @@ final class PaletteModel {
         }
     }
 
-    /// Esc: back out of a confirmation or error, then clear the query, then leave clipboard
-    /// or file mode for search, then close.
+    /// Esc: back out of a confirmation or error, then clear the query, then leave clipboard,
+    /// file or colour mode for search, then close.
     func cancel() {
         if confirming != nil {
             confirming = nil
-        } else if error != nil || clipboard.error != nil || files.error != nil {
+        } else if error != nil || clipboard.error != nil || files.error != nil || colors.error != nil {
             error = nil
             clipboard.error = nil
             files.error = nil
+            colors.error = nil
         } else if !query.isEmpty {
             query = ""
         } else if mode != .search {
@@ -609,6 +636,29 @@ final class PaletteModel {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(file.path, forType: .string)
         showCopied(file.path)
+    }
+
+    // MARK: Colour actions
+
+    func copySelectedColor() {
+        guard let color = colors.selected else { return }
+        do {
+            try core.copyColor(color: color, format: colorFormat)
+            showCopied(formatColor(color: color, format: colorFormat))
+        } catch {
+            self.error = error.userMessage
+        }
+    }
+
+    func deleteSelectedColor() {
+        colors.deleteSelected()
+        onColorsChanged?()
+    }
+
+    /// The magnifier covers the screen, so the palette gets out of its way first.
+    private func pickColor() {
+        onClose?()
+        onPickColor?()
     }
 
     private func complete(with completion: String) {
@@ -694,6 +744,11 @@ private struct PaletteView: View {
                     Divider().padding(.horizontal, 14)
                     FilesModeView(model: model)
                 }
+            case .colors:
+                if !model.colors.colors.isEmpty {
+                    Divider().padding(.horizontal, 14)
+                    ColorsModeView(model: model)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -707,6 +762,7 @@ extension PaletteMode {
         case .search: "magnifyingglass"
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
+        case .colors: "swatchpalette"
         }
     }
 
@@ -716,6 +772,7 @@ extension PaletteMode {
         case .search: nil
         case .clipboard: "Clipboard"
         case .files: "Files"
+        case .colors: "Colours"
         }
     }
 
@@ -724,6 +781,7 @@ extension PaletteMode {
         case .search: "Search apps and actions, or calculate"
         case .clipboard: "Search clipboard history"
         case .files: "Search files"
+        case .colors: "Search picked colours"
         }
     }
 }

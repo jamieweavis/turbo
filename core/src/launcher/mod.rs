@@ -80,10 +80,12 @@ pub enum OpenOutcome {
     Copied {
         text: String,
     },
-    /// Switch the palette to another mode (clipboard history, file search).
+    /// Switch the palette to another mode (clipboard history, file search, colours).
     ShowMode {
         mode: PaletteMode,
     },
+    /// Close the palette and show the colour picker's magnifier.
+    PickColor,
 }
 
 /// What the palette is showing.
@@ -92,6 +94,8 @@ pub enum PaletteMode {
     Search,
     Clipboard,
     Files,
+    /// The colour picker's history.
+    Colors,
 }
 
 /// Palette modes listed in search, so they can be found without their hotkeys:
@@ -119,7 +123,23 @@ const MODES: &[ModeEntry] = &[
         &["find", "documents", "finder", "spotlight"],
         "doc.text.magnifyingglass",
     ),
+    (
+        PaletteMode::Colors,
+        "colors",
+        "List Colours",
+        &[
+            "list colors",
+            "colour history",
+            "color history",
+            "picked",
+            "swatches",
+        ],
+        "swatchpalette",
+    ),
 ];
+
+/// The launcher result that opens the colour picker's magnifier.
+const PICK_COLOR_ID: &str = "color:pick";
 
 fn mode_for_id(id: &str) -> Option<PaletteMode> {
     MODES.iter().find(|m| m.1 == id).map(|m| m.0)
@@ -280,6 +300,22 @@ impl SystemEntry {
         }
     }
 
+    fn pick_color() -> Self {
+        Self {
+            id: PICK_COLOR_ID.to_owned(),
+            title: "Pick Colour".to_owned(),
+            subtitle: "Jaycast",
+            title_match: Prepared::new("Pick Colour"),
+            keywords: ["pick color", "colour picker", "color picker", "eyedropper"]
+                .iter()
+                .map(|k| Prepared::new(k))
+                .collect(),
+            symbol: "eyedropper".to_owned(),
+            needs_confirmation: false,
+            kind: ResultKind::SystemAction,
+        }
+    }
+
     fn result(&self) -> SearchResult {
         SearchResult {
             id: self.id.clone(),
@@ -304,6 +340,7 @@ impl Launcher {
             system: MODES
                 .iter()
                 .map(SystemEntry::mode)
+                .chain([SystemEntry::pick_color()])
                 .chain(system::actions().iter().map(SystemEntry::new))
                 .chain(windows::ACTIONS.iter().map(SystemEntry::window))
                 .collect(),
@@ -379,6 +416,8 @@ impl Launcher {
         let mut outcome = OpenOutcome::Done;
         if let Some(mode) = id.strip_prefix("mode:").and_then(mode_for_id) {
             outcome = OpenOutcome::ShowMode { mode };
+        } else if id == PICK_COLOR_ID {
+            outcome = OpenOutcome::PickColor;
         } else if let Some(text) = id.strip_prefix("calc:") {
             crate::pasteboard::copy(text)?;
             // Calculations aren't worth remembering for ranking.
@@ -729,6 +768,33 @@ mod tests {
             titles(&search(&index, &usage, "secure")),
             vec!["Lock Screen"]
         );
+    }
+
+    #[test]
+    fn colour_picker_entries_are_typable() {
+        let entries: Vec<SystemEntry> = MODES
+            .iter()
+            .map(SystemEntry::mode)
+            .chain([SystemEntry::pick_color()])
+            .collect();
+        let find = |query: &str| {
+            rank(
+                &fuzzy::fold_query(query),
+                &Index::default(),
+                &entries,
+                Vec::new(),
+                &Usage::default(),
+                NOW,
+                8,
+            )
+        };
+        for query in ["pick colour", "pick color", "eyedropper"] {
+            assert_eq!(find(query)[0].id, PICK_COLOR_ID, "{query}");
+        }
+        for query in ["list colours", "list colors", "colour history"] {
+            assert_eq!(find(query)[0].id, "mode:colors", "{query}");
+        }
+        assert_eq!(mode_for_id("colors"), Some(PaletteMode::Colors));
     }
 
     #[test]

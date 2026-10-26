@@ -208,6 +208,12 @@ impl Core {
         self.colors.colors()
     }
 
+    /// Picked colours whose Hex, RGB or HSL text matches `query` (all of them when it's
+    /// empty), newest first.
+    pub fn search_color_history(&self, query: String) -> Vec<PickedColor> {
+        self.colors.search(&query)
+    }
+
     /// Records a colour the shell picked (sRGB) and copies it in the configured format.
     /// Returns the copied text.
     pub fn record_picked_color(&self, red: u8, green: u8, blue: u8) -> Result<String, CoreError> {

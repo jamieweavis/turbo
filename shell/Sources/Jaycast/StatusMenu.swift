@@ -134,41 +134,14 @@ struct StatusMenu: View {
     }
 
     private var colorPicker: some View {
-        let picker = model.colorPicker
-        let format = model.launcher.config.colorPicker.format
-
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Colour Picker")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             MenuRow(title: "Pick Colour", systemImage: "eyedropper", detail: model.launcher.config.colorPicker.hotkey?.title) {
                 dismiss()
-                picker.pick()
-            }
-
-            if !picker.history.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(picker.history.prefix(10), id: \.self) { color in
-                        Button {
-                            picker.copy(color, as: format)
-                        } label: {
-                            ColorSwatch(color: color, size: 22)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Copy \(formatColor(color: color, format: format))")
-                    }
-                }
-
-                if let error = picker.error {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                } else if let copied = picker.copied {
-                    Text("Copied \(copied)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                model.colorPicker.pick()
             }
         }
     }

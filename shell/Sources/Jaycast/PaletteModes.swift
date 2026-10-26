@@ -436,9 +436,124 @@ private struct FileRow: View {
     }
 }
 
+// MARK: - Colours
+
+/// The colour picker's history, filtered by the query in the core.
+@MainActor
+@Observable
+final class ColorBrowser {
+    private(set) var colors: [PickedColor] = []
+    var selection = 0
+    var error: String?
+    @ObservationIgnored private let core: Core
+    @ObservationIgnored private var query = ""
+
+    init(core: Core) {
+        self.core = core
+    }
+
+    var selected: PickedColor? {
+        colors.indices.contains(selection) ? colors[selection] : nil
+    }
+
+    func refresh(query: String) {
+        self.query = query
+        colors = core.searchColorHistory(query: query)
+        selection = 0
+    }
+
+    func move(by offset: Int) {
+        guard !colors.isEmpty else { return }
+        selection = (selection + offset + colors.count) % colors.count
+    }
+
+    /// Removes the row straight away; a failure brings it back with the error.
+    func deleteSelected() {
+        guard let color = selected else { return }
+        colors.remove(at: selection)
+        selection = min(selection, max(colors.count - 1, 0))
+        do {
+            try core.deletePickedColor(color: color)
+        } catch {
+            self.error = error.userMessage
+            refresh(query: query)
+        }
+    }
+}
+
+struct ColorsModeView: View {
+    let model: PaletteModel
+
+    private var browser: ColorBrowser { model.colors }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(browser.colors.enumerated()), id: \.element) { index, color in
+                            ColorRow(color: color, format: model.colorFormat, isSelected: index == browser.selection)
+                                .id(color)
+                                .contentShape(.rect)
+                                .onContinuousHover { phase in
+                                    if case .active = phase { model.hover(index) }
+                                }
+                                .onTapGesture {
+                                    browser.selection = index
+                                    model.copySelectedColor()
+                                }
+                        }
+                    }
+                    .padding(.vertical, PaletteLayout.listPadding)
+                    .padding(.horizontal, 8)
+                }
+                .scrollIndicators(.never)
+                .onChange(of: browser.selection) {
+                    if let color = browser.selected { proxy.scrollTo(color) }
+                }
+            }
+            Divider()
+            FooterHints(hints: [("↩", "Copy \(model.colorFormat.title)"), ("⌘↩", "Pick Colour"), ("⌘⌫", "Delete")])
+        }
+    }
+}
+
+/// The colour in the copy format, with the other two formats underneath.
+private struct ColorRow: View {
+    let color: PickedColor
+    let format: ColorFormat
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ColorSwatch(color: color, size: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(formatColor(color: color, format: format))
+                    .font(.system(size: 14, weight: .medium).monospaced())
+                    .lineLimit(1)
+                Text(ColorFormat.allCases.filter { $0 != format }.map { formatColor(color: color, format: $0) }.joined(separator: "  ·  "))
+                    .font(.system(size: 11).monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Text(RelativeAge.short(since: color.pickedAt))
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: PaletteLayout.rowHeight)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.1))
+            }
+        }
+    }
+}
+
 // MARK: - Shared
 
-/// The key hints along the bottom of clipboard and file mode.
+/// The key hints along the bottom of clipboard, file and colour mode.
 private struct FooterHints: View {
     let hints: [(key: String, label: String)]
 
