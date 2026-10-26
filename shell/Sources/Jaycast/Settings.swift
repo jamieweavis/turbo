@@ -51,9 +51,9 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "Clipboard"
         case .files: "File Search"
         case .windows: "Windows"
-        case .keyboard: "Keyboard"
+        case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
-        case .monitor: "Monitor"
+        case .monitor: "Brightness"
         case .caffeinate: "Caffeinate"
         case .colorPicker: "Colour Picker"
         }
@@ -69,9 +69,9 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
         case .windows: "macwindow"
-        case .keyboard: "keyboard"
+        case .keyboard: "command.square"
         case .mouse: "computermouse"
-        case .monitor: "display"
+        case .monitor: "sun.max"
         case .caffeinate: "cup.and.saucer"
         case .colorPicker: "eyedropper"
         }
