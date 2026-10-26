@@ -97,7 +97,6 @@ pub trait LauncherObserver: Send + Sync {
 /// Calculator results go above everything; a quicklink or command whose keyword was typed
 /// with an argument goes above fuzzy matches.
 pub(crate) const CALCULATOR_SCORE: i32 = 20_000;
-#[allow(dead_code)] // TODO(step 4): used by extensions::results.
 pub(crate) const KEYWORD_SCORE: i32 = 10_000;
 
 /// Alias and keyword matches count for three quarters of a match on the title itself.

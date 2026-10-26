@@ -23,3 +23,13 @@ pub(crate) fn copy(text: &str) -> Result<(), CoreError> {
         }
     })
 }
+
+/// The clipboard's text, if it holds any.
+pub(crate) fn paste() -> Option<String> {
+    autoreleasepool(|_| {
+        // SAFETY: `NSPasteboardTypeString` is an immutable AppKit constant.
+        NSPasteboard::generalPasteboard()
+            .stringForType(unsafe { NSPasteboardTypeString })
+            .map(|text| text.to_string())
+    })
+}
