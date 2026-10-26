@@ -113,12 +113,19 @@ struct SettingsView: View {
                 case .colorPicker: ColorPickerPane(picker: model.colorPicker, settings: model.launcher)
                 }
             }
-            .navigationTitle(pane.title)
+            .navigationTitle("Jaycast Settings")
             .scrollContentBackground(.hidden)
         }
         .frame(minWidth: 680, minHeight: 460)
         .containerBackground(.clear, for: .window)
-        .glassEffect(.regular, in: .rect)
+        // A background layer, so the split view keeps its normal title bar layout. Tinted with
+        // the window colour to tone down how much the desktop shows through.
+        .background {
+            Rectangle()
+                .fill(.clear)
+                .glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.5)), in: .rect)
+                .ignoresSafeArea()
+        }
     }
 }
 
