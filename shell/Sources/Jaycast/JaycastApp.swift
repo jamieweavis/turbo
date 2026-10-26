@@ -59,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        model.palette.onShowSettings = { [weak self] in self?.showSettings() }
         model.start()
         if !model.accessibility.isGranted {
             showOnboarding()

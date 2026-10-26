@@ -22,6 +22,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var resizeTask: Task<Void, Never>?
     private let quickLook = QuickLookSource()
     private let core: Core
+    /// ⌘, from the palette: it hides and the settings window opens.
+    var onShowSettings: (() -> Void)?
 
     init(core: Core, settings: LauncherSettings) {
         self.core = core
@@ -140,6 +142,10 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.quickLook = quickLook
         panel.onCancel = { [weak self] in self?.model.cancel() }
         panel.onClose = { [weak self] in self?.hide() }
+        panel.onShowSettings = { [weak self] in
+            self?.hide()
+            self?.onShowSettings?()
+        }
         panel.onKey = { [weak self] key in self?.model.handle(key) ?? false }
 
         let hosting = NSHostingView(rootView: PaletteView(model: model))
@@ -155,6 +161,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 private final class PalettePanel: NSPanel {
     var onCancel: (() -> Void)?
     var onClose: (() -> Void)?
+    var onShowSettings: (() -> Void)?
     var onKey: ((PaletteKey) -> Bool)?
     var quickLook: QuickLookSource?
 
@@ -166,10 +173,16 @@ private final class PalettePanel: NSPanel {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-           event.charactersIgnoringModifiers == "w" {
-            onClose?()
-            return true
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+            switch event.charactersIgnoringModifiers {
+            case "w":
+                onClose?()
+                return true
+            case ",":
+                onShowSettings?()
+                return true
+            default: break
+            }
         }
         if let key = PaletteKey(event, fieldHasSelection: fieldHasSelection), onKey?(key) == true {
             return true
