@@ -50,12 +50,12 @@ struct ClipboardPane: View {
             Section("Storage") {
                 Picker("Keep up to", selection: $settings.config.clipboard.maxItems) {
                     ForEach(options(Self.itemLimits, including: settings.config.clipboard.maxItems), id: \.self) { limit in
-                        Text("\(limit) items").tag(limit)
+                        Text(limit == 0 ? "Unlimited items" : "\(limit) items").tag(limit)
                     }
                 }
                 Picker("Keep items for", selection: $settings.config.clipboard.retentionDays) {
                     ForEach(options(Self.retentionDays, including: settings.config.clipboard.retentionDays), id: \.self) { days in
-                        Text(days == 1 ? "1 day" : "\(days) days").tag(days)
+                        Text(days == 0 ? "Forever" : days == 1 ? "1 day" : "\(days) days").tag(days)
                     }
                 }
                 LabeledContent("History") {
@@ -112,8 +112,10 @@ struct ClipboardPane: View {
     }
 
     /// The preset choices, plus the current value if it was set to something else.
+    /// The presets plus a custom current value, with 0 (no limit) last.
     private func options(_ presets: [UInt32], including current: UInt32) -> [UInt32] {
-        presets.contains(current) ? presets : (presets + [current]).sorted()
+        let values = current == 0 || presets.contains(current) ? presets : (presets + [current]).sorted()
+        return values + [0]
     }
 }
 

@@ -209,9 +209,17 @@ impl Store {
     }
 
     /// Drops unpinned items older than `retention_days`, then the oldest unpinned ones
-    /// beyond `max_items`. Returns how many were removed.
+    /// beyond `max_items`; 0 lifts either limit. Returns how many were removed.
     pub fn prune(&self, max_items: u32, retention_days: u32, now: f64) -> Result<usize, CoreError> {
-        let cutoff = now - f64::from(retention_days) * SECONDS_PER_DAY;
+        let cutoff = match retention_days {
+            0 => f64::MIN,
+            days => now - f64::from(days) * SECONDS_PER_DAY,
+        };
+        // SQLite treats a negative LIMIT as no limit.
+        let max_items = match max_items {
+            0 => -1,
+            count => i64::from(count),
+        };
         let condition = "WHERE pinned = 0 AND (copied_at < ?1 OR id NOT IN (
                 SELECT id FROM items WHERE pinned = 0 ORDER BY copied_at DESC LIMIT ?2))";
         let images = self.image_paths(condition, params![cutoff, max_items])?;
@@ -440,6 +448,23 @@ mod tests {
         // At day 3: retention 2 days drops "a" (day 0); max 2 then drops "b".
         assert_eq!(store.prune(2, 2, 3.0 * SECONDS_PER_DAY).unwrap(), 2);
         assert_eq!(texts(&store.items("", 10).unwrap()), vec!["d", "c"]);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn prune_with_zero_limits_keeps_everything() {
+        let dir = temp_dir("prune-unlimited");
+        let store = Store::open(&dir).unwrap();
+        for (i, t) in ["a", "b", "c"].iter().enumerate() {
+            store
+                .insert(&text(t), &source("A"), i as f64 * SECONDS_PER_DAY)
+                .unwrap();
+        }
+        assert_eq!(store.prune(0, 0, 10_000.0 * SECONDS_PER_DAY).unwrap(), 0);
+        // Each limit still applies on its own.
+        assert_eq!(store.prune(0, 2, 3.0 * SECONDS_PER_DAY).unwrap(), 1);
+        assert_eq!(store.prune(1, 0, 3.0 * SECONDS_PER_DAY).unwrap(), 1);
+        assert_eq!(texts(&store.items("", 10).unwrap()), vec!["c"]);
         fs::remove_dir_all(dir).unwrap();
     }
 

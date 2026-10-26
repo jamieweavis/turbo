@@ -62,9 +62,9 @@ pub struct ClipboardConfig {
     pub enabled: bool,
     /// Opens the palette in clipboard history.
     pub hotkey: Option<Hotkey>,
-    /// Oldest unpinned items are dropped beyond this many.
+    /// Oldest unpinned items are dropped beyond this many; 0 keeps any number.
     pub max_items: u32,
-    /// Unpinned items older than this are dropped.
+    /// Unpinned items older than this many days are dropped; 0 keeps them forever.
     pub retention_days: u32,
     /// Bundle ids whose copies are never recorded (password managers by default). Copies
     /// marked concealed or transient by the source app are never recorded either.
