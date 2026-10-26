@@ -93,7 +93,13 @@ struct StatusMenu: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            MenuToggle(title: "Hyper key", systemImage: "command", isOn: $hyperKey.config.enabled)
+            VStack(alignment: .leading, spacing: 4) {
+                MenuToggle(title: "Hyper key", systemImage: "command", isOn: $hyperKey.config.enabled)
+
+                Text(hyperKey.config.key.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
