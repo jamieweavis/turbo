@@ -156,8 +156,7 @@ struct SettingsView: View {
                 Label {
                     Text(pane.title)
                 } icon: {
-                    // A turned-off feature's icon goes grey instead of its colour.
-                    PaneIcon(pane: pane, size: 20, isOff: isEnabled(pane)?.wrappedValue == false)
+                    PaneIcon(pane: pane, size: 20)
                 }
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
@@ -274,7 +273,6 @@ private struct FeatureSwitch: View {
 struct PaneIcon: View {
     let pane: SettingsPane
     let size: CGFloat
-    var isOff = false
 
     var body: some View {
         Group {
@@ -288,7 +286,7 @@ struct PaneIcon: View {
         }
         .foregroundStyle(.white)
         .frame(width: size, height: size)
-        .background((isOff ? Color.gray : pane.tint).gradient, in: .rect(cornerRadius: size * 0.23))
+        .background(pane.tint.gradient, in: .rect(cornerRadius: size * 0.23))
     }
 }
 
