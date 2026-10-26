@@ -21,8 +21,7 @@ struct JaycastApp: App {
                 .padding(14)
             }
         } label: {
-            // The cup shows at a glance that the Mac is being kept awake.
-            Image(systemName: appDelegate.model?.caffeinate.isActive == true ? "cup.and.saucer.fill" : "sparkle.magnifyingglass")
+            Image(systemName: "sparkle.magnifyingglass")
                 .accessibilityLabel("Jaycast")
         }
         .menuBarExtraStyle(.window)
