@@ -20,8 +20,10 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var centerX: CGFloat = 0
     private var resizeTask: Task<Void, Never>?
     private let quickLook = QuickLookSource()
+    private let core: Core
 
     init(core: Core, settings: LauncherSettings) {
+        self.core = core
         model = PaletteModel(core: core, settings: settings)
         super.init()
         model.onClose = { [weak self] in self?.hide() }
@@ -59,6 +61,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             centerX = visible.midX
             panel.setFrame(frame(), display: false)
         }
+        core.setPaletteVisible(visible: true)
         panel.makeKeyAndOrderFront(nil)
         observeSize()
     }
@@ -70,6 +73,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             QLPreviewPanel.shared().orderOut(nil)
         }
         panel.orderOut(nil)
+        core.setPaletteVisible(visible: false)
         model.didHide()
     }
 

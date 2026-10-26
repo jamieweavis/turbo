@@ -23,7 +23,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 3 | Launcher core: hotkey palette, app search with fuzzy ranking, system actions, per-app hotkeys | ✅ Done |
 | 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
 | 5 | Clipboard history, file search | 🧪 Built, awaiting hands-on testing |
-| 6 | Window management, snippets / text expansion | 🚧 In progress |
+| 6 | Window management, snippets / text expansion | 🧪 Built, awaiting hands-on testing |
 
 ### Step 1: Mouse
 
@@ -88,11 +88,11 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 - [x] Shared core API: `WindowConfig` (hotkeys, default ⌃⌥ arrows etc.; gap), `WindowAction`,
       `SnippetsConfig`/`Snippet`, window and snippet results in search, window hotkeys,
       snippet tap started with the other event taps
-- [ ] Window management through Accessibility: halves (repeat cycles 1/2 → 2/3 → 1/3),
+- [x] Window management through Accessibility: halves (repeat cycles 1/2 → 2/3 → 1/3),
       quarters, thirds, maximise, almost maximise, centre, restore, next/previous display
-- [ ] Snippets with placeholders (`{clipboard}`, `{date}`, `{time}`, `{cursor}`, …) from the
+- [x] Snippets with placeholders (`{clipboard}`, `{date}`, `{time}`, `{cursor}`, …) from the
       palette, and keyword expansion while typing
-- [ ] Shell: window and snippet results in the palette, Windows and Snippets settings
+- [x] Shell: window and snippet results in the palette, Windows and Snippets settings
 
 ## Not in v1
 
@@ -102,6 +102,20 @@ Raycast extension support.
 
 ## Log
 
+- **Step 6**: built by three parallel agents (window management; snippets + expansion; Swift
+  panes), integrated on main. 281 Rust tests. Windows: pure layout module (gap shared between
+  neighbours, whole points), AX focused window with a 0.5 s messaging timeout, size → position →
+  size, `AXEnhancedUserInterface` switched off during the move; per-window memory keyed by
+  pid + CGWindowID (`_AXUIElementGetWindow`) for Restore and half cycling; next/previous
+  display ordered left to right and keeps a snapped layout. The read-only probe saw both
+  displays and the focused window; nothing has moved a real window yet. Snippets: search by
+  name/keyword, placeholders with locale date formats, insertion pastes a transient pasteboard
+  item with ⌘V and restores the previous clipboard after 600 ms; expansion is a listen-only key
+  tap that only runs when a snippet has a keyword, never reads during secure input, and pauses
+  while the palette is open (it's a non-activating panel, so the shell reports it). Known
+  limits: dead keys/IME composition, a copy made <400 ms before an expansion can miss history,
+  the restored clipboard keeps the transient marker. Settings: Windows pane (hotkeys, gap,
+  Restore Defaults) and Snippets pane (editor with placeholder menu, keyword clash warnings).
 - **Step 5**: built by three parallel agents (clipboard history; Spotlight file search; Swift
   palette modes + settings), integrated on main. 217 Rust tests. Clipboard: polls the change
   count every 400 ms, SQLite (WAL) + PNG files in `clipboard/` (0700/0600), dedupes by SHA-256,

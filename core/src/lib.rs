@@ -196,6 +196,12 @@ impl Core {
         self.launcher.open(&id, &query)
     }
 
+    /// Tells the core whether the palette is showing, so snippet keywords typed into it
+    /// don't expand. Call on every show and hide.
+    pub fn set_palette_visible(&self, visible: bool) {
+        self.snippets.set_palette_visible(visible);
+    }
+
     /// Clipboard history: pinned first, then newest; `query` filters by text.
     pub fn clipboard_items(&self, query: String, limit: u32) -> Vec<ClipboardItem> {
         self.clipboard.items(&query, limit as usize)

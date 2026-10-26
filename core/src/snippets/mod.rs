@@ -191,6 +191,11 @@ impl SnippetExpander {
         result
     }
 
+    /// While the palette shows, typing goes to it, not to the frontmost app: don't expand.
+    pub fn set_palette_visible(&self, visible: bool) {
+        self.tap.set_palette_visible(visible);
+    }
+
     pub fn stop(&self) {
         let mut state = self.state.lock().unwrap();
         state.started = false;

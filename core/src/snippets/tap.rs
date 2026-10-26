@@ -53,6 +53,9 @@ struct Shared {
     config: Mutex<Arc<SnippetsConfig>>,
     /// Bumped on every config change so the tap only takes the lock when something changed.
     generation: AtomicU64,
+    /// The palette is a non-activating panel, so typing in it leaves another app frontmost;
+    /// the shell reports it instead.
+    palette_visible: AtomicBool,
 }
 
 pub(super) struct ExpansionTap {
@@ -83,6 +86,7 @@ impl ExpansionTap {
             shared: Arc::new(Shared {
                 config: Mutex::new(Arc::new(config)),
                 generation: AtomicU64::new(0),
+                palette_visible: AtomicBool::new(false),
             }),
             worker: Mutex::new(None),
         }
@@ -91,6 +95,12 @@ impl ExpansionTap {
     pub fn set_config(&self, config: SnippetsConfig) {
         *self.shared.config.lock().unwrap() = Arc::new(config);
         self.shared.generation.fetch_add(1, Ordering::Release);
+    }
+
+    pub fn set_palette_visible(&self, visible: bool) {
+        self.shared
+            .palette_visible
+            .store(visible, Ordering::Relaxed);
     }
 
     /// Idempotent. The caller has checked Accessibility; failing to create the tap anyway
@@ -310,7 +320,10 @@ impl TapState {
             self.frontmost = frontmost;
         }
         // Typing in Jaycast itself (searching the palette for `;addr`) mustn't expand.
-        if frontmost == Some(std::process::id() as i32) {
+        if frontmost == Some(std::process::id() as i32)
+            || self.shared.palette_visible.load(Ordering::Relaxed)
+        {
+            self.matcher.reset();
             return;
         }
 
