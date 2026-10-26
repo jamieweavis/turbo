@@ -55,6 +55,11 @@ final class LauncherSettings {
         for (index, app) in config.appHotkeys.enumerated() {
             assigned.append((.app(index), app.hotkey))
         }
+        if config.windows.hotkeysEnabled {
+            for window in config.windows.hotkeys {
+                assigned.append((.window(window.action), window.hotkey))
+            }
+        }
         return assigned
     }
 
@@ -111,6 +116,60 @@ final class LauncherSettings {
         return (Array(quicklinks) + Array(commands)).contains { $0.trimmingCharacters(in: .whitespaces).lowercased() == keyword }
     }
 
+    // MARK: Windows
+
+    func windowHotkey(for action: WindowAction) -> Hotkey? {
+        config.windows.hotkeys.first { $0.action == action }?.hotkey
+    }
+
+    /// Sets or (with `nil`) clears an action's hotkey, keeping the others' order.
+    func setWindowHotkey(_ hotkey: Hotkey?, for action: WindowAction) {
+        var hotkeys = config.windows.hotkeys
+        if let index = hotkeys.firstIndex(where: { $0.action == action }) {
+            if let hotkey {
+                hotkeys[index].hotkey = hotkey
+            } else {
+                hotkeys.remove(at: index)
+            }
+        } else if let hotkey {
+            hotkeys.append(WindowHotkey(action: action, hotkey: hotkey))
+        }
+        config.windows.hotkeys = hotkeys
+    }
+
+    // MARK: Snippets
+
+    /// Adds `snippet`, or replaces the one with its id.
+    func save(_ snippet: Snippet) {
+        if let index = config.snippets.snippets.firstIndex(where: { $0.id == snippet.id }) {
+            config.snippets.snippets[index] = snippet
+        } else {
+            config.snippets.snippets.append(snippet)
+        }
+    }
+
+    /// Why `keyword` won't expand as expected next to the other snippets' (not `id`), if it
+    /// won't: expansion fires as soon as a keyword is typed, so a keyword that starts another
+    /// one always wins over it.
+    func snippetKeywordProblem(_ keyword: String, excludingID id: String) -> String? {
+        let keyword = keyword.trimmingCharacters(in: .whitespaces)
+        guard !keyword.isEmpty else { return nil }
+        let others = config.snippets.snippets
+            .filter { $0.id != id }
+            .map { $0.keyword.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        if others.contains(keyword) {
+            return "Another snippet uses this keyword"
+        }
+        if let shorter = others.first(where: { keyword.hasPrefix($0) }) {
+            return "Never expands: “\(shorter)” is typed first and expands instead"
+        }
+        if let longer = others.first(where: { $0.hasPrefix(keyword) }) {
+            return "Stops “\(longer)” from expanding, since this keyword is typed first"
+        }
+        return nil
+    }
+
     /// The app's bundle path for its icon: the index first, then Launch Services.
     func path(forBundleID bundleID: String) -> String? {
         apps.first { $0.bundleId == bundleID }?.path
@@ -132,6 +191,7 @@ final class LauncherSettings {
 enum HotkeySlot: Equatable {
     case palette, clipboard, files
     case app(Int)
+    case window(WindowAction)
 }
 
 /// Receives the core's launcher callbacks (hotkeys on the main thread, app index changes and

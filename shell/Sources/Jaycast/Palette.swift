@@ -511,6 +511,10 @@ final class PaletteModel {
             confirming = result
             return
         }
+        if result.actsOnFrontApp {
+            openInFrontApp(result)
+            return
+        }
         do {
             let outcome = try core.openResult(id: result.id, query: query)
             confirming = nil
@@ -555,6 +559,20 @@ final class PaletteModel {
         onClose?()
         do {
             try core.pasteClipboardItem(id: item.id, paste: paste)
+        } catch {
+            onReopen?()
+            self.error = error.userMessage
+        }
+    }
+
+    /// Window actions and snippets act on the app that was in front, so the palette closes
+    /// first; a failure reopens it to show why.
+    private func openInFrontApp(_ result: SearchResult) {
+        confirming = nil
+        error = nil
+        onClose?()
+        do {
+            _ = try core.openResult(id: result.id, query: query)
         } catch {
             onReopen?()
             self.error = error.userMessage
@@ -787,7 +805,7 @@ private struct ResultRow: View {
                         .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
                     if !result.subtitle.isEmpty {
-                        Text(result.subtitle)
+                        Text(result.kind == .snippet ? result.subtitle.oneLine : result.subtitle)
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -842,7 +860,6 @@ private struct ResultRow: View {
         case .application, .quicklink: return ("Open", "↩")
         case .calculator: return ("Copy", "↩")
         case .systemAction, .command: return ("Run", "↩")
-        // TODO(step 6): close the palette before opening these.
         case .windowAction: return ("Apply", "↩")
         case .snippet: return ("Paste", "↩")
         }
@@ -860,6 +877,20 @@ private struct ResultRow: View {
                 .frame(width: 26, height: 26)
                 .background(.primary.opacity(0.08), in: .rect(cornerRadius: 6))
         }
+    }
+}
+
+extension SearchResult {
+    /// Window actions and snippets act on the frontmost app, so the palette closes first.
+    var actsOnFrontApp: Bool {
+        kind == .windowAction || kind == .snippet
+    }
+}
+
+extension String {
+    /// Line breaks and runs of whitespace collapsed to single spaces, for one-line previews.
+    var oneLine: String {
+        split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
 

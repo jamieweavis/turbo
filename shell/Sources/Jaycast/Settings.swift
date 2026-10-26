@@ -37,7 +37,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, clipboard, files, mouse, monitor
+    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, mouse, monitor
 
     var id: Self { self }
 
@@ -47,8 +47,10 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .launcher: "Launcher"
         case .quicklinks: "Quicklinks"
         case .commands: "Commands"
+        case .snippets: "Snippets"
         case .clipboard: "Clipboard"
         case .files: "File Search"
+        case .windows: "Windows"
         case .mouse: "Mouse"
         case .monitor: "Monitor"
         }
@@ -60,8 +62,10 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .launcher: "magnifyingglass"
         case .quicklinks: "link"
         case .commands: "terminal"
+        case .snippets: "text.quote"
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
+        case .windows: "macwindow"
         case .mouse: "computermouse"
         case .monitor: "display"
         }
@@ -89,8 +93,10 @@ struct SettingsView: View {
                 case .launcher: LauncherPane(settings: model.launcher)
                 case .quicklinks: QuicklinksPane(settings: model.launcher)
                 case .commands: CommandsPane(settings: model.launcher)
+                case .snippets: SnippetsPane(settings: model.launcher)
                 case .clipboard: ClipboardPane(settings: model.launcher)
                 case .files: FileSearchPane(settings: model.launcher)
+                case .windows: WindowsPane(settings: model.launcher)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
                 }

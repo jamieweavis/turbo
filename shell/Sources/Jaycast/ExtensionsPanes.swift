@@ -5,7 +5,7 @@ extension Quicklink: Identifiable {}
 extension ShellCommand: Identifiable {}
 
 /// Something being added or edited in a sheet; `isNew` decides the sheet's title.
-private struct Draft<Item: Identifiable>: Identifiable {
+struct Draft<Item: Identifiable>: Identifiable {
     var item: Item
     let isNew: Bool
     var id: Item.ID { item.id }
@@ -218,9 +218,9 @@ private struct CommandEditor: View {
     }
 }
 
-// MARK: - Shared pieces
+// MARK: - Shared pieces (also used by the Snippets pane)
 
-private struct SaveErrorSection: View {
+struct SaveErrorSection: View {
     let error: String?
 
     var body: some View {
@@ -233,11 +233,12 @@ private struct SaveErrorSection: View {
     }
 }
 
-private struct ExtensionRow: View {
+struct ExtensionRow: View {
     let symbol: String
     let name: String
     let keyword: String
     let detail: String
+    var detailTruncation: Text.TruncationMode = .middle
     let problem: String?
     let onEdit: () -> Void
     let onRemove: () -> Void
@@ -262,7 +263,7 @@ private struct ExtensionRow: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(detailTruncation)
             }
             Spacer()
             if let problem {
@@ -305,7 +306,7 @@ private struct KeywordField: View {
 }
 
 /// A sheet with a title, a form, and Cancel / Save buttons.
-private struct EditorSheet<Content: View, Leading: View>: View {
+struct EditorSheet<Content: View, Leading: View>: View {
     let title: String
     let canSave: Bool
     @ViewBuilder let content: Content
