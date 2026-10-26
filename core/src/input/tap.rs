@@ -28,7 +28,7 @@ use super::actions;
 use super::buttons::{ButtonMachine, Disposition, Effect};
 use super::scroll::{self, Axes, ScrollDecision, WheelEvent};
 use super::smooth_scroll::SmoothScroller;
-use crate::config::{Modifier, MouseConfig};
+use crate::config::{ButtonBinding, Modifier, MouseConfig};
 use crate::error::CoreError;
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -286,7 +286,7 @@ impl TapState {
         let config = Arc::clone(&shared.config.lock().unwrap());
         let generation = shared.generation.load(Ordering::Acquire);
         Self {
-            buttons: ButtonMachine::new(config.buttons.clone()),
+            buttons: ButtonMachine::new(active_bindings(&config).to_vec()),
             shared,
             config,
             generation,
@@ -314,9 +314,6 @@ impl TapState {
             return Disposition::PassThrough;
         }
         self.refresh_config();
-        if !self.config.enabled {
-            return Disposition::PassThrough;
-        }
 
         match event_type {
             CGEventType::LeftMouseDown | CGEventType::RightMouseDown => {
@@ -469,14 +466,25 @@ impl TapState {
         self.config = Arc::clone(&config);
         drop(config);
         if self.buttons_changed() {
-            self.buttons = ButtonMachine::new(self.config.buttons.clone());
+            self.buttons = ButtonMachine::new(active_bindings(&self.config).to_vec());
             self.schedule_timer();
         }
     }
 
     fn buttons_changed(&self) -> bool {
         // Rebuilding drops in-flight presses, so only do it when bindings really changed.
-        !self.buttons.has_same_bindings(&self.config.buttons)
+        !self
+            .buttons
+            .has_same_bindings(active_bindings(&self.config))
+    }
+}
+
+/// With buttons turned off the machine gets no bindings, so every button passes through.
+fn active_bindings(config: &MouseConfig) -> &[ButtonBinding] {
+    if config.buttons_enabled {
+        &config.buttons
+    } else {
+        &[]
     }
 }
 
@@ -536,7 +544,7 @@ mod tests {
         assert!(tap.is_running());
         tap.start().unwrap();
         tap.set_config(MouseConfig {
-            enabled: false,
+            buttons_enabled: false,
             ..MouseConfig::default()
         });
         thread::sleep(std::time::Duration::from_millis(200));

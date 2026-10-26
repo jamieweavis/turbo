@@ -15,24 +15,15 @@ struct MousePane: View {
                 }
             }
 
-            Section {
-                Toggle("Enable mouse fixes", isOn: $settings.config.enabled)
-            } footer: {
-                Text("Only mice are affected; the trackpad keeps working as usual.")
-            }
-
-            Group {
-                smoothScrolling
-                scrollModifiers
-                buttons
-            }
-            .disabled(!settings.config.enabled)
+            smoothScrolling
+            scrollModifiers
+            buttons
         }
         .formStyle(.grouped)
     }
 
     private var smoothScrolling: some View {
-        Section("Smooth Scrolling") {
+        Section {
             Toggle("Smooth scrolling", isOn: $settings.config.smoothScroll.enabled)
 
             Group {
@@ -55,6 +46,10 @@ struct MousePane: View {
                 }
             }
             .disabled(!settings.config.smoothScroll.enabled)
+        } header: {
+            Text("Smooth Scrolling")
+        } footer: {
+            Text("Only mice are affected; the trackpad keeps working as usual.")
         }
     }
 
@@ -102,24 +97,29 @@ struct MousePane: View {
 
     private var buttons: some View {
         Section("Buttons") {
-            if settings.config.buttons.isEmpty {
-                Text("No button bindings")
-                    .foregroundStyle(.secondary)
-            }
+            Toggle("Button bindings", isOn: $settings.config.buttonsEnabled)
 
-            ForEach(settings.config.buttons.indices, id: \.self) { index in
-                ButtonBindingRow(
-                    binding: binding(at: index),
-                    isDuplicate: isDuplicate(at: index),
-                    isEditing: Binding(
-                        get: { editing == index },
-                        set: { editing = $0 ? index : nil }
-                    ),
-                    onRemove: { remove(at: index) }
-                )
-            }
+            Group {
+                if settings.config.buttons.isEmpty {
+                    Text("No button bindings")
+                        .foregroundStyle(.secondary)
+                }
 
-            Button("Add Binding", systemImage: "plus", action: addBinding)
+                ForEach(settings.config.buttons.indices, id: \.self) { index in
+                    ButtonBindingRow(
+                        binding: binding(at: index),
+                        isDuplicate: isDuplicate(at: index),
+                        isEditing: Binding(
+                            get: { editing == index },
+                            set: { editing = $0 ? index : nil }
+                        ),
+                        onRemove: { remove(at: index) }
+                    )
+                }
+
+                Button("Add Binding", systemImage: "plus", action: addBinding)
+            }
+            .disabled(!settings.config.buttonsEnabled)
         }
     }
 

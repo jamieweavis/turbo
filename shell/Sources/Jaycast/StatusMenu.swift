@@ -30,8 +30,14 @@ struct StatusMenu: View {
                 Divider()
             }
 
-            Toggle(isOn: $mouse.config.enabled) {
-                Label("Mouse fixes", systemImage: "computermouse")
+            Toggle(isOn: $mouse.config.smoothScroll.enabled) {
+                Label("Smooth scrolling", systemImage: "arrow.up.and.down")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $mouse.config.buttonsEnabled) {
+                Label("Mouse buttons", systemImage: "computermouse")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .toggleStyle(.switch)

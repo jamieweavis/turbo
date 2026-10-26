@@ -406,19 +406,19 @@ pub enum QuickPress {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct MouseConfig {
-    /// Master switch for everything in this struct.
-    pub enabled: bool,
     pub smooth_scroll: SmoothScrollConfig,
     pub scroll_modifiers: ScrollModifierConfig,
+    /// Off leaves every mouse button alone, keeping the bindings for when it's back on.
+    pub buttons_enabled: bool,
     pub buttons: Vec<ButtonBinding>,
 }
 
 impl Default for MouseConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             smooth_scroll: SmoothScrollConfig::default(),
             scroll_modifiers: ScrollModifierConfig::default(),
+            buttons_enabled: true,
             buttons: vec![
                 ButtonBinding {
                     button: BUTTON_BACK,
@@ -612,9 +612,13 @@ mod tests {
     fn partial_file_fills_in_defaults() {
         let dir = temp_dir("partial");
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("config.json"), r#"{"mouse":{"enabled":false}}"#).unwrap();
+        fs::write(
+            dir.join("config.json"),
+            r#"{"mouse":{"buttons_enabled":false}}"#,
+        )
+        .unwrap();
         let config = ConfigStore::new(&dir).load().unwrap();
-        assert!(!config.mouse.enabled);
+        assert!(!config.mouse.buttons_enabled);
         assert_eq!(config.mouse.smooth_scroll, SmoothScrollConfig::default());
         fs::remove_dir_all(dir).unwrap();
     }
