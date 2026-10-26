@@ -1029,7 +1029,7 @@ private struct ResultRow: View {
             return ("Show", "↩")
         }
         switch result.kind {
-        case .application, .quicklink: return ("Open", "↩")
+        case .application, .quicklink, .settingsPane: return ("Open", "↩")
         case .calculator: return ("Copy", "↩")
         case .systemAction, .command: return ("Run", "↩")
         case .windowAction: return ("Apply", "↩")

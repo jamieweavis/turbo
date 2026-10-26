@@ -5,6 +5,7 @@
 //!   usage-based ranking, and `search` / `open`.
 //! - `system`: the system actions (lock, sleep, dark mode, …) listed by `system::actions`
 //!   and run by `system::perform`.
+//! - `settings_panes`: System Settings panes and privacy sections, opened by URL.
 //! - `hotkeys`: global hotkeys (palette + per-app) and the focus-or-hide app toggle.
 //! - `calc`: calculator, unit and currency conversion (`Calculator::evaluate`).
 //! - `extensions`: quicklinks and shell commands (`extensions::results` / `open`).
@@ -18,6 +19,7 @@ mod extensions;
 pub(crate) mod fuzzy;
 mod hotkeys;
 mod ranking;
+mod settings_panes;
 mod system;
 
 use std::collections::HashMap;
@@ -44,12 +46,13 @@ pub(crate) use hotkeys::HotkeyManager;
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct SearchResult {
     /// Opaque; pass back to `Core::open_result`. Apps use `app:<bundle id>`, system actions
-    /// `system:<action id>`, window actions `window:<action id>`, snippets `snippet:<id>`.
+    /// `system:<action id>`, settings panes `settings:<pane id>`, window actions
+    /// `window:<action id>`, snippets `snippet:<id>`.
     pub id: String,
     pub title: String,
     pub subtitle: String,
     pub kind: ResultKind,
-    /// The app bundle's path, for the shell to draw its icon.
+    /// The app (or settings pane) bundle's path, for the shell to draw its icon.
     pub path: Option<String>,
     /// An SF Symbol name, for results without a bundle (system actions).
     pub symbol: Option<String>,
@@ -64,6 +67,8 @@ pub struct SearchResult {
 pub enum ResultKind {
     Application,
     SystemAction,
+    /// A System Settings pane or section.
+    SettingsPane,
     Calculator,
     Quicklink,
     Command,
@@ -302,7 +307,8 @@ impl Index {
     }
 }
 
-/// A system action with its title and keywords prepared for matching.
+/// A built-in result (system action, settings pane, …) with its title and keywords prepared
+/// for matching.
 struct SystemEntry {
     id: String,
     title: String,
@@ -310,6 +316,8 @@ struct SystemEntry {
     title_match: Prepared,
     keywords: Vec<Prepared>,
     symbol: String,
+    /// A bundle to draw the icon from, instead of `symbol`.
+    path: Option<String>,
     needs_confirmation: bool,
     kind: ResultKind,
 }
@@ -323,8 +331,23 @@ impl SystemEntry {
             title_match: Prepared::new(action.title),
             keywords: action.keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: action.symbol.to_owned(),
+            path: None,
             needs_confirmation: action.needs_confirmation,
             kind: ResultKind::SystemAction,
+        }
+    }
+
+    fn settings_pane(pane: &settings_panes::SettingsPane) -> Self {
+        Self {
+            id: format!("settings:{}", pane.id),
+            title: pane.title.to_owned(),
+            subtitle: pane.parent.unwrap_or("System Settings"),
+            title_match: Prepared::new(pane.title),
+            keywords: pane.keywords.iter().map(|k| Prepared::new(k)).collect(),
+            symbol: "gearshape".to_owned(),
+            path: Some(pane.icon_path()),
+            needs_confirmation: false,
+            kind: ResultKind::SettingsPane,
         }
     }
 
@@ -336,6 +359,7 @@ impl SystemEntry {
             title_match: Prepared::new(title),
             keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: symbol.to_owned(),
+            path: None,
             needs_confirmation: false,
             kind: ResultKind::WindowAction,
         }
@@ -349,6 +373,7 @@ impl SystemEntry {
             title_match: Prepared::new(title),
             keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: symbol.to_owned(),
+            path: None,
             needs_confirmation: false,
             kind: ResultKind::SystemAction,
         }
@@ -365,6 +390,7 @@ impl SystemEntry {
                 .map(|k| Prepared::new(k))
                 .collect(),
             symbol: "eyedropper".to_owned(),
+            path: None,
             needs_confirmation: false,
             kind: ResultKind::SystemAction,
         }
@@ -381,6 +407,7 @@ impl SystemEntry {
                 .map(|k| Prepared::new(k))
                 .collect(),
             symbol: symbol.to_owned(),
+            path: None,
             needs_confirmation: false,
             kind: ResultKind::SystemAction,
         }
@@ -392,7 +419,7 @@ impl SystemEntry {
             title: self.title.clone(),
             subtitle: self.subtitle.into(),
             kind: self.kind,
-            path: None,
+            path: self.path.clone(),
             symbol: Some(self.symbol.clone()),
             needs_confirmation: self.needs_confirmation,
             completion: None,
@@ -418,6 +445,11 @@ impl Launcher {
                 .chain([SystemEntry::pick_color()])
                 .chain(KEEP_AWAKE_COMMANDS.iter().map(SystemEntry::keep_awake))
                 .chain(system::actions().iter().map(SystemEntry::new))
+                .chain(
+                    settings_panes::panes()
+                        .iter()
+                        .map(SystemEntry::settings_pane),
+                )
                 .chain(windows::ACTIONS.iter().map(SystemEntry::window))
                 .collect(),
             usage: Mutex::new(store.load()),
@@ -526,6 +558,8 @@ impl Launcher {
             launch(&app.info.path)?;
         } else if let Some(action) = id.strip_prefix("system:") {
             system::perform(action)?;
+        } else if let Some(pane) = id.strip_prefix("settings:") {
+            settings_panes::open(pane)?;
         } else if let Some(action) = id.strip_prefix("window:") {
             let action = windows::action_for_id(action).ok_or_else(|| CoreError::Other {
                 message: format!("unknown window action {action}"),
@@ -884,6 +918,45 @@ mod tests {
             assert_eq!(find(query)[0].id, "mode:emoji", "{query}");
         }
         assert_eq!(mode_for_id("colors"), Some(PaletteMode::Colors));
+    }
+
+    #[test]
+    fn settings_panes_open_straight_to_the_pane() {
+        let entries: Vec<SystemEntry> = system::actions()
+            .iter()
+            .map(SystemEntry::new)
+            .chain(
+                settings_panes::panes()
+                    .iter()
+                    .map(SystemEntry::settings_pane),
+            )
+            .collect();
+        let find = |query: &str| {
+            rank(
+                &fuzzy::fold_query(query),
+                &Index::default(),
+                &entries,
+                Vec::new(),
+                &Usage::default(),
+                NOW,
+                8,
+            )
+        };
+        let privacy = &find("privacy")[0];
+        assert_eq!(privacy.id, "settings:privacy-security");
+        assert_eq!(privacy.kind, ResultKind::SettingsPane);
+        assert_eq!(privacy.subtitle, "System Settings");
+        assert!(privacy.path.as_deref().unwrap().ends_with(".appex"));
+        for (query, id) in [
+            ("sound", "settings:sound"),
+            ("full disk", "settings:privacy-full-disk-access"),
+            ("dock", "settings:desktop-dock"),
+            ("airpods", "settings:bluetooth"),
+        ] {
+            assert_eq!(find(query)[0].id, id, "{query}");
+        }
+        let fda = &find("full disk access")[0];
+        assert_eq!(fda.subtitle, "Privacy & Security");
     }
 
     #[test]

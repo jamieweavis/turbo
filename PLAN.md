@@ -58,6 +58,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
       `SearchResult`, `LauncherObserver`, `Core` search/open/hotkey methods
 - [x] App index (with change watching) and fuzzy ranking that learns from usage
 - [x] System actions (lock, sleep, dark mode, empty trash, …)
+- [x] System Settings panes and privacy sections (opened directly, with their own icons)
 - [x] Global hotkeys: palette + per-app focus-or-hide
 - [x] Shell: floating palette panel with keyboard navigation, confirmations, Launcher settings pane
 
