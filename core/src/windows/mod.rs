@@ -192,7 +192,7 @@ pub(crate) const ACTIONS: &[ActionEntry] = &[
         "almost-maximize",
         "Almost Maximize Window",
         &["fill", "window"],
-        "rectangle.dashed",
+        "rectangle.center.inset.filled",
     ),
     (
         WindowAction::Center,
@@ -226,6 +226,12 @@ pub(crate) const ACTIONS: &[ActionEntry] = &[
 
 pub(crate) fn action_for_id(id: &str) -> Option<WindowAction> {
     ACTIONS.iter().find(|a| a.1 == id).map(|a| a.0)
+}
+
+/// The window action a palette result (`window:<id>`) applies, for the shell's icons.
+#[uniffi::export]
+pub fn window_action_for_result(result_id: &str) -> Option<WindowAction> {
+    action_for_id(result_id.strip_prefix("window:")?)
 }
 
 /// Moves and resizes the frontmost app's focused window. Remembers frames per window (for
@@ -262,7 +268,13 @@ impl WindowManager {
         if screens.is_empty() {
             return Err(other("no displays found"));
         }
-        let gap = f64::from(self.config.lock().unwrap().gap);
+        let (gap, almost_maximize) = {
+            let config = self.config.lock().unwrap();
+            (
+                f64::from(config.gap),
+                f64::from(config.almost_maximize_percent.clamp(10, 100)) / 100.0,
+            )
+        };
 
         let (pid, app, window) = focused_window()?;
         let before = frame(&window).map_err(ax_error)?;
@@ -273,12 +285,14 @@ impl WindowManager {
             .map(|key| self.memory.lock().unwrap().get(key))
             .unwrap_or_default();
 
-        let plan = layout::plan(action, before, &screens, &memory, gap).map_err(|error| {
-            other(match error {
-                PlanError::NothingToRestore => "Jaycast hasn't moved this window",
-                PlanError::OneDisplay => "there's only one display",
-            })
-        })?;
+        let plan = layout::plan(action, before, &screens, &memory, gap, almost_maximize).map_err(
+            |error| {
+                other(match error {
+                    PlanError::NothingToRestore => "Jaycast hasn't moved this window",
+                    PlanError::OneDisplay => "there's only one display",
+                })
+            },
+        )?;
 
         // The memory lock isn't held across these calls: a slow app shouldn't block the
         // other caller.
@@ -487,6 +501,7 @@ mod tests {
                         &screens,
                         &layout::Memory::default(),
                         0.0,
+                        0.9,
                     );
                     println!("left half would be {plan:?}");
                 }

@@ -875,6 +875,12 @@ private struct ResultRow: View {
             Image(nsImage: AppIcons.icon(forPath: path))
                 .resizable()
                 .aspectRatio(contentMode: .fit)
+        } else if result.kind == .windowAction,
+                  let action = windowActionForResult(resultId: result.id),
+                  action.region != nil {
+            WindowActionIcon(action: action, width: 19)
+                .frame(width: 26, height: 26)
+                .background(.primary.opacity(0.08), in: .rect(cornerRadius: 6))
         } else {
             Image(systemName: result.symbol ?? "gearshape")
                 .font(.system(size: 15, weight: .medium))

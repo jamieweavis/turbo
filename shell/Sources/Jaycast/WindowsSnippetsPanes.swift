@@ -34,6 +34,11 @@ struct WindowsPane: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
+                Picker("Almost Maximize size", selection: $settings.config.windows.almostMaximizePercent) {
+                    ForEach(almostMaximizeOptions, id: \.self) { percent in
+                        Text("\(percent)%").tag(percent)
+                    }
+                }
             } footer: {
                 Text("Moving windows needs Accessibility access. Press a half's hotkey again to cycle its size through ½, ⅔ and ⅓. Every action is also in launcher search, hotkeys or not.")
             }
@@ -69,6 +74,13 @@ struct WindowsPane: View {
         .formStyle(.grouped)
     }
 
+    /// The presets, plus the current size if it was set by hand in the config.
+    private var almostMaximizeOptions: [UInt32] {
+        let presets: [UInt32] = [60, 70, 80, 90, 95]
+        let current = settings.config.windows.almostMaximizePercent
+        return presets.contains(current) ? presets : (presets + [current]).sorted()
+    }
+
     private var gap: Binding<Double> {
         Binding(
             get: { draggedGap ?? Double(settings.config.windows.gap) },
@@ -90,9 +102,9 @@ private struct WindowActionRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: action.symbol)
+            WindowActionIcon(action: action)
                 .foregroundStyle(.secondary)
-                .frame(width: 20)
+                .frame(width: 22)
             Text(action.title)
             Spacer()
             if let problem {

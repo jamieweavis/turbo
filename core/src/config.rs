@@ -124,6 +124,8 @@ pub struct WindowConfig {
     pub hotkeys_enabled: bool,
     /// Points left between snapped windows and between windows and the screen edges.
     pub gap: u32,
+    /// Percent of the visible frame Almost Maximize fills, in each dimension.
+    pub almost_maximize_percent: u32,
     pub hotkeys: Vec<WindowHotkey>,
 }
 
@@ -142,6 +144,7 @@ impl Default for WindowConfig {
         Self {
             hotkeys_enabled: true,
             gap: 0,
+            almost_maximize_percent: 90,
             hotkeys: vec![
                 bind(LeftHalf, KEY_LEFT_ARROW, control_option()),
                 bind(RightHalf, KEY_RIGHT_ARROW, control_option()),

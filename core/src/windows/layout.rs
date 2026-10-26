@@ -15,9 +15,6 @@ const SAME_FRAME_TOLERANCE: f64 = 2.0;
 /// Widths (or heights) a repeated half cycles through.
 const HALF_CYCLE: [f64; 3] = [1.0 / 2.0, 2.0 / 3.0, 1.0 / 3.0];
 
-/// Share of the visible frame an almost-maximised window takes, in each dimension.
-const ALMOST_MAXIMIZE: f64 = 0.9;
-
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct Rect {
     pub x: f64,
@@ -191,6 +188,7 @@ pub(super) fn plan(
     screens: &[Screen],
     memory: &Memory,
     gap: f64,
+    almost_maximize: f64,
 ) -> Result<Plan, PlanError> {
     let current = screen_for(&window, screens);
     match action {
@@ -222,7 +220,7 @@ pub(super) fn plan(
             // A window still where Jaycast snapped it is snapped the same way over there;
             // anything else keeps its relative position and size.
             match memory.still_snapped(&window) {
-                Some(snap) => Ok(snap_plan(snap, &window, target, gap)),
+                Some(snap) => Ok(snap_plan(snap, &window, target, gap, almost_maximize)),
                 None => {
                     let frame = relative_move(&window, &screens[current].visible, &target.visible);
                     Ok(Plan {
@@ -247,6 +245,7 @@ pub(super) fn plan(
                 &window,
                 &screens[current],
                 gap,
+                almost_maximize,
             ))
         }
     }
@@ -262,8 +261,9 @@ fn is_cycling_half(action: WindowAction) -> bool {
     )
 }
 
-/// The frame for a positional action on `screen`.
-fn snap_plan(snap: Snap, window: &Rect, screen: &Screen, gap: f64) -> Plan {
+/// The frame for a positional action on `screen`. An almost-maximised window takes
+/// `almost_maximize` of the visible frame in each dimension.
+fn snap_plan(snap: Snap, window: &Rect, screen: &Screen, gap: f64, almost_maximize: f64) -> Plan {
     use Align::*;
     use WindowAction::*;
     let area = screen.visible.inset(gap);
@@ -293,12 +293,12 @@ fn snap_plan(snap: Snap, window: &Rect, screen: &Screen, gap: f64) -> Plan {
         BottomRightSixth => ((2.0 * third, 1.0), (0.5, 1.0), (End, End)),
         Maximize => (full, full, (Middle, Middle)),
         AlmostMaximize => {
-            let margin = (1.0 - ALMOST_MAXIMIZE) / 2.0;
+            let margin = (1.0 - almost_maximize) / 2.0;
             let inner = Rect::new(
                 area.x + area.w * margin,
                 area.y + area.h * margin,
-                area.w * ALMOST_MAXIMIZE,
-                area.h * ALMOST_MAXIMIZE,
+                area.w * almost_maximize,
+                area.h * almost_maximize,
             );
             return Plan {
                 frame: inner.rounded(),
@@ -421,8 +421,11 @@ mod tests {
 
     const WINDOW: Rect = Rect::new(100.0, 100.0, 800.0, 600.0);
 
+    /// The default almost-maximise share.
+    const ALMOST: f64 = 0.9;
+
     fn frame(action: WindowAction, window: Rect, gap: f64) -> Rect {
-        plan(action, window, &[LAPTOP], &Memory::default(), gap)
+        plan(action, window, &[LAPTOP], &Memory::default(), gap, ALMOST)
             .unwrap()
             .frame
     }
@@ -430,7 +433,7 @@ mod tests {
     /// Plans `action`, then remembers it as `WindowManager` does (assuming the window took
     /// the frame exactly), returning the new frame.
     fn apply(action: WindowAction, window: Rect, screens: &[Screen], memory: &mut Memory) -> Rect {
-        let plan = plan(action, window, screens, memory, 0.0).unwrap();
+        let plan = plan(action, window, screens, memory, 0.0, ALMOST).unwrap();
         if plan.forget {
             *memory = Memory::default();
         } else {
@@ -585,7 +588,7 @@ mod tests {
                 continue;
             }
             let window = Rect::new(13.3, 47.7, 333.3, 222.2);
-            let f = plan(action, window, &[screen], &Memory::default(), 7.0)
+            let f = plan(action, window, &[screen], &Memory::default(), 7.0, ALMOST)
                 .unwrap()
                 .frame;
             for v in [f.x, f.y, f.w, f.h] {
@@ -657,6 +660,17 @@ mod tests {
         let f = frame(AlmostMaximize, WINDOW, 0.0);
         assert_eq!(f, Rect::new(72.0, 69.0, 1296.0, 787.0));
         assert_eq!(f.x, 1440.0 - f.right());
+        let smaller = plan(
+            AlmostMaximize,
+            WINDOW,
+            &[LAPTOP],
+            &Memory::default(),
+            0.0,
+            0.7,
+        )
+        .unwrap()
+        .frame;
+        assert_eq!(smaller, Rect::new(216.0, 156.0, 1008.0, 613.0));
     }
 
     #[test]
@@ -682,7 +696,7 @@ mod tests {
         assert_eq!(apply(Restore, snapped, &[LAPTOP], &mut memory), WINDOW);
         assert_eq!(memory, Memory::default());
         assert_eq!(
-            plan(Restore, WINDOW, &[LAPTOP], &memory, 0.0),
+            plan(Restore, WINDOW, &[LAPTOP], &memory, 0.0, ALMOST),
             Err(PlanError::NothingToRestore)
         );
     }
@@ -737,6 +751,7 @@ mod tests {
             &[LAPTOP, EXTERNAL],
             &Memory::default(),
             0.0,
+            ALMOST,
         )
         .unwrap()
         .frame;
@@ -760,18 +775,18 @@ mod tests {
         let mut window = WINDOW;
         let mut visited = Vec::new();
         for _ in 0..3 {
-            window = plan(NextDisplay, window, &screens, &memory, 0.0)
+            window = plan(NextDisplay, window, &screens, &memory, 0.0, ALMOST)
                 .unwrap()
                 .frame;
             visited.push(screen_for(&window, &screens));
         }
         assert_eq!(visited, [1, 2, 0]);
-        let back = plan(PreviousDisplay, WINDOW, &screens, &memory, 0.0)
+        let back = plan(PreviousDisplay, WINDOW, &screens, &memory, 0.0, ALMOST)
             .unwrap()
             .frame;
         assert_eq!(screen_for(&back, &screens), 2);
         assert_eq!(
-            plan(NextDisplay, WINDOW, &[LAPTOP], &memory, 0.0),
+            plan(NextDisplay, WINDOW, &[LAPTOP], &memory, 0.0, ALMOST),
             Err(PlanError::OneDisplay)
         );
     }
@@ -786,6 +801,7 @@ mod tests {
             &[LAPTOP, EXTERNAL],
             &Memory::default(),
             0.0,
+            ALMOST,
         )
         .unwrap();
         assert_eq!(
@@ -805,6 +821,7 @@ mod tests {
             &[LAPTOP, EXTERNAL],
             &Memory::default(),
             0.0,
+            ALMOST,
         )
         .unwrap()
         .frame;
@@ -829,19 +846,35 @@ mod tests {
 
     #[test]
     fn fixed_size_windows_are_aligned_within_the_target() {
-        let p = plan(LeftHalf, WINDOW, &[LAPTOP], &Memory::default(), 0.0).unwrap();
+        let p = plan(LeftHalf, WINDOW, &[LAPTOP], &Memory::default(), 0.0, ALMOST).unwrap();
         // Narrower than the half: left edge, centred vertically.
         assert_eq!(
             place_fixed_size(&p, (400.0, 300.0)),
             Rect::new(0.0, 313.0, 400.0, 300.0)
         );
-        let p = plan(RightHalf, WINDOW, &[LAPTOP], &Memory::default(), 0.0).unwrap();
+        let p = plan(
+            RightHalf,
+            WINDOW,
+            &[LAPTOP],
+            &Memory::default(),
+            0.0,
+            ALMOST,
+        )
+        .unwrap();
         // Wider than the half: right edge on the screen edge.
         assert_eq!(
             place_fixed_size(&p, (1000.0, 300.0)),
             Rect::new(440.0, 313.0, 1000.0, 300.0)
         );
-        let p = plan(BottomRight, WINDOW, &[LAPTOP], &Memory::default(), 0.0).unwrap();
+        let p = plan(
+            BottomRight,
+            WINDOW,
+            &[LAPTOP],
+            &Memory::default(),
+            0.0,
+            ALMOST,
+        )
+        .unwrap();
         assert_eq!(
             place_fixed_size(&p, (300.0, 200.0)),
             Rect::new(1140.0, 700.0, 300.0, 200.0)
