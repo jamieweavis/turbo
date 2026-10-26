@@ -12,6 +12,7 @@ final class AppModel {
     let launcher: LauncherSettings
     @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
+    @ObservationIgnored private let commandOutput = CommandOutputWindows()
     private(set) var isInputRunning = false
     private(set) var inputError: String?
 
@@ -40,6 +41,9 @@ final class AppModel {
             onAppsChanged: { [launcher, palette] in
                 launcher.refreshApps()
                 if palette.isVisible { palette.model.search() }
+            },
+            onCommandFinished: { [commandOutput] name, output, success in
+                commandOutput.show(name: name, output: output, success: success)
             }
         ))
         // Hotkeys don't need Accessibility, so they work before it's granted.

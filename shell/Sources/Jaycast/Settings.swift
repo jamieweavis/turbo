@@ -37,7 +37,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, mouse, monitor
+    case general, launcher, quicklinks, commands, mouse, monitor
 
     var id: Self { self }
 
@@ -45,6 +45,8 @@ enum SettingsPane: CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .launcher: "Launcher"
+        case .quicklinks: "Quicklinks"
+        case .commands: "Commands"
         case .mouse: "Mouse"
         case .monitor: "Monitor"
         }
@@ -54,6 +56,8 @@ enum SettingsPane: CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .launcher: "magnifyingglass"
+        case .quicklinks: "link"
+        case .commands: "terminal"
         case .mouse: "computermouse"
         case .monitor: "display"
         }
@@ -79,6 +83,8 @@ struct SettingsView: View {
                 switch pane {
                 case .general: GeneralPane(model: model, onShowOnboarding: onShowOnboarding)
                 case .launcher: LauncherPane(settings: model.launcher)
+                case .quicklinks: QuicklinksPane(settings: model.launcher)
+                case .commands: CommandsPane(settings: model.launcher)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
                 }

@@ -57,6 +57,35 @@ final class LauncherSettings {
     }
 
     /// The app's bundle path for its icon: the index first, then Launch Services.
+    // MARK: Quicklinks and commands
+
+    /// Adds `quicklink`, or replaces the one with its id.
+    func save(_ quicklink: Quicklink) {
+        if let index = config.quicklinks.firstIndex(where: { $0.id == quicklink.id }) {
+            config.quicklinks[index] = quicklink
+        } else {
+            config.quicklinks.append(quicklink)
+        }
+    }
+
+    func save(_ command: ShellCommand) {
+        if let index = config.commands.firstIndex(where: { $0.id == command.id }) {
+            config.commands[index] = command
+        } else {
+            config.commands.append(command)
+        }
+    }
+
+    /// Whether another quicklink or command (not `id`) already uses `keyword`. Keywords
+    /// decide what `<keyword> <argument>` runs, so they must be unique across both lists.
+    func isKeywordTaken(_ keyword: String, excludingID id: String) -> Bool {
+        let keyword = keyword.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !keyword.isEmpty else { return false }
+        let quicklinks = config.quicklinks.lazy.filter { $0.id != id }.map(\.keyword)
+        let commands = config.commands.lazy.filter { $0.id != id }.map(\.keyword)
+        return (Array(quicklinks) + Array(commands)).contains { $0.trimmingCharacters(in: .whitespaces).lowercased() == keyword }
+    }
+
     func path(forBundleID bundleID: String) -> String? {
         apps.first { $0.bundleId == bundleID }?.path
             ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)?.path(percentEncoded: false)
@@ -73,18 +102,21 @@ final class LauncherSettings {
     }
 }
 
-/// Receives the core's launcher callbacks (hotkeys on the main thread, app index changes on
-/// a background thread) and forwards them, in order, to the main actor.
+/// Receives the core's launcher callbacks (hotkeys on the main thread, app index changes and
+/// command results on background threads) and forwards them, in order, to the main actor.
 final class LauncherObserverBridge: LauncherObserver {
     private let onTogglePalette: @MainActor @Sendable () -> Void
     private let onAppsChanged: @MainActor @Sendable () -> Void
+    private let onCommandFinished: @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void
 
     init(
         onTogglePalette: @escaping @MainActor @Sendable () -> Void,
-        onAppsChanged: @escaping @MainActor @Sendable () -> Void
+        onAppsChanged: @escaping @MainActor @Sendable () -> Void,
+        onCommandFinished: @escaping @MainActor @Sendable (_ name: String, _ output: String, _ success: Bool) -> Void
     ) {
         self.onTogglePalette = onTogglePalette
         self.onAppsChanged = onAppsChanged
+        self.onCommandFinished = onCommandFinished
     }
 
     func togglePalette() {
@@ -99,8 +131,11 @@ final class LauncherObserverBridge: LauncherObserver {
         }
     }
 
-    // TODO(step 4): show command output.
-    func commandFinished(name: String, output: String, success: Bool) {}
+    func commandFinished(name: String, output: String, success: Bool) {
+        DispatchQueue.main.async { [onCommandFinished] in
+            MainActor.assumeIsolated { onCommandFinished(name, output, success) }
+        }
+    }
 }
 
 /// App icons by bundle path, cached since the palette redraws rows on every keystroke.

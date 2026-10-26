@@ -128,6 +128,8 @@ enum PaletteLayout {
     static let width: CGFloat = 680
     static let searchHeight: CGFloat = 60
     static let rowHeight: CGFloat = 44
+    /// Calculator results get a taller row for their large answer.
+    static let calculatorRowHeight: CGFloat = 64
     static let messageHeight: CGFloat = 36
     static let listPadding: CGFloat = 8
     static let maxVisibleRows = 8
@@ -140,10 +142,14 @@ enum PaletteLayout {
             height += messageHeight
         }
         if !model.results.isEmpty {
-            let rows = min(model.results.count, maxVisibleRows)
-            height += 1 + listPadding * 2 + CGFloat(rows) * rowHeight
+            let rows = model.results.prefix(maxVisibleRows).reduce(0) { $0 + rowHeight(for: $1) }
+            height += 1 + listPadding * 2 + rows
         }
         return height
+    }
+
+    static func rowHeight(for result: SearchResult) -> CGFloat {
+        result.kind == .calculator ? calculatorRowHeight : rowHeight
     }
 }
 
@@ -162,16 +168,22 @@ final class PaletteModel {
     /// A result that needs confirming; ⏎ again runs it, Esc backs out.
     private(set) var confirming: SearchResult?
     private(set) var error: String?
+    /// Shown briefly after copying a calculator result, before the palette closes.
+    private(set) var copied: String?
     /// Bumped on every show, so the search field takes focus and selects its text.
     private(set) var focusRequest = 0
+    /// Bumped when a completion fills the field, so the cursor moves to the end.
+    private(set) var cursorToEndRequest = 0
 
     @ObservationIgnored var onClose: (() -> Void)?
     @ObservationIgnored private let core: Core
     /// Where the mouse was when it last picked a row: rows scrolling under a still pointer
     /// shouldn't steal the keyboard selection.
     @ObservationIgnored private var lastHoverLocation: NSPoint?
+    @ObservationIgnored private var closeTask: Task<Void, Never>?
 
     private static let limit: UInt32 = 20
+    private static let copiedVisibleFor = Duration.milliseconds(600)
 
     init(core: Core) {
         self.core = core
@@ -179,7 +191,9 @@ final class PaletteModel {
 
     /// The line between the search field and the results, if any.
     var message: PaletteMessage? {
-        if let confirming {
+        if let copied {
+            .copied(copied)
+        } else if let confirming {
             .confirm(confirming.title)
         } else if let error {
             .error(error)
@@ -208,8 +222,11 @@ final class PaletteModel {
     }
 
     func didHide() {
+        closeTask?.cancel()
+        closeTask = nil
         confirming = nil
         error = nil
+        copied = nil
     }
 
     func move(by offset: Int) {
@@ -233,19 +250,51 @@ final class PaletteModel {
         open(result)
     }
 
+    /// Tab: fill in the selected result's completion (e.g. a quicklink's keyword). Results
+    /// without one ignore Tab, so it never surprises by rewriting the query.
+    func completeSelected() {
+        guard let completion = selectedResult?.completion else { return }
+        complete(with: completion)
+    }
+
     func open(_ result: SearchResult) {
+        guard copied == nil else { return }
+        if let completion = result.completion {
+            complete(with: completion)
+            return
+        }
         if result.needsConfirmation, confirming?.id != result.id {
             confirming = result
             return
         }
         do {
-            _ = try core.openResult(id: result.id, query: query)
+            let outcome = try core.openResult(id: result.id, query: query)
             confirming = nil
             error = nil
-            onClose?()
+            switch outcome {
+            case .done:
+                onClose?()
+            case .copied(let text):
+                showCopied(text)
+            }
         } catch {
             confirming = nil
             self.error = error.userMessage
+        }
+    }
+
+    private func complete(with completion: String) {
+        query = completion
+        cursorToEndRequest += 1
+    }
+
+    private func showCopied(_ text: String) {
+        copied = text
+        closeTask?.cancel()
+        closeTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.copiedVisibleFor)
+            guard !Task.isCancelled else { return }
+            self?.onClose?()
         }
     }
 
@@ -264,6 +313,7 @@ final class PaletteModel {
 }
 
 enum PaletteMessage: Equatable {
+    case copied(String)
     case confirm(String)
     case error(String)
     case noResults(String)
@@ -282,11 +332,16 @@ private struct PaletteView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.secondary)
-                SearchField(text: $model.query, focusRequest: model.focusRequest) { command in
+                SearchField(
+                    text: $model.query,
+                    focusRequest: model.focusRequest,
+                    cursorToEndRequest: model.cursorToEndRequest
+                ) { command in
                     switch command {
                     case .up: model.move(by: -1)
                     case .down: model.move(by: 1)
                     case .submit: model.openSelected()
+                    case .complete: model.completeSelected()
                     case .cancel: model.cancel()
                     }
                 }
@@ -315,6 +370,10 @@ private struct MessageRow: View {
     var body: some View {
         HStack(spacing: 8) {
             switch message {
+            case .copied(let text):
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("Copied").fontWeight(.semibold)
+                Text(text).foregroundStyle(.secondary).lineLimit(1)
             case .confirm(let title):
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 Text("\(title)?").fontWeight(.semibold)
@@ -371,35 +430,68 @@ private struct ResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            icon
-                .frame(width: 28, height: 28)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(result.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .lineLimit(1)
-                if !result.subtitle.isEmpty {
-                    Text(result.subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+            if result.kind == .calculator {
+                calculation
+            } else {
+                icon
+                    .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(result.title)
+                        .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
+                    if !result.subtitle.isEmpty {
+                        Text(result.subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
             Spacer(minLength: 0)
             if isSelected {
-                Text(result.kind == .application ? "Open" : "Run")
+                Text(hint.label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("↩")
+                Text(hint.key)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: PaletteLayout.rowHeight)
+        .frame(height: PaletteLayout.rowHeight(for: result))
         .background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.1))
             }
+        }
+    }
+
+    /// The large answer with the expression underneath.
+    private var calculation: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(result.title)
+                .font(.system(size: 28, weight: .semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            if !result.subtitle.isEmpty {
+                Text(result.subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.leading, 4)
+    }
+
+    /// What ⏎ will do with this result.
+    private var hint: (label: String, key: String) {
+        if result.completion != nil {
+            return ("Complete", "⇥")
+        }
+        switch result.kind {
+        case .application, .quicklink: return ("Open", "↩")
+        case .calculator: return ("Copy", "↩")
+        case .systemAction, .command: return ("Run", "↩")
         }
     }
 
@@ -423,9 +515,10 @@ private struct ResultRow: View {
 private struct SearchField: NSViewRepresentable {
     @Binding var text: String
     let focusRequest: Int
+    let cursorToEndRequest: Int
     let onCommand: (Command) -> Void
 
-    enum Command { case up, down, submit, cancel }
+    enum Command { case up, down, submit, complete, cancel }
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
@@ -433,7 +526,7 @@ private struct SearchField: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 22)
-        field.placeholderString = "Search apps and actions"
+        field.placeholderString = "Search apps and actions, or calculate"
         field.cell?.wraps = false
         field.cell?.isScrollable = true
         field.delegate = context.coordinator
@@ -453,6 +546,11 @@ private struct SearchField: NSViewRepresentable {
                 field.selectText(nil)
             }
         }
+        if context.coordinator.cursorToEndRequest != cursorToEndRequest {
+            context.coordinator.cursorToEndRequest = cursorToEndRequest
+            let end = (field.stringValue as NSString).length
+            field.currentEditor()?.selectedRange = NSRange(location: end, length: 0)
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -463,6 +561,7 @@ private struct SearchField: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: SearchField
         var focusRequest = 0
+        var cursorToEndRequest = 0
 
         init(parent: SearchField) {
             self.parent = parent
@@ -479,6 +578,7 @@ private struct SearchField: NSViewRepresentable {
             case #selector(NSResponder.moveUp(_:)): parent.onCommand(.up)
             case #selector(NSResponder.moveDown(_:)): parent.onCommand(.down)
             case #selector(NSResponder.insertNewline(_:)): parent.onCommand(.submit)
+            case #selector(NSResponder.insertTab(_:)): parent.onCommand(.complete)
             case #selector(NSResponder.cancelOperation(_:)): parent.onCommand(.cancel)
             default: return false
             }

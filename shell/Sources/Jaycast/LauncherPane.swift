@@ -35,6 +35,12 @@ struct LauncherPane: View {
             }
 
             Section {
+                Toggle("Show calculator and conversion results", isOn: $settings.config.calculator)
+            } footer: {
+                Text("Type maths, units or currencies, like “12% of 80” or “5 km in miles”. Press ↩ to copy the answer.")
+            }
+
+            Section {
                 ForEach(Array(settings.config.appHotkeys.enumerated()), id: \.offset) { index, appHotkey in
                     AppHotkeyRow(
                         name: appHotkey.name,
