@@ -17,7 +17,7 @@ struct StatusMenu: View {
             }
 
             mouse
-
+            Divider()
             keyboard
 
             if !model.accessibility.isGranted {
