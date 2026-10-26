@@ -962,13 +962,16 @@ private struct PaletteView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let menu = model.actionsMenu {
-                // A click anywhere else closes the menu without acting on what's under it.
-                Color.black.opacity(0.001)
-                    .onTapGesture { model.closeActions() }
-                ActionsMenuView(model: model, menu: menu)
-                    .padding(.trailing, 10)
-                    .padding(.bottom, ActionsMenuLayout.bottomInset(for: model.mode))
-                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottomTrailing)))
+                // The click catcher fills the palette, so the menu needs its own alignment.
+                ZStack(alignment: .bottomTrailing) {
+                    // A click anywhere else closes the menu without acting on what's under it.
+                    Color.black.opacity(0.001)
+                        .onTapGesture { model.closeActions() }
+                    ActionsMenuView(model: model, menu: menu)
+                        .padding(.trailing, 10)
+                        .padding(.bottom, ActionsMenuLayout.bottomInset(for: model.mode))
+                        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottomTrailing)))
+                }
             }
         }
         .animation(.snappy(duration: 0.15), value: model.actionsMenu != nil)

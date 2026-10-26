@@ -328,10 +328,12 @@ struct ActionsMenuView: View {
             .frame(height: ActionsMenuLayout.fieldHeight)
         }
         .frame(width: ActionsMenuLayout.width)
-        .glassEffect(.regular.tint(.black.opacity(0.45)), in: .rect(cornerRadius: ActionsMenuLayout.cornerRadius))
+        // Lighter than the palette behind it, so it reads as a layer on top.
+        .background(Color(white: 0.24), in: .rect(cornerRadius: ActionsMenuLayout.cornerRadius))
+        .glassEffect(.regular.tint(.white.opacity(0.06)), in: .rect(cornerRadius: ActionsMenuLayout.cornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: ActionsMenuLayout.cornerRadius)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                .strokeBorder(.white.opacity(0.2), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.35), radius: 18, y: 6)
     }
@@ -397,7 +399,7 @@ private struct ActionRow: View {
         .frame(height: ActionsMenuLayout.rowHeight)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(0.1))
+                RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.2))
             }
         }
     }
