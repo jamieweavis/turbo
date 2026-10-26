@@ -252,6 +252,8 @@ enum PaletteKey {
     case copyPath
     /// ⌘Y
     case quickLook
+    /// ⌘K: open or close the actions menu.
+    case actions
 
     init?(_ event: NSEvent, fieldHasSelection: Bool) {
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return nil }
@@ -262,6 +264,7 @@ enum PaletteKey {
             switch event.charactersIgnoringModifiers {
             case "p": self = .togglePin
             case "y": self = .quickLook
+            case "k": self = .actions
             case "c" where !fieldHasSelection: self = .copyPath
             default: return nil
             }
@@ -310,8 +313,20 @@ enum PaletteLayout {
         }
     }
 
+    /// Room for the actions menu above whatever it floats over, so it never gets clipped.
     @MainActor
     static func size(for model: PaletteModel) -> CGSize {
+        var size = contentSize(for: model)
+        if let menu = model.actionsMenu {
+            let needed = searchHeight + listPadding + ActionsMenuLayout.fullHeight(for: menu)
+                + ActionsMenuLayout.bottomInset(for: model.mode)
+            size.height = max(size.height, needed)
+        }
+        return size
+    }
+
+    @MainActor
+    private static func contentSize(for model: PaletteModel) -> CGSize {
         let message = model.message != nil ? messageHeight : 0
         switch model.mode {
         case .search:
@@ -372,6 +387,10 @@ final class PaletteModel {
     private(set) var focusRequest = 0
     /// Bumped when a completion fills the field, so the cursor moves to the end.
     private(set) var cursorToEndRequest = 0
+    /// Bumped when the actions menu closes, so typing goes back to the search field.
+    private(set) var refocusRequest = 0
+    /// The ⌘K menu of everything that can be done with the selection, while it's open.
+    private(set) var actionsMenu: ActionsMenu?
 
     let clipboard: ClipboardBrowser
     let files: FileBrowser
@@ -390,7 +409,7 @@ final class PaletteModel {
     @ObservationIgnored var onKeepAwakeChanged: ((Bool) -> Void)?
     /// A colour was deleted from the history here.
     @ObservationIgnored var onColorsChanged: (() -> Void)?
-    @ObservationIgnored private let core: Core
+    @ObservationIgnored let core: Core
     @ObservationIgnored private let settings: LauncherSettings
     /// Where the mouse was when it last picked a row: rows scrolling under a still pointer
     /// shouldn't steal the keyboard selection.
@@ -492,6 +511,7 @@ final class PaletteModel {
     /// Switches mode in place, starting from an empty query.
     func enter(_ mode: PaletteMode) {
         self.mode = mode
+        actionsMenu = nil
         confirming = nil
         error = nil
         copied = nil
@@ -506,6 +526,7 @@ final class PaletteModel {
     func didHide() {
         closeTask?.cancel()
         closeTask = nil
+        actionsMenu = nil
         confirming = nil
         error = nil
         copied = nil
@@ -517,7 +538,7 @@ final class PaletteModel {
         if self.mode == mode { refresh() }
     }
 
-    private func refresh() {
+    func refresh() {
         switch mode {
         case .search: search()
         case .clipboard: clipboard.refresh(query: query)
@@ -593,11 +614,22 @@ final class PaletteModel {
         }
     }
 
-    /// The ⌘ shortcuts; returns whether the key did something in this mode.
+    /// The ⌘ shortcuts; returns whether the key did something in this mode. Any of them
+    /// closes the actions menu first, since they act on the selection behind it.
     func handle(_ key: PaletteKey) -> Bool {
+        if key == .actions {
+            toggleActions()
+            return true
+        }
+        closeActions()
         switch (mode, key) {
         case (.search, .alternateOpen):
-            openSelected()
+            // The result's second action, as listed in the actions menu; ↩ for the rest.
+            if let action = actions().first(where: { $0.keys == ActionKeys.alternate }) {
+                action.perform()
+            } else {
+                openSelected()
+            }
         case (.clipboard, .alternateOpen):
             pasteSelected(paste: !clipboardConfig.pasteOnOpen)
         case (.clipboard, .togglePin):
@@ -667,10 +699,12 @@ final class PaletteModel {
         }
     }
 
-    /// Esc: back out of a confirmation or error, then clear the query, then leave clipboard,
-    /// file, colour or emoji mode for search, then close.
+    /// Esc: close the actions menu, back out of a confirmation or error, then clear the
+    /// query, then leave clipboard, file, colour or emoji mode for search, then close.
     func cancel() {
-        if confirming != nil {
+        if actionsMenu != nil {
+            closeActions()
+        } else if confirming != nil {
             confirming = nil
         } else if error != nil || clipboard.error != nil || files.error != nil || colors.error != nil
                     || emoji.error != nil {
@@ -736,12 +770,16 @@ final class PaletteModel {
         }
     }
 
-    /// Copying a path is a UI convenience, so it stays in the shell.
     func copySelectedPath() {
         guard let file = files.selected else { return }
+        copy(file.path)
+    }
+
+    /// Copying a path or name is a UI convenience, so it stays in the shell.
+    func copy(_ text: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(file.path, forType: .string)
-        showCopied(file.path)
+        NSPasteboard.general.setString(text, forType: .string)
+        showCopied(text)
     }
 
     // MARK: Colour actions
@@ -762,7 +800,7 @@ final class PaletteModel {
     }
 
     /// The magnifier covers the screen, so the palette gets out of its way first.
-    private func pickColor() {
+    func pickColor() {
         onClose?()
         onPickColor?()
     }
@@ -788,7 +826,43 @@ final class PaletteModel {
         cursorToEndRequest += 1
     }
 
-    private func showCopied(_ text: String) {
+    /// Shows an error from an action under the search field.
+    func report(_ error: Error) {
+        self.error = error.userMessage
+    }
+
+    // MARK: Actions menu
+
+    /// ⌘K: lists what can be done with the selection; nothing opens without a selection.
+    func toggleActions() {
+        if actionsMenu != nil {
+            closeActions()
+            return
+        }
+        let actions = actions()
+        guard !actions.isEmpty else { return }
+        confirming = nil
+        actionsMenu = ActionsMenu(actions: actions)
+    }
+
+    func closeActions() {
+        guard actionsMenu != nil else { return }
+        actionsMenu = nil
+        refocusRequest += 1
+    }
+
+    /// Runs an action from the menu; ones that need confirming ask on the first ↩.
+    func run(_ action: PaletteAction) {
+        guard let menu = actionsMenu else { return }
+        if action.needsConfirmation, menu.confirming != action.id {
+            menu.confirming = action.id
+            return
+        }
+        closeActions()
+        action.perform()
+    }
+
+    func showCopied(_ text: String) {
         copied = text
         closeTask?.cancel()
         closeTask = Task { [weak self] in
@@ -833,6 +907,7 @@ private struct PaletteView: View {
                     placeholder: model.mode.placeholder,
                     focusRequest: model.focusRequest,
                     cursorToEndRequest: model.cursorToEndRequest,
+                    refocusRequest: model.refocusRequest,
                     takesSidewaysArrows: model.mode.isGrid
                 ) { command in
                     switch command {
@@ -885,6 +960,18 @@ private struct PaletteView: View {
             RoundedRectangle(cornerRadius: PaletteLayout.cornerRadius)
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         }
+        .overlay(alignment: .bottomTrailing) {
+            if let menu = model.actionsMenu {
+                // A click anywhere else closes the menu without acting on what's under it.
+                Color.black.opacity(0.001)
+                    .onTapGesture { model.closeActions() }
+                ActionsMenuView(model: model, menu: menu)
+                    .padding(.trailing, 10)
+                    .padding(.bottom, ActionsMenuLayout.bottomInset(for: model.mode))
+                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottomTrailing)))
+            }
+        }
+        .animation(.snappy(duration: 0.15), value: model.actionsMenu != nil)
     }
 }
 
@@ -1103,7 +1190,10 @@ private struct ActionBar: View {
     private var actions: [FloatingAction] {
         guard let result = model.selectedResult else { return [] }
         let action = result.primaryAction
-        return [FloatingAction(label: action.label, keys: [action.key]) { model.openSelected() }]
+        return [
+            FloatingAction(label: action.label, keys: [action.key]) { model.openSelected() },
+            .showActions(model),
+        ]
     }
 }
 
@@ -1111,6 +1201,11 @@ struct FloatingAction {
     let label: String
     let keys: [String]
     let perform: () -> Void
+
+    @MainActor
+    static func showActions(_ model: PaletteModel) -> FloatingAction {
+        FloatingAction(label: "Actions", keys: ["⌘", "K"]) { model.toggleActions() }
+    }
 }
 
 /// A settings button on the left and the selection's actions in a capsule on the right,
@@ -1224,13 +1319,16 @@ extension String {
 
 /// An unbezeled AppKit text field: SwiftUI's can't select all on demand or hand over the
 /// arrow, return and escape keys before the field acts on them.
-private struct SearchField: NSViewRepresentable {
+struct SearchField: NSViewRepresentable {
     @Binding var text: String
     let placeholder: String
+    var fontSize: CGFloat = 22
     let focusRequest: Int
-    let cursorToEndRequest: Int
+    var cursorToEndRequest = 0
+    /// Takes focus back without selecting the text, leaving the cursor at the end.
+    var refocusRequest = 0
     /// ← and → move through a grid instead of the cursor.
-    let takesSidewaysArrows: Bool
+    var takesSidewaysArrows = false
     let onCommand: (Command) -> Void
 
     enum Command { case up, down, left, right, submit, alternateSubmit, complete, cancel }
@@ -1240,7 +1338,7 @@ private struct SearchField: NSViewRepresentable {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: 22)
+        field.font = .systemFont(ofSize: fontSize)
         field.placeholderString = placeholder
         field.cell?.wraps = false
         field.cell?.isScrollable = true
@@ -1264,6 +1362,14 @@ private struct SearchField: NSViewRepresentable {
                 field.selectText(nil)
             }
         }
+        if context.coordinator.refocusRequest != refocusRequest {
+            context.coordinator.refocusRequest = refocusRequest
+            DispatchQueue.main.async {
+                guard field.window?.makeFirstResponder(field) == true else { return }
+                let end = (field.stringValue as NSString).length
+                field.currentEditor()?.selectedRange = NSRange(location: end, length: 0)
+            }
+        }
         if context.coordinator.cursorToEndRequest != cursorToEndRequest {
             context.coordinator.cursorToEndRequest = cursorToEndRequest
             let end = (field.stringValue as NSString).length
@@ -1280,6 +1386,7 @@ private struct SearchField: NSViewRepresentable {
         var parent: SearchField
         var focusRequest = 0
         var cursorToEndRequest = 0
+        var refocusRequest = 0
 
         init(parent: SearchField) {
             self.parent = parent

@@ -7,6 +7,7 @@
 //!   and run by `system::perform`.
 //! - `settings_panes`: System Settings panes and privacy sections, opened by URL.
 //! - `hotkeys`: global hotkeys (palette + per-app) and the focus-or-hide app toggle.
+//! - `running`: running apps for the palette's actions menu (is running, hide, quit).
 //! - `calc`: calculator, unit and currency conversion (`Calculator::evaluate`).
 //! - `extensions`: quicklinks and shell commands (`extensions::results` / `open`).
 //!
@@ -19,6 +20,7 @@ mod extensions;
 pub(crate) mod fuzzy;
 mod hotkeys;
 mod ranking;
+pub(crate) mod running;
 mod settings_panes;
 mod system;
 
@@ -583,6 +585,17 @@ impl Launcher {
         }
         self.record(id, query);
         Ok(outcome)
+    }
+
+    /// Forgets how often and for which queries `id` was opened.
+    pub fn reset_ranking(&self, id: &str) -> Result<(), CoreError> {
+        let now = now();
+        let snapshot = {
+            let mut usage = self.usage.lock().unwrap();
+            usage.forget(id);
+            usage.clone()
+        };
+        self.store.save(&snapshot, now)
     }
 
     /// Every indexed app, sorted by name (for choosing app hotkeys in settings).

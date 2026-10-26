@@ -314,6 +314,25 @@ impl Core {
         self.launcher.open(&id, &query)
     }
 
+    /// Forgets a result's usage history (the actions menu's Reset Ranking).
+    pub fn reset_result_ranking(&self, id: String) -> Result<(), CoreError> {
+        self.launcher.reset_ranking(&id)
+    }
+
+    /// Whether an app with this bundle id is running (to offer Hide and Quit).
+    pub fn is_app_running(&self, bundle_id: String) -> bool {
+        launcher::running::is_running(&bundle_id)
+    }
+
+    pub fn hide_app(&self, bundle_id: String) -> Result<(), CoreError> {
+        launcher::running::hide(&bundle_id)
+    }
+
+    /// Asks the app to quit, or with `force` kills it without letting it save.
+    pub fn quit_app(&self, bundle_id: String, force: bool) -> Result<(), CoreError> {
+        launcher::running::quit(&bundle_id, force)
+    }
+
     /// Tells the core whether the palette is showing, so snippet keywords typed into it
     /// don't expand. Call on every show and hide.
     pub fn set_palette_visible(&self, visible: bool) {

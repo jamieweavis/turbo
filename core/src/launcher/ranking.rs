@@ -113,6 +113,15 @@ impl Usage {
         ids
     }
 
+    /// Forgets everything recorded for `id`, so it ranks on match quality alone again.
+    pub fn forget(&mut self, id: &str) {
+        self.items.remove(id);
+        for ids in self.queries.values_mut() {
+            ids.remove(id);
+        }
+        self.queries.retain(|_, ids| !ids.is_empty());
+    }
+
     /// Drops counters that have decayed to nothing, so the file doesn't grow forever.
     fn prune(&mut self, now: f64) {
         self.items.retain(|_, d| d.value_at(now) >= PRUNE_BELOW);
@@ -233,6 +242,24 @@ mod tests {
         let mut usage = Usage::default();
         usage.record("app:ss", &q("sys set"), 0.0);
         assert!(usage.boost("app:ss", &q("sysset"), 0.0) > usage.boost("app:ss", &q("x"), 0.0));
+    }
+
+    #[test]
+    fn forgetting_drops_frecency_and_query_affinity() {
+        let mut usage = Usage::default();
+        usage.record("app:safari", &q("saf"), 0.0);
+        usage.record("app:slack", &q("s"), 0.0);
+        usage.forget("app:safari");
+        assert_eq!(usage.frecency("app:safari", 0.0), 0.0);
+        assert_eq!(usage.boost("app:safari", &q("sa"), 0.0), 0);
+        assert!(
+            !usage.queries.contains_key("sa"),
+            "empty prefixes are dropped"
+        );
+        assert!(
+            usage.boost("app:slack", &q("s"), 0.0) > 0,
+            "others are kept"
+        );
     }
 
     #[test]

@@ -61,6 +61,10 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 - [x] System Settings panes and privacy sections (opened directly, with their own icons)
 - [x] Global hotkeys: palette + per-app focus-or-hide
 - [x] Shell: floating palette panel with keyboard navigation, confirmations, Launcher settings pane
+- [x] ⌘K actions menu (added on request): a searchable list of everything that can be done
+      with the selection in every palette mode, with its shortcuts; ⌘↩ runs a result's second
+      action (Show in Finder for apps); apps can also be hidden, quit or force quit, and any
+      result's ranking reset
 
 ### Step 4: Calculator, quicklinks, shell commands
 
@@ -106,6 +110,12 @@ Raycast extension support.
 
 ## Log
 
+- **Actions menu**: shell-side `PaletteAction` lists built per mode from the existing model
+  methods, so the menu and the ⌘ shortcuts stay in step; the menu floats bottom-right over the
+  palette with its own field (filter by words in the title), and the palette grows to fit it
+  unfiltered. Destructive actions that can't be undone (Force Quit, clearing clipboard or
+  colour history) ask for a second ↩. Core: `is_app_running`, `hide_app`, `quit_app` (via
+  `NSRunningApplication`) and `reset_result_ranking`. Not yet tried in the running app.
 - **Hyper key**: the chosen key is remapped to F18 through the HID event system's
   `UserKeyMapping` (what `hidutil` sets; other mappings are kept), and an active HID-level tap
   swallows F18 and adds ⌃⌥⇧⌘ to key and mouse button events while it's held, so global

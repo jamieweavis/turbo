@@ -155,6 +155,7 @@ struct ClipboardModeView: View {
             ("⌘↩", pastes ? "Copy" : "Paste"),
             ("⌘P", browser.selected?.pinned == true ? "Unpin" : "Pin"),
             ("⌘⌫", "Delete"),
+            ("⌘K", "Actions"),
         ]
     }
 }
@@ -397,7 +398,7 @@ struct FilesModeView: View {
                 }
             }
             Divider()
-            FooterHints(hints: [("↩", "Open"), ("⌘↩", "Show in Finder"), ("⌘Y", "Quick Look"), ("⌘C", "Copy Path")])
+            FooterHints(hints: [("↩", "Open"), ("⌘↩", "Show in Finder"), ("⌘Y", "Quick Look"), ("⌘K", "Actions")])
         }
     }
 }
@@ -502,7 +503,7 @@ struct ColorsModeView: View {
                 ColorCell(color: color, format: model.colorFormat, isSelected: isSelected)
             }
             Divider()
-            FooterHints(leading: otherFormats, hints: [("↩", "Copy \(model.colorFormat.title)"), ("⌘↩", "Pick Colour"), ("⌘⌫", "Delete")])
+            FooterHints(leading: otherFormats, hints: [("↩", "Copy \(model.colorFormat.title)"), ("⌘↩", "Pick Colour"), ("⌘K", "Actions")])
         }
     }
 
@@ -624,16 +625,14 @@ struct EmojiModeView: View {
 
     private var actions: [FloatingAction] {
         guard browser.selected != nil else { return [] }
-        // The panel doesn't activate, so the frontmost app is the one the paste lands in.
-        let target = NSWorkspace.shared.frontmostApplication
-            .flatMap { $0 == .current ? nil : $0.localizedName }
         return [
-            FloatingAction(label: target.map { "Paste to \($0)" } ?? "Paste", keys: ["↩"]) {
+            FloatingAction(label: PaletteModel.pasteTitle, keys: ["↩"]) {
                 model.insertSelectedEmoji(paste: true)
             },
             FloatingAction(label: "Copy", keys: ["⌘", "↩"]) {
                 model.insertSelectedEmoji(paste: false)
             },
+            .showActions(model),
         ]
     }
 }
