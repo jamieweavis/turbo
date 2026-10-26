@@ -37,7 +37,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, mouse
+    case general, mouse, monitor
 
     var id: Self { self }
 
@@ -45,6 +45,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         switch self {
         case .general: "General"
         case .mouse: "Mouse"
+        case .monitor: "Monitor"
         }
     }
 
@@ -52,6 +53,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .mouse: "computermouse"
+        case .monitor: "display"
         }
     }
 }
@@ -75,6 +77,7 @@ struct SettingsView: View {
                 switch pane {
                 case .general: GeneralPane(model: model, onShowOnboarding: onShowOnboarding)
                 case .mouse: MousePane(settings: model.mouse)
+                case .monitor: MonitorPane(settings: model.displays)
                 }
             }
             .navigationTitle(pane.title)
@@ -98,7 +101,7 @@ private struct GeneralPane: View {
                         Button("Grant Access…", action: onShowOnboarding)
                     }
                 }
-                LabeledContent("Mouse input") {
+                LabeledContent("Input") {
                     if let error = model.inputError {
                         Text(error).foregroundStyle(.red)
                     } else {

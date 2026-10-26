@@ -14,10 +14,14 @@ struct JaycastApp: App {
                     onShowSettings: { appDelegate.showSettings() }
                 )
             } else {
-                Text("Jaycast couldn't start")
-                Button("Quit Jaycast") { NSApp.terminate(nil) }
+                VStack(alignment: .leading) {
+                    Text("Jaycast couldn't start")
+                    Button("Quit Jaycast") { NSApp.terminate(nil) }
+                }
+                .padding(14)
             }
         }
+        .menuBarExtraStyle(.window)
     }
 }
 
