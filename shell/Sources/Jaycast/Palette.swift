@@ -5,8 +5,8 @@ import Quartz
 import SwiftUI
 
 /// The launcher palette: a floating Liquid Glass panel with a search field and results.
-/// It has four modes (search, clipboard history, file search, picked colours) sharing the
-/// one field.
+/// It has five modes (search, clipboard history, file search, picked colours, emoji) sharing
+/// the one field. Colours and emoji show a grid rather than a list.
 ///
 /// The panel is non-activating, so the frontmost app keeps looking active, but it still
 /// becomes key so typing goes to the search field. The controller solely owns the frame:
@@ -256,9 +256,24 @@ enum PaletteLayout {
     static let cornerRadius: CGFloat = 26
     /// Clipboard history shows a list and a preview side by side, at a fixed size.
     static let clipboardSize = CGSize(width: 820, height: 470)
+    /// Emoji fill a fixed-size grid, so the palette doesn't jump while typing.
+    static let emojiSize = CGSize(width: 680, height: 480)
+    static let emojiColumns = 8
+    static let emojiCellHeight: CGFloat = 60
+    static let colorColumns = 5
+    static let colorCellHeight: CGFloat = 124
+    /// Colour rows shown before the grid scrolls; the half row hints there's more.
+    static let maxVisibleColorRows = 2.5
+    static let gridSpacing: CGFloat = 6
+    static let gridPadding: CGFloat = 12
+    static let gridHeaderHeight: CGFloat = 26
 
     static func width(for mode: PaletteMode) -> CGFloat {
-        mode == .clipboard ? clipboardSize.width : 680
+        switch mode {
+        case .clipboard: clipboardSize.width
+        case .emoji: emojiSize.width
+        case .search, .files, .colors: 680
+        }
     }
 
     @MainActor
@@ -274,15 +289,25 @@ enum PaletteLayout {
             return CGSize(width: width(for: .search), height: height)
         case .clipboard:
             return clipboardSize
-        case .files, .colors:
+        case .emoji:
+            return model.emoji.isEmpty ? CGSize(width: emojiSize.width, height: searchHeight + message) : emojiSize
+        case .files:
             var height = searchHeight + message
-            let count = model.mode == .files ? model.files.results.count : model.colors.colors.count
-            let rows = min(count, maxVisibleRows)
+            let rows = min(model.files.results.count, maxVisibleRows)
             if rows > 0 {
                 // A divider above the list and another above the footer.
                 height += 1 + listPadding * 2 + CGFloat(rows) * rowHeight + 1 + footerHeight
             }
-            return CGSize(width: width(for: model.mode), height: height)
+            return CGSize(width: width(for: .files), height: height)
+        case .colors:
+            var height = searchHeight + message
+            let count = model.colors.colors.count
+            if count > 0 {
+                let rows = min((Double(count) / Double(colorColumns)).rounded(.up), maxVisibleColorRows)
+                let grid = rows * colorCellHeight + (rows.rounded(.up) - 1) * gridSpacing
+                height += 1 + listPadding * 2 + grid.rounded() + 1 + footerHeight
+            }
+            return CGSize(width: width(for: .colors), height: height)
         }
     }
 
@@ -317,6 +342,7 @@ final class PaletteModel {
     let clipboard: ClipboardBrowser
     let files: FileBrowser
     let colors: ColorBrowser
+    let emoji: EmojiBrowser
 
     @ObservationIgnored var onClose: (() -> Void)?
     /// Shows the palette again, e.g. to report a paste that failed after it closed.
@@ -342,6 +368,7 @@ final class PaletteModel {
         clipboard = ClipboardBrowser(core: core)
         files = FileBrowser(core: core)
         colors = ColorBrowser(core: core)
+        emoji = EmojiBrowser(core: core)
     }
 
     var clipboardConfig: ClipboardConfig { settings.config.clipboard }
@@ -353,7 +380,7 @@ final class PaletteModel {
         if let copied {
             return .copied(copied)
         }
-        if let error = error ?? clipboard.error ?? files.error ?? colors.error {
+        if let error = error ?? clipboard.error ?? files.error ?? colors.error ?? emoji.error {
             return .error(error)
         }
         switch mode {
@@ -378,6 +405,10 @@ final class PaletteModel {
                 return query.trimmingCharacters(in: .whitespaces).isEmpty
                     ? .info("No colours yet. Pick one with Pick Colour.")
                     : .noResults(query)
+            }
+        case .emoji:
+            if emoji.isEmpty {
+                return .noResults(query)
             }
         }
         return nil
@@ -440,6 +471,7 @@ final class PaletteModel {
         case .clipboard: clipboard.refresh(query: query)
         case .files: files.search(query)
         case .colors: colors.refresh(query: query)
+        case .emoji: emoji.refresh(query: query)
         }
     }
 
@@ -452,6 +484,7 @@ final class PaletteModel {
 
     // MARK: Keys
 
+    /// ↑/↓ (a row up or down in grids).
     func move(by offset: Int) {
         switch mode {
         case .search:
@@ -460,7 +493,18 @@ final class PaletteModel {
             selection = (selection + offset + results.count) % results.count
         case .clipboard: clipboard.move(by: offset)
         case .files: files.move(by: offset)
-        case .colors: colors.move(by: offset)
+        case .colors: colors.move(offset < 0 ? .up : .down)
+        case .emoji: emoji.move(offset < 0 ? .up : .down)
+        }
+    }
+
+    /// ←/→ in grid modes; elsewhere they move the cursor in the field.
+    func moveSideways(by offset: Int) {
+        let direction: GridDirection = offset < 0 ? .left : .right
+        switch mode {
+        case .colors: colors.move(direction)
+        case .emoji: emoji.move(direction)
+        case .search, .clipboard, .files: break
         }
     }
 
@@ -477,6 +521,7 @@ final class PaletteModel {
         case .clipboard: clipboard.selection = index
         case .files: files.selection = index
         case .colors: colors.selection = index
+        case .emoji: emoji.selection = index
         }
     }
 
@@ -491,6 +536,8 @@ final class PaletteModel {
             openSelectedFile()
         case .colors:
             copySelectedColor()
+        case .emoji:
+            insertSelectedEmoji(paste: true)
         }
     }
 
@@ -516,6 +563,8 @@ final class PaletteModel {
             pickColor()
         case (.colors, .delete):
             deleteSelectedColor()
+        case (.emoji, .alternateOpen):
+            insertSelectedEmoji(paste: false)
         default:
             return false
         }
@@ -564,15 +613,17 @@ final class PaletteModel {
     }
 
     /// Esc: back out of a confirmation or error, then clear the query, then leave clipboard,
-    /// file or colour mode for search, then close.
+    /// file, colour or emoji mode for search, then close.
     func cancel() {
         if confirming != nil {
             confirming = nil
-        } else if error != nil || clipboard.error != nil || files.error != nil || colors.error != nil {
+        } else if error != nil || clipboard.error != nil || files.error != nil || colors.error != nil
+                    || emoji.error != nil {
             error = nil
             clipboard.error = nil
             files.error = nil
             colors.error = nil
+            emoji.error = nil
         } else if !query.isEmpty {
             query = ""
         } else if mode != .search {
@@ -661,6 +712,22 @@ final class PaletteModel {
         onPickColor?()
     }
 
+    // MARK: Emoji actions
+
+    /// Pasting closes first, so the emoji lands in the app that was in front; copying shows
+    /// it was copied, then closes.
+    func insertSelectedEmoji(paste: Bool) {
+        guard let selected = emoji.selected, copied == nil else { return }
+        if paste { onClose?() }
+        do {
+            try core.insertEmoji(emoji: selected.emoji, paste: paste)
+            if !paste { showCopied(selected.emoji) }
+        } catch {
+            if paste { onReopen?() }
+            self.error = error.userMessage
+        }
+    }
+
     private func complete(with completion: String) {
         query = completion
         cursorToEndRequest += 1
@@ -710,11 +777,14 @@ private struct PaletteView: View {
                     text: $model.query,
                     placeholder: model.mode.placeholder,
                     focusRequest: model.focusRequest,
-                    cursorToEndRequest: model.cursorToEndRequest
+                    cursorToEndRequest: model.cursorToEndRequest,
+                    takesSidewaysArrows: model.mode.isGrid
                 ) { command in
                     switch command {
                     case .up: model.move(by: -1)
                     case .down: model.move(by: 1)
+                    case .left: model.moveSideways(by: -1)
+                    case .right: model.moveSideways(by: 1)
                     case .submit: model.openSelected()
                     case .alternateSubmit: _ = model.handle(.alternateOpen)
                     case .complete: model.completeSelected()
@@ -749,6 +819,11 @@ private struct PaletteView: View {
                     Divider().padding(.horizontal, 14)
                     ColorsModeView(model: model)
                 }
+            case .emoji:
+                if !model.emoji.isEmpty {
+                    Divider().padding(.horizontal, 14)
+                    EmojiModeView(model: model)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -763,6 +838,7 @@ extension PaletteMode {
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
         case .colors: "swatchpalette"
+        case .emoji: "face.smiling"
         }
     }
 
@@ -773,7 +849,13 @@ extension PaletteMode {
         case .clipboard: "Clipboard"
         case .files: "Files"
         case .colors: "Colours"
+        case .emoji: "Emoji"
         }
+    }
+
+    /// Colours and emoji are grids, where ← and → move the selection.
+    var isGrid: Bool {
+        self == .colors || self == .emoji
     }
 
     var placeholder: String {
@@ -782,6 +864,7 @@ extension PaletteMode {
         case .clipboard: "Search clipboard history"
         case .files: "Search files"
         case .colors: "Search picked colours"
+        case .emoji: "Search emoji"
         }
     }
 }
@@ -969,9 +1052,11 @@ private struct SearchField: NSViewRepresentable {
     let placeholder: String
     let focusRequest: Int
     let cursorToEndRequest: Int
+    /// ← and → move through a grid instead of the cursor.
+    let takesSidewaysArrows: Bool
     let onCommand: (Command) -> Void
 
-    enum Command { case up, down, submit, alternateSubmit, complete, cancel }
+    enum Command { case up, down, left, right, submit, alternateSubmit, complete, cancel }
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
@@ -1034,6 +1119,8 @@ private struct SearchField: NSViewRepresentable {
             switch selector {
             case #selector(NSResponder.moveUp(_:)): parent.onCommand(.up)
             case #selector(NSResponder.moveDown(_:)): parent.onCommand(.down)
+            case #selector(NSResponder.moveLeft(_:)) where parent.takesSidewaysArrows: parent.onCommand(.left)
+            case #selector(NSResponder.moveRight(_:)) where parent.takesSidewaysArrows: parent.onCommand(.right)
             case #selector(NSResponder.insertNewline(_:)):
                 let command = NSApp.currentEvent?.modifierFlags.contains(.command) == true
                 parent.onCommand(command ? .alternateSubmit : .submit)

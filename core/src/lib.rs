@@ -8,6 +8,7 @@ mod clipboard;
 mod color_picker;
 mod config;
 mod display;
+mod emoji;
 mod error;
 mod files;
 mod hyper;
@@ -28,6 +29,8 @@ pub use color_picker::{PickedColor, format_color};
 pub use config::*;
 use display::{BrightnessKeyTap, DisplayManager};
 pub use display::{DisplayInfo, DisplayObserver};
+use emoji::EmojiPicker;
+pub use emoji::{EmojiInfo, EmojiSection};
 pub use error::CoreError;
 pub use files::FileResult;
 use files::FileSearch;
@@ -79,6 +82,7 @@ pub struct Core {
     hyper_key: HyperKey,
     caffeinate: Arc<Caffeinate>,
     colors: ColorHistory,
+    emoji: EmojiPicker,
 }
 
 #[uniffi::export]
@@ -101,6 +105,7 @@ impl Core {
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
         let hyper_key = HyperKey::new(config.hyper_key.clone());
         let colors = ColorHistory::new(&data_dir);
+        let emoji = EmojiPicker::new(&data_dir);
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
@@ -116,6 +121,7 @@ impl Core {
             hyper_key,
             caffeinate,
             colors,
+            emoji,
         }))
     }
 
@@ -232,6 +238,18 @@ impl Core {
 
     pub fn clear_color_history(&self) -> Result<(), CoreError> {
         self.colors.clear()
+    }
+
+    /// Emoji in grid sections: recently used then every group for an empty query,
+    /// otherwise one section of matches by name or shortcode.
+    pub fn search_emoji(&self, query: String) -> Vec<EmojiSection> {
+        self.emoji.search(&query)
+    }
+
+    /// Copies an emoji, or pastes it into the frontmost app (needs Accessibility; close the
+    /// palette first), and remembers it as recently used.
+    pub fn insert_emoji(&self, emoji: String, paste: bool) -> Result<(), CoreError> {
+        self.emoji.insert(&emoji, paste)
     }
 
     /// Registers the saved hotkeys. Call once at launch, on the main thread, after

@@ -127,10 +127,18 @@ fn is_trusted() -> bool {
 /// Returns at once: the paste follows shortly on its own thread, and the clipboard is put
 /// back about half a second later.
 pub(crate) fn insert(snippet: &Snippet) -> Result<(), CoreError> {
+    insert_expanding(snippet.text.clone())
+}
+
+/// Types `text` into the frontmost app as it is, like a snippet without placeholders.
+pub(crate) fn insert_text(text: &str) -> Result<(), CoreError> {
+    insert_expanding(text.replace('{', "{{").replace('}', "}}"))
+}
+
+fn insert_expanding(text: String) -> Result<(), CoreError> {
     if !is_trusted() {
         return Err(CoreError::PermissionDenied);
     }
-    let text = snippet.text.clone();
     thread::Builder::new()
         .name("jaycast-snippet-insert".into())
         .spawn(move || insert::run(&text, 0, PASTE_DELAY))?;

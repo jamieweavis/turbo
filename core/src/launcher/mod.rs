@@ -96,6 +96,8 @@ pub enum PaletteMode {
     Files,
     /// The colour picker's history.
     Colors,
+    /// The emoji picker.
+    Emoji,
 }
 
 /// Palette modes listed in search, so they can be found without their hotkeys:
@@ -135,6 +137,19 @@ const MODES: &[ModeEntry] = &[
             "swatches",
         ],
         "swatchpalette",
+    ),
+    (
+        PaletteMode::Emoji,
+        "emoji",
+        "Search Emoji",
+        &[
+            "emoji picker",
+            "emojis",
+            "symbols",
+            "smiley",
+            "insert emoji",
+        ],
+        "face.smiling",
     ),
 ];
 
@@ -771,7 +786,7 @@ mod tests {
     }
 
     #[test]
-    fn colour_picker_entries_are_typable() {
+    fn colour_and_emoji_entries_are_typable() {
         let entries: Vec<SystemEntry> = MODES
             .iter()
             .map(SystemEntry::mode)
@@ -793,6 +808,9 @@ mod tests {
         }
         for query in ["list colours", "list colors", "colour history"] {
             assert_eq!(find(query)[0].id, "mode:colors", "{query}");
+        }
+        for query in ["emoji", "emoji picker", "smiley"] {
+            assert_eq!(find(query)[0].id, "mode:emoji", "{query}");
         }
         assert_eq!(mode_for_id("colors"), Some(PaletteMode::Colors));
     }

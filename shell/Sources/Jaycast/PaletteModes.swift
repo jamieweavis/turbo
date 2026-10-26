@@ -462,12 +462,12 @@ final class ColorBrowser {
         selection = 0
     }
 
-    func move(by offset: Int) {
-        guard !colors.isEmpty else { return }
-        selection = (selection + offset + colors.count) % colors.count
+    func move(_ direction: GridDirection) {
+        let grid = GridNavigation(sectionCounts: [colors.count], columns: PaletteLayout.colorColumns)
+        selection = grid.move(selection, direction)
     }
 
-    /// Removes the row straight away; a failure brings it back with the error.
+    /// Removes the swatch straight away; a failure brings it back with the error.
     func deleteSelected() {
         guard let color = selected else { return }
         colors.remove(at: selection)
@@ -488,78 +488,275 @@ struct ColorsModeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(browser.colors.enumerated()), id: \.element) { index, color in
-                            ColorRow(color: color, format: model.colorFormat, isSelected: index == browser.selection)
-                                .id(color)
-                                .contentShape(.rect)
-                                .onContinuousHover { phase in
-                                    if case .active = phase { model.hover(index) }
-                                }
-                                .onTapGesture {
-                                    browser.selection = index
-                                    model.copySelectedColor()
-                                }
-                        }
-                    }
-                    .padding(.vertical, PaletteLayout.listPadding)
-                    .padding(.horizontal, 8)
+            PaletteGrid(
+                sections: [GridSection(title: nil, items: browser.colors)],
+                columns: PaletteLayout.colorColumns,
+                cellHeight: PaletteLayout.colorCellHeight,
+                selection: browser.selection,
+                onHover: { model.hover($0) },
+                onTap: { index in
+                    browser.selection = index
+                    model.copySelectedColor()
                 }
-                .scrollIndicators(.never)
-                .onChange(of: browser.selection) {
-                    if let color = browser.selected { proxy.scrollTo(color) }
-                }
+            ) { color, isSelected in
+                ColorCell(color: color, format: model.colorFormat, isSelected: isSelected)
             }
             Divider()
-            FooterHints(hints: [("↩", "Copy \(model.colorFormat.title)"), ("⌘↩", "Pick Colour"), ("⌘⌫", "Delete")])
+            FooterHints(leading: otherFormats, hints: [("↩", "Copy \(model.colorFormat.title)"), ("⌘↩", "Pick Colour"), ("⌘⌫", "Delete")])
         }
+    }
+
+    /// The selected colour in the two formats ↩ doesn't copy.
+    private var otherFormats: String? {
+        guard let color = browser.selected else { return nil }
+        return ColorFormat.allCases.filter { $0 != model.colorFormat }
+            .map { formatColor(color: color, format: $0) }
+            .joined(separator: "  ·  ")
     }
 }
 
-/// The colour in the copy format, with the other two formats underneath.
-private struct ColorRow: View {
+/// A large swatch with the colour in the copy format and its age underneath.
+private struct ColorCell: View {
     let color: PickedColor
     let format: ColorFormat
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            ColorSwatch(color: color, size: 28)
-            VStack(alignment: .leading, spacing: 1) {
+        VStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(color.color.gradient)
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.12)))
+                .overlay {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 15)
+                            .strokeBorder(Color.accentColor, lineWidth: 2.5)
+                            .padding(-4)
+                    }
+                }
+                .shadow(color: color.color.opacity(0.35), radius: isSelected ? 8 : 4, y: 2)
+            VStack(spacing: 1) {
                 Text(formatColor(color: color, format: format))
-                    .font(.system(size: 14, weight: .medium).monospaced())
+                    .font(.system(size: 12, weight: .medium).monospaced())
                     .lineLimit(1)
-                Text(ColorFormat.allCases.filter { $0 != format }.map { formatColor(color: color, format: $0) }.joined(separator: "  ·  "))
-                    .font(.system(size: 11).monospaced())
+                    .minimumScaleFactor(0.7)
+                Text(RelativeAge.short(since: color.pickedAt))
+                    .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
-            Spacer(minLength: 0)
-            Text(RelativeAge.short(since: color.pickedAt))
-                .font(.system(size: 11).monospacedDigit())
-                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10)
-        .frame(height: PaletteLayout.rowHeight)
+        .padding(8)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.1))
+                RoundedRectangle(cornerRadius: 16).fill(.primary.opacity(0.08))
             }
         }
     }
 }
 
+// MARK: - Emoji
+
+/// Emoji in sections, searched in the core. ↩ pastes into the app that was in front.
+@MainActor
+@Observable
+final class EmojiBrowser {
+    private(set) var sections: [EmojiSection] = []
+    var selection = 0
+    var error: String?
+    /// Every section's emoji in grid order, for selecting by flat index.
+    private var flat: [EmojiInfo] = []
+    @ObservationIgnored private let core: Core
+
+    init(core: Core) {
+        self.core = core
+    }
+
+    var isEmpty: Bool { flat.isEmpty }
+
+    var selected: EmojiInfo? {
+        flat.indices.contains(selection) ? flat[selection] : nil
+    }
+
+    func refresh(query: String) {
+        sections = core.searchEmoji(query: query)
+        flat = sections.flatMap(\.emojis)
+        selection = 0
+    }
+
+    func move(_ direction: GridDirection) {
+        let grid = GridNavigation(sectionCounts: sections.map(\.emojis.count), columns: PaletteLayout.emojiColumns)
+        selection = grid.move(selection, direction)
+    }
+}
+
+struct EmojiModeView: View {
+    let model: PaletteModel
+
+    private var browser: EmojiBrowser { model.emoji }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PaletteGrid(
+                sections: browser.sections.map { GridSection(title: $0.title, items: $0.emojis) },
+                columns: PaletteLayout.emojiColumns,
+                cellHeight: PaletteLayout.emojiCellHeight,
+                selection: browser.selection,
+                onHover: { model.hover($0) },
+                onTap: { index in
+                    browser.selection = index
+                    model.insertSelectedEmoji(paste: true)
+                }
+            ) { emoji, isSelected in
+                Text(emoji.emoji)
+                    .font(.system(size: 34))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scaleEffect(isSelected ? 1.12 : 1)
+                    .background {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 12).fill(.primary.opacity(0.1))
+                        }
+                    }
+                    .animation(.snappy(duration: 0.15), value: isSelected)
+            }
+            Divider()
+            FooterHints(leading: selectedName, hints: [("↩", "Paste"), ("⌘↩", "Copy")])
+        }
+    }
+
+    private var selectedName: String? {
+        guard let emoji = browser.selected else { return nil }
+        return [emoji.name, emoji.shortcode.map { ":\($0):" }].compactMap(\.self).joined(separator: "  ")
+    }
+}
+
+// MARK: - Grids
+
+enum GridDirection {
+    case left, right, up, down
+}
+
+/// Arrow-key movement through a grid whose sections each start a new row. Left and right
+/// step through items in order; up and down keep the column (or the last item of a shorter
+/// row). Both wrap around at the ends.
+struct GridNavigation {
+    /// Each row's flat item indices.
+    private let rows: [Range<Int>]
+    private let count: Int
+
+    init(sectionCounts: [Int], columns: Int) {
+        var rows: [Range<Int>] = []
+        var start = 0
+        for sectionCount in sectionCounts {
+            for rowStart in stride(from: start, to: start + sectionCount, by: columns) {
+                rows.append(rowStart..<min(rowStart + columns, start + sectionCount))
+            }
+            start += sectionCount
+        }
+        self.rows = rows
+        count = start
+    }
+
+    func move(_ selection: Int, _ direction: GridDirection) -> Int {
+        guard count > 0 else { return 0 }
+        switch direction {
+        case .left: return (selection - 1 + count) % count
+        case .right: return (selection + 1) % count
+        case .up, .down:
+            guard let row = rows.firstIndex(where: { $0.contains(selection) }) else { return 0 }
+            let column = selection - rows[row].lowerBound
+            let target = rows[(row + (direction == .up ? -1 : 1) + rows.count) % rows.count]
+            return min(target.lowerBound + column, target.upperBound - 1)
+        }
+    }
+}
+
+struct GridSection<Item> {
+    let title: String?
+    let items: [Item]
+}
+
+/// A scrolling grid of sections for the palette, selected by flat index across sections.
+/// Cells are identified by that index, since an item can appear in more than one section.
+struct PaletteGrid<Item, Cell: View>: View {
+    let sections: [GridSection<Item>]
+    let columns: Int
+    let cellHeight: CGFloat
+    let selection: Int
+    let onHover: (Int) -> Void
+    let onTap: (Int) -> Void
+    @ViewBuilder let cell: (Item, Bool) -> Cell
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: PaletteLayout.gridSpacing), count: columns),
+                    spacing: PaletteLayout.gridSpacing
+                ) {
+                    ForEach(Array(sectionOffsets.enumerated()), id: \.offset) { sectionIndex, offset in
+                        let section = sections[sectionIndex]
+                        Section {
+                            ForEach(Array(section.items.enumerated()), id: \.offset) { itemIndex, item in
+                                let index = offset + itemIndex
+                                cell(item, index == selection)
+                                    .frame(height: cellHeight)
+                                    .id(index)
+                                    .contentShape(.rect)
+                                    .onContinuousHover { phase in
+                                        if case .active = phase { onHover(index) }
+                                    }
+                                    .onTapGesture { onTap(index) }
+                            }
+                        } header: {
+                            if let title = section.title {
+                                Text(title)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 6)
+                                    .frame(height: PaletteLayout.gridHeaderHeight, alignment: .bottom)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, PaletteLayout.listPadding)
+                .padding(.horizontal, PaletteLayout.gridPadding)
+            }
+            .scrollIndicators(.never)
+            .onChange(of: selection) {
+                proxy.scrollTo(selection)
+            }
+        }
+    }
+
+    /// Each section's first flat index.
+    private var sectionOffsets: [Int] {
+        var offsets: [Int] = []
+        var start = 0
+        for section in sections {
+            offsets.append(start)
+            start += section.items.count
+        }
+        return offsets
+    }
+}
+
 // MARK: - Shared
 
-/// The key hints along the bottom of clipboard, file and colour mode.
+/// The key hints along the bottom of clipboard, file, colour and emoji mode, optionally
+/// with a description of the selection on the left.
 private struct FooterHints: View {
+    var leading: String?
     let hints: [(key: String, label: String)]
 
     var body: some View {
         HStack(spacing: 14) {
-            Spacer()
+            if let leading {
+                Text(leading)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
             ForEach(hints, id: \.key) { hint in
                 HStack(spacing: 4) {
                     Text(hint.label).foregroundStyle(.secondary)
