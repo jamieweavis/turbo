@@ -46,12 +46,14 @@ struct KeepAwakePane: View {
             }
 
             Section {
-                Toggle("Keep Mac awake", isOn: Binding(get: { state.isActive }, set: { state.setActive($0) }))
-                Toggle("Keep display on", isOn: $settings.config.keepAwake.keepDisplayOn)
-            } footer: {
-                Text(settings.config.keepAwake.keepDisplayOn
-                    ? "Stops the Mac and its displays sleeping while idle. Stays on when Jaycast relaunches."
-                    : "Stops the Mac sleeping while idle; displays can still sleep. Stays on when Jaycast relaunches.")
+                Toggle(isOn: Binding(get: { state.isActive }, set: { state.setActive($0) })) {
+                    Text("Keep Mac awake")
+                    Text("Stops the Mac sleeping while idle. Stays on when Jaycast relaunches.")
+                }
+                Toggle(isOn: $settings.config.keepAwake.keepDisplayOn) {
+                    Text("Keep display on")
+                    Text("Stops the displays sleeping too while the Mac is kept awake.")
+                }
             }
 
             Section("Hotkeys") {
