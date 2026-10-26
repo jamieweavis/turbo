@@ -4,6 +4,7 @@
 uniffi::setup_scaffolding!();
 
 mod config;
+mod display;
 mod error;
 mod input;
 
@@ -11,6 +12,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub use config::*;
+use display::{BrightnessKeyTap, DisplayManager};
+pub use display::{DisplayInfo, DisplayObserver};
 pub use error::CoreError;
 use input::InputEngine;
 
@@ -35,6 +38,8 @@ pub struct Core {
     store: ConfigStore,
     config: Mutex<Config>,
     input: InputEngine,
+    displays: Arc<DisplayManager>,
+    brightness_keys: BrightnessKeyTap,
 }
 
 #[uniffi::export]
@@ -45,10 +50,14 @@ impl Core {
         let store = ConfigStore::new(&PathBuf::from(data_dir));
         let config = store.load()?;
         let input = InputEngine::new(config.mouse.clone());
+        let displays = DisplayManager::new(config.monitor.clone());
+        let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
             input,
+            displays,
+            brightness_keys,
         }))
     }
 
@@ -65,14 +74,45 @@ impl Core {
         Ok(())
     }
 
-    /// Starts intercepting mouse input. Fails with `PermissionDenied` without Accessibility.
-    /// Calling it while already running is a no-op.
+    pub fn monitor_config(&self) -> MonitorConfig {
+        self.config.lock().unwrap().monitor.clone()
+    }
+
+    /// Saves the new monitor settings and applies them immediately.
+    pub fn set_monitor_config(&self, monitor: MonitorConfig) -> Result<(), CoreError> {
+        let mut config = self.config.lock().unwrap();
+        config.monitor = monitor.clone();
+        self.store.save(&config)?;
+        self.displays.set_config(monitor);
+        Ok(())
+    }
+
+    /// External displays with their cached brightness. Never blocks on DDC.
+    pub fn displays(&self) -> Vec<DisplayInfo> {
+        self.displays.displays()
+    }
+
+    /// Sets a display's brightness (0.0–1.0). Returns at once; the DDC write is coalesced
+    /// on a background thread.
+    pub fn set_brightness(&self, display_id: u32, brightness: f64) -> Result<(), CoreError> {
+        self.displays.set_brightness(display_id, brightness)
+    }
+
+    /// Registers the shell's observer for display and brightness changes (`None` clears it).
+    pub fn set_display_observer(&self, observer: Option<Arc<dyn DisplayObserver>>) {
+        self.displays.set_observer(observer);
+    }
+
+    /// Starts the event taps (mouse and brightness keys). Fails with `PermissionDenied`
+    /// without Accessibility. Calling it while already running is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
-        self.input.start()
+        self.input.start()?;
+        self.brightness_keys.start()
     }
 
     pub fn stop_input(&self) {
         self.input.stop();
+        self.brightness_keys.stop();
     }
 
     pub fn is_input_running(&self) -> bool {

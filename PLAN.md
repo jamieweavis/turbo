@@ -41,10 +41,14 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ### Step 2: Monitor
 
-- [ ] Enumerate external displays; read/write brightness over DDC/CI (`ddc-macos`)
-- [ ] Menu bar sliders per display
-- [ ] Brightness keys control the display under the cursor (pass through on the built-in display),
-      with the native on-screen indicator
+- [x] Shared core API: `MonitorConfig`, `DisplayInfo`, `DisplayObserver` callback, `Core`
+      display methods; brightness keys start/stop with the other event taps
+- [ ] Enumerate external displays; read/write brightness over DDC/CI (`ddc-macos`), coalesced
+      background writes, hotplug
+- [ ] Brightness keys control the display under the cursor (pass through on the built-in display
+      or displays without DDC)
+- [ ] Shell: menu bar popover with per-display sliders, on-screen indicator for key changes,
+      Monitor settings pane
 
 ### Step 3: Launcher core
 

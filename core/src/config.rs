@@ -14,6 +14,26 @@ use crate::error::CoreError;
 #[serde(default)]
 pub struct Config {
     pub mouse: MouseConfig,
+    pub monitor: MonitorConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct MonitorConfig {
+    /// Master switch: brightness control for external displays over DDC/CI.
+    pub enabled: bool,
+    /// Brightness keys adjust the external display under the cursor. On the built-in display
+    /// (or one without DDC) they keep their normal behaviour.
+    pub brightness_keys: bool,
+}
+
+impl Default for MonitorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            brightness_keys: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
