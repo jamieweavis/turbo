@@ -36,6 +36,9 @@ final class SettingsWindowController {
         // shows its own title instead.
         window.title = "Jaycast Settings"
         window.titleVisibility = .hidden
+        // No toolbar band behind the pane switch: it floats at the top right over the pane.
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
