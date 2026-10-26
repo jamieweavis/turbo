@@ -14,6 +14,8 @@ final class DisplaySettings {
     }
     private(set) var saveError: String?
     private(set) var brightnessError: String?
+    /// The built-in display's brightness, or nil when it isn't active (e.g. the lid is closed).
+    private(set) var builtinBrightness: Double?
 
     /// Called when the brightness keys change a display, to show the on-screen indicator.
     @ObservationIgnored var onBrightnessFromKeys: ((_ displayID: UInt32, _ brightness: Double) -> Void)?
@@ -24,6 +26,9 @@ final class DisplaySettings {
     /// Displays with a write loop in flight; their core echoes are ignored meanwhile so a
     /// dragged slider doesn't jump back to a stale value.
     @ObservationIgnored private var writing: Set<UInt32> = []
+
+    /// When the built-in slider last wrote, so a refresh doesn't fight a drag.
+    @ObservationIgnored private var lastBuiltinWrite = ContinuousClock.now
 
     private static let writeInterval = Duration.milliseconds(16)
 
@@ -43,6 +48,24 @@ final class DisplaySettings {
         pending[displayID] = brightness
         guard writing.insert(displayID).inserted else { return }
         Task { await writeLoop(displayID) }
+    }
+
+    /// Re-reads the built-in display's brightness, which macOS changes itself (the brightness
+    /// keys, auto-brightness, opening and closing the lid).
+    func refreshBuiltin() {
+        guard ContinuousClock.now - lastBuiltinWrite > .milliseconds(500) else { return }
+        builtinBrightness = core.builtinBrightness()
+    }
+
+    func setBuiltinBrightness(_ brightness: Double) {
+        builtinBrightness = brightness
+        lastBuiltinWrite = .now
+        do {
+            try core.setBuiltinBrightness(brightness: brightness)
+            brightnessError = nil
+        } catch {
+            brightnessError = error.userMessage
+        }
     }
 
     // MARK: Observer callbacks

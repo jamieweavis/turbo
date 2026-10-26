@@ -11,7 +11,9 @@ struct StatusMenu: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if model.displays.config.enabled, !model.displays.displays.isEmpty {
+            if model.displays.builtinBrightness != nil
+                || (model.displays.config.enabled && !model.displays.displays.isEmpty)
+            {
                 displays
                 Divider()
             }
@@ -57,6 +59,13 @@ struct StatusMenu: View {
         }
         .padding(14)
         .frame(width: 300)
+        .task {
+            // Follow changes macOS makes to the built-in display while the menu is open.
+            while !Task.isCancelled {
+                model.displays.refreshBuiltin()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
     }
 
     private var mouse: some View {
@@ -97,8 +106,18 @@ struct StatusMenu: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            ForEach(model.displays.displays, id: \.id) { display in
-                DisplayBrightnessRow(display: display, settings: model.displays)
+            if let brightness = model.displays.builtinBrightness {
+                BrightnessSliderRow(
+                    name: "Built-in Display",
+                    brightness: brightness,
+                    onChange: { model.displays.setBuiltinBrightness($0) }
+                )
+            }
+
+            if model.displays.config.enabled {
+                ForEach(model.displays.displays, id: \.id) { display in
+                    DisplayBrightnessRow(display: display, settings: model.displays)
+                }
             }
 
             if let error = model.displays.brightnessError {
@@ -110,37 +129,50 @@ struct StatusMenu: View {
     }
 }
 
-/// A display's name with a brightness slider, or a note when it can't be controlled.
+/// An external display's brightness slider, or a note when it can't be controlled.
 /// Shared by the menu bar popover and the Monitor settings pane.
 struct DisplayBrightnessRow: View {
     let display: DisplayInfo
     let settings: DisplaySettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(display.name)
-                .font(.callout)
-
-            if display.supportsDdc {
-                HStack(spacing: 8) {
-                    Image(systemName: "sun.min")
-                        .foregroundStyle(.secondary)
-                    Slider(
-                        value: Binding(
-                            get: { display.brightness },
-                            set: { settings.setBrightness($0, for: display.id) }
-                        ),
-                        in: 0...1
-                    )
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("\(display.name) brightness")
-                    Image(systemName: "sun.max")
-                        .foregroundStyle(.secondary)
-                }
-            } else {
+        if display.supportsDdc {
+            BrightnessSliderRow(
+                name: display.name,
+                brightness: display.brightness,
+                onChange: { settings.setBrightness($0, for: display.id) }
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(display.name)
+                    .font(.callout)
                 Text("Brightness control not supported")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// A display's name above a brightness slider.
+struct BrightnessSliderRow: View {
+    let name: String
+    let brightness: Double
+    let onChange: (Double) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(name)
+                .font(.callout)
+
+            HStack(spacing: 8) {
+                Image(systemName: "sun.min")
+                    .foregroundStyle(.secondary)
+                Slider(value: Binding(get: { brightness }, set: onChange), in: 0...1)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("\(name) brightness")
+                Image(systemName: "sun.max")
                     .foregroundStyle(.secondary)
             }
         }

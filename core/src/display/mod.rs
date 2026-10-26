@@ -3,6 +3,7 @@
 //! Module ownership (so parallel work doesn't collide):
 //! - `mod.rs`, `ddc`: display enumeration, hotplug, cached brightness and the DDC writers.
 //! - `keys`: the brightness-key event tap, which calls [`DisplayManager::adjust`].
+//! - `builtin`: the built-in display's brightness, which macOS controls itself.
 //!
 //! DDC is slow (tens of ms per transaction) and flaky, so nothing here blocks a caller on
 //! it: a scan thread enumerates displays (at startup and, debounced, after every display
@@ -10,6 +11,7 @@
 //! served from a cache. The bottom of the range goes below the monitor's own minimum with
 //! gamma dimming (see [`dimming`]), so brightness 0 is black.
 
+pub(crate) mod builtin;
 mod ddc;
 mod dimming;
 mod keys;

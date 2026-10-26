@@ -170,6 +170,23 @@ impl Core {
         self.displays.set_brightness(display_id, brightness)
     }
 
+    /// The built-in display's brightness (0.0–1.0), or `None` when it isn't active (a
+    /// closed MacBook, a desktop Mac) or can't be read.
+    pub fn builtin_brightness(&self) -> Option<f64> {
+        display::builtin::brightness()
+    }
+
+    /// Sets the built-in display's brightness (0.0–1.0).
+    pub fn set_builtin_brightness(&self, brightness: f64) -> Result<(), CoreError> {
+        if display::builtin::set_brightness(brightness) {
+            Ok(())
+        } else {
+            Err(CoreError::Other {
+                message: "couldn't set the built-in display's brightness".into(),
+            })
+        }
+    }
+
     /// Registers the shell's observer for display and brightness changes (`None` clears it).
     pub fn set_display_observer(&self, observer: Option<Arc<dyn DisplayObserver>>) {
         self.displays.set_observer(observer);
