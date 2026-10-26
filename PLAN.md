@@ -94,6 +94,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 - [x] Snippets with placeholders (`{clipboard}`, `{date}`, `{time}`, `{cursor}`, …) from the
       palette, and keyword expansion while typing
 - [x] Shell: window and snippet results in the palette, Windows and Snippets settings
+- [x] Hyper key (added on request): Caps Lock or a left/right modifier acts as ⌃⌥⇧⌘ (Shift
+      optional) while held; a quick press can send Escape or toggle Caps Lock; Keyboard pane
 
 ## Not in v1
 
@@ -103,6 +105,14 @@ Raycast extension support.
 
 ## Log
 
+- **Hyper key**: the chosen key is remapped to F18 through the HID event system's
+  `UserKeyMapping` (what `hidutil` sets; other mappings are kept), and an active HID-level tap
+  swallows F18 and adds ⌃⌥⇧⌘ to key and mouse button events while it's held, so global
+  hotkeys and other apps' taps see plain modifiers. The mapping only exists while the tap runs:
+  removed on stop/quit, when the setting is off, and at launch in case of a crash. A quick press
+  is one with nothing else pressed, released within 1 s. Off by default. Known limits: apps
+  that read the live modifier state instead of the event's flags won't see Hyper, and a key
+  already bound to F18 elsewhere would fire. Not yet tried on the real keyboard.
 - **Step 6**: built by three parallel agents (window management; snippets + expansion; Swift
   panes), integrated on main. 281 Rust tests. Windows: pure layout module (gap shared between
   neighbours, whole points), AX focused window with a 0.5 s messaging timeout, size → position →

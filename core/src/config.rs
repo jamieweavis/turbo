@@ -16,6 +16,7 @@ pub struct Config {
     pub mouse: MouseConfig,
     pub monitor: MonitorConfig,
     pub launcher: LauncherConfig,
+    pub hyper_key: HyperKeyConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
@@ -355,6 +356,48 @@ impl Default for MonitorConfig {
             brightness_keys: true,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct HyperKeyConfig {
+    /// The key that acts as ⌃⌥⇧⌘ while held. `None` turns the Hyper key off and leaves the
+    /// keyboard alone.
+    pub key: Option<HyperKeySource>,
+    /// Hyper includes Shift (⌃⌥⇧⌘). Without it Hyper is ⌃⌥⌘, and Shift can be added on top.
+    pub include_shift: bool,
+    /// What pressing and releasing the key on its own does.
+    pub quick_press: QuickPress,
+}
+
+impl Default for HyperKeyConfig {
+    fn default() -> Self {
+        Self {
+            key: None,
+            include_shift: true,
+            quick_press: QuickPress::Nothing,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Enum)]
+pub enum HyperKeySource {
+    CapsLock,
+    LeftControl,
+    LeftShift,
+    LeftOption,
+    LeftCommand,
+    RightControl,
+    RightShift,
+    RightOption,
+    RightCommand,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum QuickPress {
+    Nothing,
+    Escape,
+    ToggleCapsLock,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]

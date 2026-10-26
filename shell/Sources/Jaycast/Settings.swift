@@ -37,7 +37,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, mouse, monitor
+    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, keyboard, mouse, monitor
 
     var id: Self { self }
 
@@ -51,6 +51,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "Clipboard"
         case .files: "File Search"
         case .windows: "Windows"
+        case .keyboard: "Keyboard"
         case .mouse: "Mouse"
         case .monitor: "Monitor"
         }
@@ -66,6 +67,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
         case .windows: "macwindow"
+        case .keyboard: "keyboard"
         case .mouse: "computermouse"
         case .monitor: "display"
         }
@@ -97,6 +99,7 @@ struct SettingsView: View {
                 case .clipboard: ClipboardPane(settings: model.launcher)
                 case .files: FileSearchPane(settings: model.launcher)
                 case .windows: WindowsPane(settings: model.launcher)
+                case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: model.isInputRunning)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
                 }

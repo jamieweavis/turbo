@@ -10,6 +10,7 @@ final class AppModel {
     let mouse: MouseSettings
     let displays: DisplaySettings
     let launcher: LauncherSettings
+    let hyperKey: HyperKeySettings
     @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
     @ObservationIgnored private let commandOutput = CommandOutputWindows()
@@ -24,6 +25,7 @@ final class AppModel {
         displays = DisplaySettings(core: core)
         brightnessIndicator = BrightnessIndicator(settings: displays)
         launcher = LauncherSettings(core: core)
+        hyperKey = HyperKeySettings(core: core)
         palette = PaletteWindowController(core: core, settings: launcher)
     }
 

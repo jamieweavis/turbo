@@ -8,6 +8,7 @@ mod config;
 mod display;
 mod error;
 mod files;
+mod hyper;
 mod input;
 mod launcher;
 mod pasteboard;
@@ -25,6 +26,7 @@ pub use display::{DisplayInfo, DisplayObserver};
 pub use error::CoreError;
 pub use files::FileResult;
 use files::FileSearch;
+use hyper::HyperKey;
 use input::InputEngine;
 pub use launcher::{AppInfo, LauncherObserver, OpenOutcome, PaletteMode, ResultKind, SearchResult};
 use launcher::{HotkeyManager, Launcher};
@@ -66,6 +68,7 @@ pub struct Core {
     files: FileSearch,
     windows: Arc<WindowManager>,
     snippets: SnippetExpander,
+    hyper_key: HyperKey,
 }
 
 #[uniffi::export]
@@ -85,6 +88,7 @@ impl Core {
         let clipboard = ClipboardHistory::new(&data_dir, config.launcher.clipboard.clone());
         let files = FileSearch::new(config.launcher.files.clone());
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
+        let hyper_key = HyperKey::new(config.hyper_key.clone());
         Ok(Arc::new(Self {
             store,
             config: Mutex::new(config),
@@ -97,6 +101,7 @@ impl Core {
             files,
             windows,
             snippets,
+            hyper_key,
         }))
     }
 
@@ -140,6 +145,19 @@ impl Core {
     /// Registers the shell's observer for display and brightness changes (`None` clears it).
     pub fn set_display_observer(&self, observer: Option<Arc<dyn DisplayObserver>>) {
         self.displays.set_observer(observer);
+    }
+
+    pub fn hyper_key_config(&self) -> HyperKeyConfig {
+        self.config.lock().unwrap().hyper_key.clone()
+    }
+
+    /// Saves the new Hyper key settings and applies them immediately if input is running.
+    /// The settings are saved even if remapping the key fails.
+    pub fn set_hyper_key_config(&self, hyper_key: HyperKeyConfig) -> Result<(), CoreError> {
+        let mut config = self.config.lock().unwrap();
+        config.hyper_key = hyper_key.clone();
+        self.store.save(&config)?;
+        self.hyper_key.set_config(hyper_key)
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {
@@ -245,22 +263,26 @@ impl Core {
         self.launcher.apps()
     }
 
-    /// Starts the event taps (mouse, brightness keys and snippet expansion). Fails with
-    /// `PermissionDenied` without Accessibility. Calling it while already running is a no-op.
+    /// Starts the event taps (mouse, brightness keys, snippet expansion and the Hyper key).
+    /// Fails with `PermissionDenied` without Accessibility. Calling it while already running
+    /// is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
         self.input.start()?;
         self.brightness_keys.start()?;
-        self.snippets.start()
+        self.snippets.start()?;
+        self.hyper_key.start()
     }
 
+    /// Also gives the Hyper key back its normal behaviour; call it before quitting.
     pub fn stop_input(&self) {
         self.input.stop();
         self.brightness_keys.stop();
         self.snippets.stop();
+        self.hyper_key.stop();
     }
 
-    /// True only when the mouse and brightness key taps are running (the snippet tap only
-    /// runs while expansion is on).
+    /// True only when the mouse and brightness key taps are running (the snippet and Hyper
+    /// taps only run while those features are on).
     pub fn is_input_running(&self) -> bool {
         self.input.is_running() && self.brightness_keys.is_running()
     }
