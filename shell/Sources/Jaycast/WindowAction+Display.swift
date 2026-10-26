@@ -19,6 +19,12 @@ extension WindowAction: Identifiable {
         case .rightThird: "Right Third"
         case .leftTwoThirds: "Left Two Thirds"
         case .rightTwoThirds: "Right Two Thirds"
+        case .topLeftSixth: "Top Left Sixth"
+        case .topCenterSixth: "Top Center Sixth"
+        case .topRightSixth: "Top Right Sixth"
+        case .bottomLeftSixth: "Bottom Left Sixth"
+        case .bottomCenterSixth: "Bottom Center Sixth"
+        case .bottomRightSixth: "Bottom Right Sixth"
         case .maximize: "Maximize"
         case .almostMaximize: "Almost Maximize"
         case .center: "Center"
@@ -41,6 +47,12 @@ extension WindowAction: Identifiable {
         case .leftThird, .leftTwoThirds: "rectangle.leftthird.inset.filled"
         case .centerThird: "rectangle.center.inset.filled"
         case .rightThird, .rightTwoThirds: "rectangle.rightthird.inset.filled"
+        case .topLeftSixth: "square.grid.3x3.topleft.filled"
+        case .topCenterSixth: "square.grid.3x3.topmiddle.filled"
+        case .topRightSixth: "square.grid.3x3.topright.filled"
+        case .bottomLeftSixth: "square.grid.3x3.bottomleft.filled"
+        case .bottomCenterSixth: "square.grid.3x3.bottommiddle.filled"
+        case .bottomRightSixth: "square.grid.3x3.bottomright.filled"
         case .maximize: "rectangle.inset.filled"
         case .almostMaximize: "rectangle.dashed"
         case .center: "rectangle.center.inset.filled"
@@ -53,7 +65,7 @@ extension WindowAction: Identifiable {
 
 /// How the Windows settings pane groups the actions.
 enum WindowActionGroup: CaseIterable, Identifiable {
-    case halves, quarters, thirds, sizeAndPosition, displays
+    case halves, quarters, thirds, sixths, sizeAndPosition, displays
 
     var id: Self { self }
 
@@ -62,6 +74,7 @@ enum WindowActionGroup: CaseIterable, Identifiable {
         case .halves: "Halves"
         case .quarters: "Quarters"
         case .thirds: "Thirds"
+        case .sixths: "Sixths"
         case .sizeAndPosition: "Size & Position"
         case .displays: "Displays"
         }
@@ -72,6 +85,7 @@ enum WindowActionGroup: CaseIterable, Identifiable {
         case .halves: [.leftHalf, .rightHalf, .topHalf, .bottomHalf]
         case .quarters: [.topLeft, .topRight, .bottomLeft, .bottomRight]
         case .thirds: [.leftThird, .centerThird, .rightThird, .leftTwoThirds, .rightTwoThirds]
+        case .sixths: [.topLeftSixth, .topCenterSixth, .topRightSixth, .bottomLeftSixth, .bottomCenterSixth, .bottomRightSixth]
         case .sizeAndPosition: [.maximize, .almostMaximize, .center, .restore]
         case .displays: [.nextDisplay, .previousDisplay]
         }

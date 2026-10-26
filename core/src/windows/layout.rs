@@ -285,6 +285,12 @@ fn snap_plan(snap: Snap, window: &Rect, screen: &Screen, gap: f64) -> Plan {
         RightThird => ((2.0 * third, 1.0), full, (End, Middle)),
         LeftTwoThirds => ((0.0, 2.0 * third), full, (Start, Middle)),
         RightTwoThirds => ((third, 1.0), full, (End, Middle)),
+        TopLeftSixth => ((0.0, third), (0.0, 0.5), (Start, Start)),
+        TopCenterSixth => ((third, 2.0 * third), (0.0, 0.5), (Middle, Start)),
+        TopRightSixth => ((2.0 * third, 1.0), (0.0, 0.5), (End, Start)),
+        BottomLeftSixth => ((0.0, third), (0.5, 1.0), (Start, End)),
+        BottomCenterSixth => ((third, 2.0 * third), (0.5, 1.0), (Middle, End)),
+        BottomRightSixth => ((2.0 * third, 1.0), (0.5, 1.0), (End, End)),
         Maximize => (full, full, (Middle, Middle)),
         AlmostMaximize => {
             let margin = (1.0 - ALMOST_MAXIMIZE) / 2.0;
@@ -496,6 +502,45 @@ mod tests {
             frame(RightTwoThirds, WINDOW, 0.0),
             Rect::new(480.0, 25.0, 960.0, 875.0)
         );
+    }
+
+    #[test]
+    fn sixths_tile_two_rows_of_three() {
+        assert_eq!(
+            frame(TopLeftSixth, WINDOW, 0.0),
+            Rect::new(0.0, 25.0, 480.0, 438.0)
+        );
+        assert_eq!(
+            frame(TopCenterSixth, WINDOW, 0.0),
+            Rect::new(480.0, 25.0, 480.0, 438.0)
+        );
+        assert_eq!(
+            frame(TopRightSixth, WINDOW, 0.0),
+            Rect::new(960.0, 25.0, 480.0, 438.0)
+        );
+        assert_eq!(
+            frame(BottomLeftSixth, WINDOW, 0.0),
+            Rect::new(0.0, 463.0, 480.0, 437.0)
+        );
+        assert_eq!(
+            frame(BottomCenterSixth, WINDOW, 0.0),
+            Rect::new(480.0, 463.0, 480.0, 437.0)
+        );
+        assert_eq!(
+            frame(BottomRightSixth, WINDOW, 0.0),
+            Rect::new(960.0, 463.0, 480.0, 437.0)
+        );
+
+        // With a gap, neighbours in a row and across rows sit one gap apart.
+        let gap = 10.0;
+        let top = [TopLeftSixth, TopCenterSixth, TopRightSixth].map(|a| frame(a, WINDOW, gap));
+        let bottom_left = frame(BottomLeftSixth, WINDOW, gap);
+        assert_eq!(top[0].x, gap);
+        assert!((top[1].x - top[0].right() - gap).abs() <= 1.0);
+        assert!((top[2].x - top[1].right() - gap).abs() <= 1.0);
+        assert_eq!(1440.0 - top[2].right(), gap);
+        assert_eq!(bottom_left.y - top[0].bottom(), gap);
+        assert_eq!(900.0 - bottom_left.bottom(), gap);
     }
 
     #[test]

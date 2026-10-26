@@ -189,6 +189,13 @@ pub enum WindowAction {
     RightThird,
     LeftTwoThirds,
     RightTwoThirds,
+    /// Sixths: a grid of two rows of three columns.
+    TopLeftSixth,
+    TopCenterSixth,
+    TopRightSixth,
+    BottomLeftSixth,
+    BottomCenterSixth,
+    BottomRightSixth,
     Maximize,
     /// Maximised, inset to leave a margin of the desktop showing.
     AlmostMaximize,

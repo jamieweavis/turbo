@@ -89,7 +89,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
       `SnippetsConfig`/`Snippet`, window and snippet results in search, window hotkeys,
       snippet tap started with the other event taps
 - [x] Window management through Accessibility: halves (repeat cycles 1/2 → 2/3 → 1/3),
-      quarters, thirds, maximise, almost maximise, centre, restore, next/previous display
+      quarters, thirds, sixths (2 rows × 3 columns), maximise, almost maximise, centre, restore,
+      next/previous display
 - [x] Snippets with placeholders (`{clipboard}`, `{date}`, `{time}`, `{cursor}`, …) from the
       palette, and keyword expansion while typing
 - [x] Shell: window and snippet results in the palette, Windows and Snippets settings
