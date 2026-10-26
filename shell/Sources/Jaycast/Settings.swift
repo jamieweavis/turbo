@@ -57,7 +57,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .snippets: "Snippets"
         case .clipboard: "Clipboard"
         case .files: "File Search"
-        case .windows: "Windows"
+        case .windows: "Window Management"
         case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
         case .monitor: "Brightness"
@@ -75,7 +75,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .snippets: "text.quote"
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
-        case .windows: "macwindow"
+        case .windows: "rectangle.lefthalf.filled"
         case .keyboard: "command.square"
         case .mouse: "computermouse"
         case .monitor: "sun.max"
@@ -94,12 +94,17 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $selection) { pane in
-                Label(pane.title, systemImage: pane.systemImage)
+                if pane == .windows {
+                    // The same drawn screen as the Left Half action, rather than a symbol.
+                    Label { Text(pane.title) } icon: { WindowActionIcon(action: .leftHalf, width: 18) }
+                } else {
+                    Label(pane.title, systemImage: pane.systemImage)
+                }
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
-            // so the selected (bold) "Colour Picker" fits.
-            .frame(minWidth: 165)
-            .navigationSplitViewColumnWidth(min: 165, ideal: 165, max: 165)
+            // so the selected (bold) "Window Management" fits.
+            .frame(minWidth: 220)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 220, max: 220)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             let pane = selection ?? .general

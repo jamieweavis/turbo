@@ -110,7 +110,7 @@ struct WindowActionIcon: View {
     }
 }
 
-/// How the Windows settings pane groups the actions.
+/// How the Window Management settings pane groups the actions.
 enum WindowActionGroup: CaseIterable, Identifiable {
     case halves, quarters, thirds, sixths, sizeAndPosition, displays
 
