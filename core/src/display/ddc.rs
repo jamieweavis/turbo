@@ -6,15 +6,21 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use ddc::Ddc;
+use ddc::{Ddc, DdcCommandRaw};
 use ddc_macos::Monitor;
 
 /// MCCS VCP code for luminance (brightness).
 const VCP_BRIGHTNESS: u8 = 0x10;
+/// DDC/CI opcode for "Get VCP Feature".
+const GET_VCP: u8 = 0x01;
 const READ_ATTEMPTS: usize = 3;
 const RETRY_DELAY: Duration = Duration::from_millis(60);
 /// Pause between consecutive writes; many monitors drop commands sent back to back.
 const WRITE_GAP: Duration = Duration::from_millis(40);
+/// Every request goes out twice, this far apart. Some monitors (seen on a Dell U2723QE over
+/// USB-C on Apple Silicon) answer a lone read with a null message and silently drop a lone
+/// write, sometimes for days, but handle a request that's repeated before the reply is read.
+const REPEAT_GAP: Duration = Duration::from_millis(10);
 /// Waits between re-reads of a display whose DDC didn't answer, then every `RECOVERY_MAX`.
 const RECOVERY_DELAYS: [Duration; 4] = [
     Duration::from_secs(2),
@@ -194,9 +200,9 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
         };
 
         // One retry: DDC over USB-C/DisplayPort fails intermittently on some monitors.
-        let ok = monitor.set_vcp_feature(VCP_BRIGHTNESS, raw).is_ok() || {
+        let ok = write_brightness(&mut monitor, raw) || {
             thread::sleep(RETRY_DELAY);
-            monitor.set_vcp_feature(VCP_BRIGHTNESS, raw).is_ok()
+            write_brightness(&mut monitor, raw)
         };
         shared.state.lock().unwrap().slot.record(raw, ok);
         thread::sleep(WRITE_GAP);
@@ -208,6 +214,10 @@ fn read_brightness(monitor: &mut Monitor) -> Option<Reading> {
         if attempt > 0 {
             thread::sleep(RETRY_DELAY);
         }
+        // The first copy of the request goes out without reading a reply; `get_vcp_feature`
+        // sends the second and reads.
+        let _ = monitor.execute_raw(&[GET_VCP, VCP_BRIGHTNESS], &mut [], Duration::ZERO);
+        thread::sleep(REPEAT_GAP);
         if let Ok(value) = monitor.get_vcp_feature(VCP_BRIGHTNESS) {
             let max = value.maximum();
             if max > 0 {
@@ -219,6 +229,13 @@ fn read_brightness(monitor: &mut Monitor) -> Option<Reading> {
         }
     }
     None
+}
+
+/// Sends the brightness write twice (see [`REPEAT_GAP`]).
+fn write_brightness(monitor: &mut Monitor, raw: u16) -> bool {
+    let _ = monitor.set_vcp_feature(VCP_BRIGHTNESS, raw);
+    thread::sleep(REPEAT_GAP);
+    monitor.set_vcp_feature(VCP_BRIGHTNESS, raw).is_ok()
 }
 
 #[cfg(test)]
