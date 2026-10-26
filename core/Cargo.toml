@@ -12,7 +12,7 @@ crate-type = ["lib", "staticlib"]
 uniffi.workspace = true
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSEvent", "NSRunningApplication", "NSWorkspace", "block2", "objc2-core-graphics"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSString", "NSURL"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSError", "NSFileManager", "NSString", "NSURL"] }
 objc2-core-foundation = "0.3"
 objc2-core-graphics = "0.3"
 serde = { version = "1", features = ["derive"] }
@@ -20,3 +20,6 @@ serde_json = "1"
 thiserror = "2"
 ddc = "0.2"
 ddc-macos = "0.2"
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+plist = "1"
+unicode-normalization = "0.1"
