@@ -26,3 +26,19 @@ impl From<serde_json::Error> for CoreError {
         }
     }
 }
+
+impl From<toml::de::Error> for CoreError {
+    fn from(error: toml::de::Error) -> Self {
+        CoreError::InvalidConfig {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<toml::ser::Error> for CoreError {
+    fn from(error: toml::ser::Error) -> Self {
+        CoreError::InvalidConfig {
+            message: error.to_string(),
+        }
+    }
+}

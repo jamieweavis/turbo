@@ -27,3 +27,4 @@ unicode-segmentation = "1"
 rusqlite = { version = "0.41", features = ["bundled"] }
 sha2 = "0.11"
 emojis = "0.8"
+toml = "1.1.8"

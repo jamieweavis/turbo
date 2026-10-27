@@ -1,4 +1,4 @@
-//! User settings, persisted as JSON in the app's data directory.
+//! User settings, persisted as TOML at `~/.config/jaycast.toml`.
 //!
 //! Every struct uses `#[serde(default)]` so configs written by older builds keep loading
 //! as fields are added.
@@ -23,6 +23,7 @@ pub struct Config {
 #[serde(default)]
 pub struct LauncherConfig {
     /// Opens the palette. `None` means no global hotkey (the menu bar still opens it).
+    #[serde(with = "cleared")]
     pub hotkey: Option<Hotkey>,
     /// Hotkeys that focus an app (launching it if needed), or hide it if it's already in front.
     pub app_hotkeys: Vec<AppHotkey>,
@@ -107,6 +108,7 @@ pub struct ClipboardConfig {
     /// Off stops watching the clipboard, and leaves out the history's hotkey and search item.
     pub enabled: bool,
     /// Opens the palette in clipboard history.
+    #[serde(with = "cleared")]
     pub hotkey: Option<Hotkey>,
     /// Oldest unpinned items are dropped beyond this many; 0 keeps any number.
     pub max_items: u32,
@@ -286,7 +288,7 @@ impl Default for SnippetsConfig {
     }
 }
 
-/// Keeping the Mac awake. Whether it's on lives beside the config, in `keep-awake.json`.
+/// Keeping the Mac awake. Whether it's on lives in the data directory, in `keep-awake.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
 pub struct KeepAwakeConfig {
@@ -311,7 +313,7 @@ impl Default for KeepAwakeConfig {
     }
 }
 
-/// Picking a colour from anywhere on screen. The history lives beside the config, in
+/// Picking a colour from anywhere on screen. The history lives in the data directory, in
 /// `colors.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
 #[serde(default)]
@@ -670,10 +672,13 @@ pub struct ScrollModifierConfig {
     /// Flip the wheel's direction without touching the trackpad's natural scrolling.
     pub reverse_direction: bool,
     /// Held while scrolling: scroll horizontally.
+    #[serde(with = "cleared")]
     pub horizontal: Option<Modifier>,
     /// Held while scrolling: zoom in/out.
+    #[serde(with = "cleared")]
     pub zoom: Option<Modifier>,
     /// Held while scrolling: small, unsmoothed steps for fine positioning.
+    #[serde(with = "cleared")]
     pub precise: Option<Modifier>,
 }
 
@@ -729,24 +734,84 @@ pub enum Action {
     },
 }
 
-/// Loads and saves [`Config`] at `<data_dir>/config.json`.
-pub struct ConfigStore {
-    path: PathBuf,
-}
+/// For an optional setting whose default is set: TOML has no null, so a cleared one is
+/// written as `false` rather than left out, which would bring the default back on load.
+mod cleared {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-impl ConfigStore {
-    pub fn new(data_dir: &Path) -> Self {
-        Self {
-            path: data_dir.join("config.json"),
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Stored<T> {
+        Set(T),
+        Off(bool),
+        /// `null`, from the JSON config of older builds.
+        Null,
+    }
+
+    pub fn serialize<T: Serialize, S: Serializer>(
+        value: &Option<T>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(value) => value.serialize(serializer),
+            None => serializer.serialize_bool(false),
         }
     }
 
+    pub fn deserialize<'de, T: Deserialize<'de>, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<T>, D::Error> {
+        match Stored::deserialize(deserializer)? {
+            Stored::Set(value) => Ok(Some(value)),
+            Stored::Off(false) | Stored::Null => Ok(None),
+            Stored::Off(true) => Err(serde::de::Error::custom("expected a value or `false`")),
+        }
+    }
+}
+
+/// Loads and saves [`Config`] at `~/.config/jaycast.toml`.
+pub struct ConfigStore {
+    path: PathBuf,
+    /// Where builds before the TOML config kept it, as JSON. Read only while `path` is missing.
+    legacy_path: PathBuf,
+}
+
+impl ConfigStore {
+    /// `data_dir` is checked for a config from before the move to `~/.config`.
+    pub fn new(path: PathBuf, data_dir: &Path) -> Self {
+        Self {
+            path,
+            legacy_path: data_dir.join("config.json"),
+        }
+    }
+
+    /// `~/.config/jaycast.toml`.
+    pub fn default_path() -> Result<PathBuf, CoreError> {
+        let home = std::env::home_dir().ok_or_else(|| CoreError::Other {
+            message: "couldn't find the home directory".into(),
+        })?;
+        Ok(home.join(".config").join("jaycast.toml"))
+    }
+
     /// A missing file yields the defaults; an unreadable one is an error rather than
-    /// silently discarding the user's settings.
+    /// silently discarding the user's settings. A legacy JSON config is moved over on first
+    /// load and left in place.
     pub fn load(&self) -> Result<Config, CoreError> {
-        match fs::read(&self.path) {
-            Ok(bytes) => Ok(serde_json::from_slice(&bytes)?),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+        match fs::read_to_string(&self.path) {
+            Ok(text) => Ok(toml::from_str(&text)?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match fs::read(&self.legacy_path) {
+                    Ok(bytes) => {
+                        let config = serde_json::from_slice(&bytes)?;
+                        self.save(&config)?;
+                        Ok(config)
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        Ok(Config::default())
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            }
             Err(error) => Err(error.into()),
         }
     }
@@ -756,8 +821,8 @@ impl ConfigStore {
         if let Some(dir) = self.path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let tmp = self.path.with_extension("json.tmp");
-        fs::write(&tmp, serde_json::to_vec_pretty(config)?)?;
+        let tmp = self.path.with_extension("toml.tmp");
+        fs::write(&tmp, toml::to_string_pretty(config)?)?;
         fs::rename(&tmp, &self.path)?;
         Ok(())
     }
@@ -773,16 +838,59 @@ mod tests {
         dir
     }
 
+    fn store(dir: &Path) -> ConfigStore {
+        ConfigStore::new(dir.join("jaycast.toml"), &dir.join("data"))
+    }
+
     #[test]
     fn missing_file_loads_defaults() {
-        let store = ConfigStore::new(&temp_dir("missing"));
+        let store = store(&temp_dir("missing"));
         assert_eq!(store.load().unwrap(), Config::default());
+    }
+
+    #[test]
+    fn defaults_round_trip() {
+        let dir = temp_dir("defaults");
+        let store = store(&dir);
+        store.save(&Config::default()).unwrap();
+        assert_eq!(store.load().unwrap(), Config::default());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn cleared_settings_stay_cleared() {
+        let dir = temp_dir("cleared");
+        let store = store(&dir);
+        let mut config = Config::default();
+        config.launcher.hotkey = None;
+        config.launcher.clipboard.hotkey = None;
+        config.mouse.scroll_modifiers.zoom = None;
+        store.save(&config).unwrap();
+        assert_eq!(store.load().unwrap(), config);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn legacy_json_config_moves_over() {
+        let dir = temp_dir("legacy");
+        fs::create_dir_all(dir.join("data")).unwrap();
+        fs::write(
+            dir.join("data/config.json"),
+            r#"{"mouse":{"buttons_enabled":false},"launcher":{"hotkey":null}}"#,
+        )
+        .unwrap();
+        let config = store(&dir).load().unwrap();
+        assert!(!config.mouse.buttons_enabled);
+        assert_eq!(config.launcher.hotkey, None);
+        assert!(dir.join("jaycast.toml").exists());
+        assert_eq!(store(&dir).load().unwrap(), config);
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn save_then_load_round_trips() {
         let dir = temp_dir("roundtrip");
-        let store = ConfigStore::new(&dir);
+        let store = store(&dir);
         let mut config = Config::default();
         config.mouse.smooth_scroll.speed = 1.5;
         config.mouse.buttons.push(ButtonBinding {
@@ -803,11 +911,11 @@ mod tests {
         let dir = temp_dir("partial");
         fs::create_dir_all(&dir).unwrap();
         fs::write(
-            dir.join("config.json"),
-            r#"{"mouse":{"buttons_enabled":false}}"#,
+            dir.join("jaycast.toml"),
+            "[mouse]\nbuttons_enabled = false\n",
         )
         .unwrap();
-        let config = ConfigStore::new(&dir).load().unwrap();
+        let config = store(&dir).load().unwrap();
         assert!(!config.mouse.buttons_enabled);
         assert_eq!(config.mouse.smooth_scroll, SmoothScrollConfig::default());
         fs::remove_dir_all(dir).unwrap();

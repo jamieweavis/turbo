@@ -87,11 +87,12 @@ pub struct Core {
 
 #[uniffi::export]
 impl Core {
-    /// `data_dir` is where settings live (the shell passes Application Support/Jaycast).
+    /// `data_dir` is where history and state live (the shell passes Application
+    /// Support/Jaycast); the config itself is `~/.config/jaycast.toml`.
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
         let data_dir = PathBuf::from(data_dir);
-        let store = ConfigStore::new(&data_dir);
+        let store = ConfigStore::new(ConfigStore::default_path()?, &data_dir);
         let config = store.load()?;
         let input = InputEngine::new(config.mouse.clone());
         let displays = DisplayManager::new(config.monitor.clone());
