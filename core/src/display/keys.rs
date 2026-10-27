@@ -273,7 +273,7 @@ fn aux_fields(event: &CGEvent) -> Option<(i16, isize)> {
 
 /// The display containing the mouse cursor. An event created without a source carries the
 /// current cursor position, which is more reliable than a keyboard event's own location.
-fn display_under_cursor() -> Option<CGDirectDisplayID> {
+pub(crate) fn display_under_cursor() -> Option<CGDirectDisplayID> {
     let location = CGEvent::location(CGEvent::new(None).as_deref());
     let mut display: CGDirectDisplayID = 0;
     let mut count: u32 = 0;

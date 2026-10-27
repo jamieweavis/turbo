@@ -646,6 +646,12 @@ pub struct SmoothScrollConfig {
     pub speed: f64,
     /// Fast consecutive ticks scroll progressively further.
     pub acceleration: bool,
+    /// Scroll vertically like a trackpad: gesture and momentum phases, so scroll views
+    /// bounce at their top and bottom.
+    pub trackpad_simulation_vertical: bool,
+    /// Scroll horizontally like a trackpad: scroll views bounce at their sides, and swipe
+    /// gestures such as going back in Safari work.
+    pub trackpad_simulation_horizontal: bool,
 }
 
 impl Default for SmoothScrollConfig {
@@ -655,6 +661,8 @@ impl Default for SmoothScrollConfig {
             smoothness: Smoothness::Regular,
             speed: 1.0,
             acceleration: true,
+            trackpad_simulation_vertical: true,
+            trackpad_simulation_horizontal: true,
         }
     }
 }

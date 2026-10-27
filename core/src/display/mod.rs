@@ -14,7 +14,7 @@
 pub(crate) mod builtin;
 mod ddc;
 mod dimming;
-mod keys;
+pub(crate) mod keys;
 
 use std::ffi::c_void;
 use std::sync::{Arc, Condvar, Mutex, Weak};

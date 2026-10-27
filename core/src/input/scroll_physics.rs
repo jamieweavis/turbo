@@ -5,9 +5,16 @@
 //!
 //! Model: every tick starts a fresh animation covering the tick's distance plus whatever the
 //! previous animation hadn't delivered yet. An animation cruises at constant speed for most of
-//! its distance, then eases out under exponential drag, so content moves crisply and settles
-//! without a long glide. Faster spinning means more distance per tick and shorter animations,
-//! and a run of quick swipes keeps multiplying the distance so long pages fly by.
+//! its distance, then settles: Low eases out over a fixed duration, Regular and High coast
+//! under drag. Faster spinning means more distance per tick and shorter animations, and a run
+//! of quick swipes keeps multiplying the distance so long pages fly by.
+//!
+//! Output, chosen separately for vertical and horizontal scrolling: with trackpad
+//! simulation, the cruise is a gesture (fingers down) and the coast is
+//! momentum (fingers lifted), so scroll views rubber-band at their edges and drop the rest of
+//! the coast. Low has no coast, so it is all gesture. Without it, events are plain continuous
+//! scrolls with no phase, which scroll views treat like an old-style wheel and stop dead at
+//! their edges.
 
 use crate::config::{SmoothScrollConfig, Smoothness};
 
@@ -22,8 +29,6 @@ const INTERVAL_MIN: f64 = 0.001;
 const ACCEL_END_INTERVAL: f64 = 0.015;
 /// How many recent intervals are averaged, so one uneven notch doesn't jolt the speed.
 const INTERVAL_SMOOTHING: usize = 3;
-/// How quickly the base duration falls off as ticks speed up; 0 would be linear.
-const DURATION_CURVATURE: f64 = 4.0;
 
 /// A spin needs at least this many consecutive ticks to count as a swipe.
 const SWIPE_MIN_TICKS: u32 = 2;
@@ -39,15 +44,35 @@ const FAST_SCROLL_INITIAL: f64 = 1.33;
 const FAST_SCROLL_GROWTH: f64 = 2.04;
 const FAST_SCROLL_MAX: f64 = 50.0;
 
-/// Speed (px/s) at which the ease-out counts as stopped.
-const STOP_SPEED: f64 = 30.0;
+/// Screen the per-tick distances are tuned for; bigger screens scroll slightly further.
+const REFERENCE_SCREEN: (f64, f64) = (1920.0, 1080.0);
+/// How much of the fastest per-tick distance follows the screen size.
+const SCREEN_WEIGHT: f64 = 0.1;
 
-/// macOS gesture scroll phases.
+/// Speed (px/s) at which a coast counts as stopped.
+const STOP_SPEED: f64 = 30.0;
+/// Initial slope of Low's ease-out (1 would be linear); it always ends at zero speed.
+const EASE_START_SLOPE: f64 = 1.2;
+/// In trackpad output, every animation is a gesture for at least this long before it may
+/// turn into momentum: apps like Xcode ignore momentum deltas, so a tick must start as a
+/// gesture, and fewer switches mean fewer of the stutters some apps show on each switch.
+const GESTURE_MIN_TIME: f64 = CONSECUTIVE_MAX;
+
+/// Phases of the scroll events to post.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Phase {
+    /// A plain continuous scroll, outside any gesture.
+    None,
     Began,
     Changed,
     Ended,
+    MomentumBegan,
+    MomentumChanged,
+    MomentumEnded,
+    /// Fingers touching the trackpad. Followed by `Cancelled` it is a tap without scrolling,
+    /// which makes apps that run their own momentum stop it.
+    MayBegin,
+    Cancelled,
 }
 
 /// One scroll event to post: whole pixels, macOS sign convention (positive = up / left).
@@ -58,26 +83,74 @@ pub(crate) struct Frame {
     pub phase: Phase,
 }
 
+/// How an animation is reported to apps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Output {
+    Unphased,
+    Trackpad,
+}
+
+/// How an animation settles once its cruise is over.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Tail {
+    /// The whole animation follows an ease-out over its duration, ending at zero speed.
+    Ease,
+    /// Coasts under drag `dv/dt = -coefficient * v^exponent` down to [`STOP_SPEED`].
+    /// Exponents below 1 glide at speed and then stop more decisively than plain friction.
+    Drag { coefficient: f64, exponent: f64 },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Params {
     /// Pixels per tick for an isolated tick.
     min_px: f64,
-    /// Pixels per tick once ticks come every [`ACCEL_END_INTERVAL`].
+    /// Pixels per tick once ticks come every [`ACCEL_END_INTERVAL`], on the reference screen.
     max_px: f64,
     /// Cruise duration (s) for slow ticks, shrinking towards `fast_duration` as they speed up.
     slow_duration: f64,
     fast_duration: f64,
-    /// Drag coefficient (1/s) of the ease-out; higher stops sooner.
-    drag: f64,
+    /// How quickly the duration falls off as ticks speed up; 0 is linear.
+    duration_curvature: f64,
+    tail: Tail,
+    vertical_output: Output,
+    horizontal_output: Output,
     acceleration: bool,
 }
 
 impl Params {
     fn new(config: &SmoothScrollConfig) -> Self {
-        let (min_px, max_px, slow_duration, fast_duration, drag) = match config.smoothness {
-            Smoothness::Low => (60.0, 120.0, 0.12, 0.09, 30.0),
-            Smoothness::Regular => (60.0, 120.0, 0.18, 0.11, 23.0),
-            Smoothness::High => (90.0, 180.0, 0.22, 0.22, 12.0),
+        let (min_px, max_px, slow_duration, fast_duration, duration_curvature, tail) =
+            match config.smoothness {
+                Smoothness::Low => (60.0, 120.0, 0.24, 0.10, 0.0, Tail::Ease),
+                Smoothness::Regular => (
+                    60.0,
+                    120.0,
+                    0.18,
+                    0.11,
+                    4.0,
+                    Tail::Drag {
+                        coefficient: 23.0,
+                        exponent: 1.0,
+                    },
+                ),
+                Smoothness::High => (
+                    90.0,
+                    180.0,
+                    0.22,
+                    0.22,
+                    0.0,
+                    Tail::Drag {
+                        coefficient: 35.0,
+                        exponent: 0.75,
+                    },
+                ),
+            };
+        let output = |trackpad| {
+            if trackpad {
+                Output::Trackpad
+            } else {
+                Output::Unphased
+            }
         };
         let speed = config.speed.clamp(0.1, 10.0);
         Self {
@@ -85,27 +158,37 @@ impl Params {
             max_px: max_px * speed,
             slow_duration,
             fast_duration,
-            drag,
+            duration_curvature,
+            tail,
+            vertical_output: output(config.trackpad_simulation_vertical),
+            horizontal_output: output(config.trackpad_simulation_horizontal),
             acceleration: config.acceleration,
         }
     }
 
-    /// Pixels for one tick, given the smoothed interval since the previous one.
-    fn tick_distance(&self, interval: Option<f64>) -> f64 {
+    /// Pixels for one tick, given the smoothed interval since the previous one and how big
+    /// the screen is along the scroll axis relative to the reference.
+    fn tick_distance(&self, interval: Option<f64>, screen_factor: f64) -> f64 {
         if !self.acceleration {
             return self.min_px;
         }
+        let max_px = self.max_px * (1.0 - SCREEN_WEIGHT + SCREEN_WEIGHT * screen_factor);
         let interval = interval.unwrap_or(CONSECUTIVE_MAX).max(ACCEL_END_INTERVAL);
         let (slow_rate, fast_rate) = (1.0 / CONSECUTIVE_MAX, 1.0 / ACCEL_END_INTERVAL);
         let t = ((1.0 / interval - slow_rate) / (fast_rate - slow_rate)).clamp(0.0, 1.0);
-        self.min_px + (self.max_px - self.min_px) * t
+        self.min_px + (max_px - self.min_px) * t
     }
 
     /// Cruise duration for the animation a tick starts.
     fn duration(&self, interval: Option<f64>) -> f64 {
         let interval = interval.unwrap_or(CONSECUTIVE_MAX);
         let t = ((CONSECUTIVE_MAX - interval) / (CONSECUTIVE_MAX - INTERVAL_MIN)).clamp(0.0, 1.0);
-        let eased = (t * DURATION_CURVATURE).exp_m1() / DURATION_CURVATURE.exp_m1();
+        let curvature = self.duration_curvature;
+        let eased = if curvature == 0.0 {
+            t
+        } else {
+            (t * curvature).exp_m1() / curvature.exp_m1()
+        };
         self.slow_duration + (self.fast_duration - self.slow_duration) * eased
     }
 }
@@ -191,62 +274,147 @@ impl Cadence {
     }
 }
 
-/// Distance over time for one animation: constant speed, then exponential drag down to
-/// [`STOP_SPEED`], landing exactly on `distance`.
+/// A coast under drag from some starting speed down to [`STOP_SPEED`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Drag {
+    coefficient: f64,
+    exponent: f64,
+}
+
+impl Drag {
+    fn is_linear(&self) -> bool {
+        (self.exponent - 1.0).abs() < 1e-9
+    }
+
+    /// Distance covered from `speed` until stopped.
+    fn distance(&self, speed: f64) -> f64 {
+        let (a, b) = (self.coefficient, self.exponent);
+        if self.is_linear() {
+            (speed - STOP_SPEED) / a
+        } else {
+            (speed.powf(2.0 - b) - STOP_SPEED.powf(2.0 - b)) / ((2.0 - b) * a)
+        }
+    }
+
+    /// The starting speed that covers exactly `distance` before stopping.
+    fn speed_for(&self, distance: f64) -> f64 {
+        let (a, b) = (self.coefficient, self.exponent);
+        if self.is_linear() {
+            a * distance + STOP_SPEED
+        } else {
+            (distance * (2.0 - b) * a + STOP_SPEED.powf(2.0 - b)).powf(1.0 / (2.0 - b))
+        }
+    }
+
+    /// Time from `speed` until stopped.
+    fn duration(&self, speed: f64) -> f64 {
+        let (a, b) = (self.coefficient, self.exponent);
+        if self.is_linear() {
+            (speed / STOP_SPEED).ln() / a
+        } else {
+            (speed.powf(1.0 - b) - STOP_SPEED.powf(1.0 - b)) / ((1.0 - b) * a)
+        }
+    }
+
+    /// Distance covered `t` seconds into a coast that started at `speed`.
+    fn position(&self, speed: f64, t: f64) -> f64 {
+        let (a, b) = (self.coefficient, self.exponent);
+        if self.is_linear() {
+            speed / a * -(-a * t).exp_m1()
+        } else {
+            let k = 1.0 - b;
+            let now_speed = (speed.powf(k) - k * a * t).max(0.0).powf(1.0 / k);
+            (speed.powf(2.0 - b) - now_speed.powf(2.0 - b)) / ((2.0 - b) * a)
+        }
+    }
+}
+
+/// Low's ease-out: starts at [`EASE_START_SLOPE`] times the average speed and ends at rest.
+fn ease_out(u: f64) -> f64 {
+    let s = EASE_START_SLOPE;
+    u * (s + u * ((3.0 - 2.0 * s) + u * (s - 2.0)))
+}
+
+/// Distance over time for one animation, landing exactly on `distance` at `end_time`.
 #[derive(Debug, Clone, Copy)]
 struct Curve {
     distance: f64,
+    tail: Tail,
+    /// Cruise speed, or the coast's starting speed when there is no cruise.
     speed: f64,
+    /// When the cruise ends. For an ease-out the whole curve counts as cruise.
     cruise_time: f64,
     cruise_distance: f64,
-    drag: f64,
     end_time: f64,
 }
 
 impl Curve {
-    fn new(distance: f64, duration: f64, drag: f64) -> Self {
+    fn new(distance: f64, duration: f64, tail: Tail) -> Self {
         let mut curve = Self {
             distance,
+            tail,
             speed: 0.0,
             cruise_time: 0.0,
             cruise_distance: distance,
-            drag,
             end_time: 0.0,
         };
         if duration <= 0.0 || distance <= 0.0 {
             return curve;
         }
         let speed = distance / duration;
+        let drag = match tail {
+            Tail::Ease => {
+                curve.cruise_time = duration;
+                curve.end_time = duration;
+                return curve;
+            }
+            Tail::Drag {
+                coefficient,
+                exponent,
+            } => Drag {
+                coefficient,
+                exponent,
+            },
+        };
         if speed <= STOP_SPEED {
-            // Too slow to need easing out.
+            // Too slow to need a coast.
             curve.speed = speed;
             curve.cruise_time = duration;
             curve.end_time = duration;
             return curve;
         }
-        // Drag from v to the stop speed covers (v - stop) / drag.
-        let tail = (speed - STOP_SPEED) / drag;
-        if tail <= distance {
+        let coast = drag.distance(speed);
+        if coast <= distance {
             curve.speed = speed;
-            curve.cruise_distance = distance - tail;
+            curve.cruise_distance = distance - coast;
             curve.cruise_time = curve.cruise_distance / speed;
         } else {
-            // Short hop: all ease-out, starting just fast enough to cover the distance.
-            curve.speed = drag * distance + STOP_SPEED;
+            // Short hop: all coast, starting just fast enough to cover the distance.
+            curve.speed = drag.speed_for(distance);
             curve.cruise_distance = 0.0;
         }
-        curve.end_time = curve.cruise_time + (curve.speed / STOP_SPEED).ln() / drag;
+        curve.end_time = curve.cruise_time + drag.duration(curve.speed);
         curve
     }
 
     fn position(&self, t: f64) -> f64 {
         if t >= self.end_time {
-            self.distance
-        } else if t <= self.cruise_time {
-            self.speed * t
-        } else {
-            let coasting = t - self.cruise_time;
-            self.cruise_distance + self.speed / self.drag * -(-self.drag * coasting).exp_m1()
+            return self.distance;
+        }
+        match self.tail {
+            Tail::Ease => self.distance * ease_out(t / self.end_time),
+            Tail::Drag { .. } if t <= self.cruise_time => self.speed * t,
+            Tail::Drag {
+                coefficient,
+                exponent,
+            } => {
+                let drag = Drag {
+                    coefficient,
+                    exponent,
+                };
+                let coasted = drag.position(self.speed, t - self.cruise_time);
+                (self.cruise_distance + coasted).min(self.distance)
+            }
         }
     }
 }
@@ -254,10 +422,13 @@ impl Curve {
 #[derive(Debug, Clone, Copy)]
 struct Animation {
     direction: Direction,
+    output: Output,
     started_at: f64,
     curve: Curve,
     /// Distance along the curve already handed to `carry`.
     delivered: f64,
+    /// Animation time of the previous frame, if there was one.
+    last_t: Option<f64>,
 }
 
 impl Animation {
@@ -267,14 +438,25 @@ impl Animation {
     }
 }
 
+/// Which trackpad phase has been opened by a posted event and must be closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Open {
+    None,
+    Gesture,
+    Momentum,
+}
+
 pub(crate) struct ScrollPhysics {
     params: Params,
     cadence: Cadence,
     animation: Option<Animation>,
-    /// The gesture's Began event has been posted.
-    began: bool,
+    open: Open,
+    /// Events closing a phase that a tick interrupted, posted before the next frame.
+    pending: Vec<Frame>,
     /// Signed sub-pixel remainder not yet emitted.
     carry: f64,
+    /// Size of the screen being scrolled, in points.
+    screen: (f64, f64),
 }
 
 impl ScrollPhysics {
@@ -283,8 +465,10 @@ impl ScrollPhysics {
             params: Params::new(config),
             cadence: Cadence::default(),
             animation: None,
-            began: false,
+            open: Open::None,
+            pending: Vec::new(),
             carry: 0.0,
+            screen: REFERENCE_SCREEN,
         }
     }
 
@@ -293,8 +477,15 @@ impl ScrollPhysics {
         self.params = Params::new(config);
     }
 
+    /// The size of the screen under the pointer, applied from the next tick.
+    pub fn set_screen(&mut self, width: f64, height: f64) {
+        if width > 0.0 && height > 0.0 {
+            self.screen = (width, height);
+        }
+    }
+
     pub fn is_idle(&self) -> bool {
-        self.animation.is_none()
+        self.animation.is_none() && self.pending.is_empty()
     }
 
     /// Adds one wheel tick, in lines with macOS's sign convention.
@@ -307,12 +498,22 @@ impl ScrollPhysics {
         } else {
             ((true, horizontal.signum()), horizontal.abs())
         };
+        let output = match (precise, direction) {
+            (true, _) => Output::Unphased,
+            (false, (true, _)) => self.params.horizontal_output,
+            (false, (false, _)) => self.params.vertical_output,
+        };
         let tick = self.cadence.record(now, direction);
 
-        let previous = self.animation.filter(|a| a.direction == direction);
+        let previous = self
+            .animation
+            .filter(|a| a.direction == direction && a.output == output);
         if previous.is_none() {
-            // Reversing or switching axis stops the current motion dead rather than fighting it.
+            // Reversing or switching axis stops the current motion dead rather than fighting
+            // it, and ends its gesture so the new direction starts a fresh one.
             self.carry = 0.0;
+            let closing = self.close();
+            self.pending.extend(closing);
         }
         // A tick after a pause starts afresh; one that continues a spin or swipe run picks
         // up what's left so quick ticks add up.
@@ -324,7 +525,13 @@ impl ScrollPhysics {
         let (distance, duration) = if precise {
             (PRECISE_PX_PER_LINE * lines, 0.0)
         } else {
-            let mut per_tick = self.params.tick_distance(tick.interval);
+            let (horizontal, _) = direction;
+            let screen_factor = if horizontal {
+                self.screen.0 / REFERENCE_SCREEN.0
+            } else {
+                self.screen.1 / REFERENCE_SCREEN.1
+            };
+            let mut per_tick = self.params.tick_distance(tick.interval, screen_factor);
             if self.params.acceleration {
                 per_tick *= fast_scroll_factor(tick.swipes + 1);
             }
@@ -335,17 +542,20 @@ impl ScrollPhysics {
         };
         self.animation = Some(Animation {
             direction,
+            output,
             started_at: now,
-            curve: Curve::new(distance, duration, self.params.drag),
+            curve: Curve::new(distance, duration, self.params.tail),
             delivered: 0.0,
+            last_t: None,
         });
     }
 
-    /// Advances to `now` and returns the events to post: usually one, two when the gesture
-    /// ends, none when idle or when nothing reached a whole pixel.
+    /// Advances to `now` and returns the events to post: usually one, a few around phase
+    /// changes, none when idle or when nothing reached a whole pixel.
     pub fn tick(&mut self, now: f64) -> Vec<Frame> {
+        let mut frames = std::mem::take(&mut self.pending);
         let Some(animation) = &mut self.animation else {
-            return Vec::new();
+            return frames;
         };
         let t = (now - animation.started_at).max(0.0);
         let position = animation.curve.position(t);
@@ -353,59 +563,88 @@ impl ScrollPhysics {
         self.carry += (position - animation.delivered) * sign;
         animation.delivered = position;
 
+        // A frame is momentum only once all of it lies past the cruise.
+        let coasting = animation.last_t.is_some_and(|last| {
+            last >= animation.curve.cruise_time.max(GESTURE_MIN_TIME)
+                && matches!(animation.curve.tail, Tail::Drag { .. })
+        });
+        animation.last_t = Some(t);
+        let output = animation.output;
+
         let whole = if finished {
             self.carry.round()
         } else {
             self.carry.trunc()
         };
         self.carry -= whole;
-        let (dx, dy) = if horizontal {
-            (whole as i32, 0)
-        } else {
-            (0, whole as i32)
-        };
-        let phase = if self.began {
-            Phase::Changed
-        } else {
-            Phase::Began
-        };
-
-        let mut frames = Vec::new();
-        if whole != 0.0 || !self.began {
+        if whole != 0.0 {
+            let (dx, dy) = if horizontal {
+                (whole as i32, 0)
+            } else {
+                (0, whole as i32)
+            };
+            let phase = match (output, self.open, coasting) {
+                (Output::Unphased, ..) => Phase::None,
+                (Output::Trackpad, Open::None, _) => {
+                    self.open = Open::Gesture;
+                    Phase::Began
+                }
+                (Output::Trackpad, Open::Gesture, false) => Phase::Changed,
+                (Output::Trackpad, Open::Gesture, true) => {
+                    frames.push(zero_frame(Phase::Ended));
+                    self.open = Open::Momentum;
+                    Phase::MomentumBegan
+                }
+                (Output::Trackpad, Open::Momentum, true) => Phase::MomentumChanged,
+                (Output::Trackpad, Open::Momentum, false) => {
+                    // A tick during the coast puts the fingers back down.
+                    frames.push(zero_frame(Phase::MomentumEnded));
+                    self.open = Open::Gesture;
+                    Phase::Began
+                }
+            };
             frames.push(Frame { dx, dy, phase });
-            self.began = true;
         }
         if finished {
-            frames.push(frame_ended());
-            self.reset();
+            frames.extend(self.close());
+            self.animation = None;
+            self.carry = 0.0;
         }
         frames
     }
 
-    /// Stops immediately, returning the event that closes the gesture if one was open.
+    /// Stops immediately, returning the events that close the gesture if one was open.
     pub fn cancel(&mut self) -> Vec<Frame> {
-        let frames = if self.began {
-            vec![frame_ended()]
-        } else {
-            Vec::new()
-        };
-        self.reset();
+        let mut frames = std::mem::take(&mut self.pending);
+        frames.extend(self.close());
+        self.animation = None;
+        self.carry = 0.0;
         self.cadence = Cadence::default();
         frames
     }
 
-    fn reset(&mut self) {
-        self.animation = None;
-        self.began = false;
-        self.carry = 0.0;
+    /// Ends whichever phase is open, then taps so apps with their own momentum don't
+    /// carry on coasting.
+    fn close(&mut self) -> Vec<Frame> {
+        let end = match self.open {
+            Open::None => return Vec::new(),
+            Open::Gesture => Phase::Ended,
+            Open::Momentum => Phase::MomentumEnded,
+        };
+        self.open = Open::None;
+        vec![
+            zero_frame(end),
+            zero_frame(Phase::MayBegin),
+            zero_frame(Phase::Cancelled),
+        ]
     }
 }
 
-fn frame_ended() -> Frame {
+fn zero_frame(phase: Phase) -> Frame {
     Frame {
         dx: 0,
         dy: 0,
-        phase: Phase::Ended,
+        phase,
     }
 }
 
@@ -416,6 +655,7 @@ mod tests {
     const FRAME: f64 = 1.0 / 120.0;
     /// Distance of one isolated tick at the default speed.
     const TICK_PX: i64 = 60;
+    const HIGH_TICK_PX: i64 = 90;
 
     fn config(acceleration: bool) -> SmoothScrollConfig {
         SmoothScrollConfig {
@@ -426,6 +666,13 @@ mod tests {
 
     fn new_physics(acceleration: bool) -> ScrollPhysics {
         ScrollPhysics::new(&config(acceleration))
+    }
+
+    fn physics_with(smoothness: Smoothness) -> ScrollPhysics {
+        ScrollPhysics::new(&SmoothScrollConfig {
+            smoothness,
+            ..config(false)
+        })
     }
 
     /// Ticks at the given times (vertical lines each), then runs frames until idle.
@@ -469,10 +716,16 @@ mod tests {
 
     #[test]
     fn one_tick_delivers_exactly_its_distance() {
-        let mut physics = new_physics(true);
-        let frames = run(&mut physics, &[(0.0, 1.0)], false);
-        assert_eq!(total_dy(&frames), TICK_PX);
-        assert!(frames.len() > 5, "should be spread over several frames");
+        for (smoothness, expected) in [
+            (Smoothness::Low, TICK_PX),
+            (Smoothness::Regular, TICK_PX),
+            (Smoothness::High, HIGH_TICK_PX),
+        ] {
+            let mut physics = physics_with(smoothness);
+            let frames = run(&mut physics, &[(0.0, 1.0)], false);
+            assert_eq!(total_dy(&frames), expected, "{smoothness:?}");
+            assert!(frames.len() > 5, "should be spread over several frames");
+        }
     }
 
     #[test]
@@ -509,6 +762,46 @@ mod tests {
     }
 
     #[test]
+    fn low_eases_out_to_rest() {
+        let mut physics = physics_with(Smoothness::Low);
+        let frames = run(&mut physics, &[(0.0, 4.0)], false);
+        let moving: Vec<i32> = frames.iter().map(|f| f.dy).filter(|&d| d != 0).collect();
+        assert!(moving[0] >= moving[moving.len() / 2], "{moving:?}");
+        assert!(moving[0] > moving[moving.len() - 1] * 3, "{moving:?}");
+        assert!((ease_out(1.0) - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn power_drag_lands_on_its_distance() {
+        let drag = Drag {
+            coefficient: 35.0,
+            exponent: 0.75,
+        };
+        for speed in [100.0, 1_000.0, 10_000.0] {
+            let end = drag.duration(speed);
+            assert!((drag.position(speed, end) - drag.distance(speed)).abs() < 1e-6);
+            assert!((drag.speed_for(drag.distance(speed)) - speed).abs() < 1e-6);
+        }
+        let curve = Curve::new(
+            2_000.0,
+            0.22,
+            Tail::Drag {
+                coefficient: 35.0,
+                exponent: 0.75,
+            },
+        );
+        let mut last = 0.0;
+        let mut t = 0.0;
+        while t < curve.end_time {
+            let p = curve.position(t);
+            assert!(p >= last, "monotonic");
+            last = p;
+            t += 0.001;
+        }
+        assert!((curve.position(curve.end_time - 1e-9) - 2_000.0).abs() < 0.5);
+    }
+
+    #[test]
     fn single_tick_settles_quickly() {
         let mut physics = new_physics(true);
         physics.feed(0.0, 1.0, 0.0, false);
@@ -517,14 +810,136 @@ mod tests {
     }
 
     #[test]
-    fn phases_run_began_changed_ended() {
-        let mut physics = new_physics(false);
+    fn without_trackpad_simulation_every_preset_is_unphased() {
+        for smoothness in [Smoothness::Low, Smoothness::Regular, Smoothness::High] {
+            let mut physics = ScrollPhysics::new(&SmoothScrollConfig {
+                smoothness,
+                trackpad_simulation_vertical: false,
+                trackpad_simulation_horizontal: false,
+                ..config(false)
+            });
+            let frames = run(&mut physics, &[(0.0, 1.0)], false);
+            assert_eq!(phases(&frames), [Phase::None], "{smoothness:?}");
+            assert!(frames.iter().all(|f| f.dy != 0), "no empty events");
+        }
+    }
+
+    #[test]
+    fn trackpad_simulation_is_per_axis() {
+        let mut physics = ScrollPhysics::new(&SmoothScrollConfig {
+            trackpad_simulation_vertical: true,
+            trackpad_simulation_horizontal: false,
+            ..config(false)
+        });
+        physics.feed(0.0, 0.0, 1.0, false);
+        let mut horizontal = Vec::new();
+        let mut now = 0.0;
+        while !physics.is_idle() {
+            horizontal.extend(physics.tick(now));
+            now += FRAME;
+        }
+        assert_eq!(phases(&horizontal), [Phase::None]);
+
+        let vertical = run(&mut physics, &[(10.0, 1.0)], false);
+        assert_eq!(phases(&vertical)[0], Phase::Began);
+    }
+
+    #[test]
+    fn regular_simulates_a_trackpad_too() {
+        let mut physics = physics_with(Smoothness::Regular);
+        let frames = run(&mut physics, &[(0.0, 4.0)], false);
+        let phases = phases(&frames);
+        assert_eq!(phases[0], Phase::Began);
+        assert!(phases.contains(&Phase::MomentumBegan), "{phases:?}");
+    }
+
+    #[test]
+    fn low_is_all_gesture_with_no_momentum() {
+        let mut physics = physics_with(Smoothness::Low);
+        let frames = run(&mut physics, &[(0.0, 4.0)], false);
+        assert_eq!(
+            phases(&frames),
+            [
+                Phase::Began,
+                Phase::Changed,
+                Phase::Ended,
+                Phase::MayBegin,
+                Phase::Cancelled
+            ]
+        );
+    }
+
+    #[test]
+    fn high_runs_gesture_then_momentum_then_taps() {
+        let mut physics = physics_with(Smoothness::High);
         let frames = run(&mut physics, &[(0.0, 1.0)], false);
         assert_eq!(
             phases(&frames),
-            [Phase::Began, Phase::Changed, Phase::Ended]
+            [
+                Phase::Began,
+                Phase::Changed,
+                Phase::Ended,
+                Phase::MomentumBegan,
+                Phase::MomentumChanged,
+                Phase::MomentumEnded,
+                Phase::MayBegin,
+                Phase::Cancelled,
+            ]
         );
-        assert_eq!(frames.last().unwrap().dy, 0, "Ended carries no delta");
+        for frame in &frames {
+            let moves = frame.dy != 0;
+            let should_move = matches!(
+                frame.phase,
+                Phase::Began | Phase::Changed | Phase::MomentumBegan | Phase::MomentumChanged
+            );
+            assert_eq!(moves, should_move, "{frame:?}");
+        }
+    }
+
+    #[test]
+    fn high_stays_a_gesture_at_first() {
+        let mut physics = physics_with(Smoothness::High);
+        let mut now = 0.0;
+        physics.feed(0.0, 1.0, 0.0, false);
+        let mut early = Vec::new();
+        while now < GESTURE_MIN_TIME {
+            early.extend(physics.tick(now));
+            now += FRAME;
+        }
+        assert!(
+            early
+                .iter()
+                .all(|f| matches!(f.phase, Phase::Began | Phase::Changed)),
+            "{early:?}"
+        );
+    }
+
+    #[test]
+    fn a_tick_during_momentum_starts_a_new_gesture() {
+        let mut physics = physics_with(Smoothness::High);
+        let frames = run(&mut physics, &[(0.0, 1.0), (0.25, 1.0)], false);
+        let phases = phases(&frames);
+        let resumed = phases
+            .windows(2)
+            .any(|w| w == [Phase::MomentumEnded, Phase::Began]);
+        assert!(resumed, "{phases:?}");
+        assert!(total_dy(&frames) > HIGH_TICK_PX);
+    }
+
+    #[test]
+    fn high_reversal_ends_the_gesture_and_starts_another() {
+        let mut physics = physics_with(Smoothness::High);
+        physics.feed(0.0, 1.0, 0.0, false);
+        physics.tick(0.0);
+        physics.tick(FRAME);
+        physics.feed(2.0 * FRAME, -1.0, 0.0, false);
+        let frames = physics.tick(2.0 * FRAME);
+        assert_eq!(
+            frames.iter().map(|f| f.phase).collect::<Vec<_>>()[..3],
+            [Phase::Ended, Phase::MayBegin, Phase::Cancelled]
+        );
+        let rest = run(&mut physics, &[], false);
+        assert_eq!(rest.iter().find(|f| f.dy != 0).unwrap().phase, Phase::Began);
     }
 
     #[test]
@@ -553,8 +968,20 @@ mod tests {
     #[test]
     fn per_tick_distance_is_capped() {
         let params = Params::new(&config(true));
-        assert_eq!(params.tick_distance(None), 60.0);
-        assert_eq!(params.tick_distance(Some(0.001)), 120.0);
+        assert_eq!(params.tick_distance(None, 1.0), 60.0);
+        assert_eq!(params.tick_distance(Some(0.001), 1.0), 120.0);
+    }
+
+    #[test]
+    fn bigger_screens_scroll_slightly_further_when_fast() {
+        let params = Params::new(&config(true));
+        assert_eq!(
+            params.tick_distance(None, 2.0),
+            60.0,
+            "slow ticks unchanged"
+        );
+        let fast = params.tick_distance(Some(0.001), 2.0);
+        assert!((fast - 132.0).abs() < 1e-9, "{fast}");
     }
 
     #[test]
@@ -617,14 +1044,15 @@ mod tests {
     }
 
     #[test]
-    fn precise_ticks_are_small_and_immediate() {
-        let mut physics = new_physics(true);
+    fn precise_ticks_are_small_immediate_and_unphased() {
+        let mut physics = physics_with(Smoothness::High);
         let frames = run(&mut physics, &spin(0.0, 10, 0.01), true);
         assert_eq!(total_dy(&frames), 10 * PRECISE_PX_PER_LINE as i64);
         assert_eq!(
             frames[0].dy, PRECISE_PX_PER_LINE as i32,
             "delivered on the first frame"
         );
+        assert_eq!(phases(&frames), [Phase::None]);
     }
 
     #[test]
@@ -643,7 +1071,7 @@ mod tests {
 
     #[test]
     fn cancel_closes_the_open_phase() {
-        let mut physics = new_physics(true);
+        let mut physics = physics_with(Smoothness::High);
         assert!(physics.cancel().is_empty());
 
         physics.feed(0.0, 1.0, 0.0, false);
@@ -654,8 +1082,25 @@ mod tests {
 
         physics.feed(0.0, 1.0, 0.0, false);
         physics.tick(0.0);
-        assert_eq!(physics.cancel(), [frame_ended()]);
+        physics.tick(FRAME);
+        assert_eq!(
+            physics.cancel(),
+            [
+                zero_frame(Phase::Ended),
+                zero_frame(Phase::MayBegin),
+                zero_frame(Phase::Cancelled)
+            ]
+        );
         assert!(physics.is_idle());
+
+        let mut unphased = ScrollPhysics::new(&SmoothScrollConfig {
+            trackpad_simulation_vertical: false,
+            ..config(false)
+        });
+        unphased.feed(0.0, 1.0, 0.0, false);
+        unphased.tick(0.0);
+        unphased.tick(FRAME);
+        assert!(unphased.cancel().is_empty(), "nothing to close");
     }
 
     #[test]

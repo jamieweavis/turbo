@@ -33,6 +33,16 @@ struct MousePane: View {
                     ForEach(Smoothness.allCases) { Text($0.title).tag($0) }
                 }
 
+                Toggle(isOn: $settings.config.smoothScroll.trackpadSimulationVertical) {
+                    Text("Vertical trackpad simulation")
+                    Text("Scrolls up and down like a trackpad: content bounces at the top and bottom like it does in macOS.")
+                }
+
+                Toggle(isOn: $settings.config.smoothScroll.trackpadSimulationHorizontal) {
+                    Text("Horizontal trackpad simulation")
+                    Text("Scrolls sideways like a trackpad: content bounces at the edges, and swipe gestures work, such as going back in Safari.")
+                }
+
                 LabeledContent("Speed") {
                     HStack {
                         Slider(value: speed, in: 0.25...3.0)
