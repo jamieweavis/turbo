@@ -1,38 +1,56 @@
 import AppKit
 
 enum MenuBarIcon {
-    /// SF Symbols has no rocket, so draw one as a template image (tinted by the menu bar like a symbol).
-    static let rocket: NSImage = {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            // Drawn upright around the origin, then tilted 45° and scaled to fill the square.
-            let transform = NSAffineTransform()
-            transform.translateX(by: 9, yBy: 9)
-            transform.rotate(byDegrees: -45)
-            transform.scaleX(by: 1.3, yBy: 1.3)
-            transform.translateX(by: 0, yBy: 0.8)
-            transform.concat()
+    /// A multitool drawn as a template image (tinted by the menu bar like a symbol):
+    /// a filled body on the left with a can opener and a knife swung out from one hinge at its base.
+    static let multitool: NSImage = {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            // Drawn on a 64-unit grid with the origin top left.
+            ctx.scaleBy(x: 18 / 64, y: 18 / 64)
+            ctx.beginTransparencyLayer(auxiliaryInfo: nil)
+            ctx.setLineWidth(4.5)
+            ctx.setLineCap(.round)
 
-            // One silhouette: pointed nose, straight body, curved fins joined by one arc across the base.
-            let rocket = NSBezierPath()
-            rocket.move(to: NSPoint(x: 0, y: 8))
-            rocket.curve(to: NSPoint(x: 2.8, y: 1.5), controlPoint1: NSPoint(x: 1.8, y: 6.4), controlPoint2: NSPoint(x: 2.8, y: 4.2))
-            rocket.line(to: NSPoint(x: 2.8, y: -1))
-            rocket.curve(to: NSPoint(x: 5, y: -4.5), controlPoint1: NSPoint(x: 4.6, y: -1.6), controlPoint2: NSPoint(x: 5.2, y: -3))
-            rocket.curve(to: NSPoint(x: -5, y: -4.5), controlPoint1: NSPoint(x: 2, y: -2.6), controlPoint2: NSPoint(x: -2, y: -2.6))
-            rocket.curve(to: NSPoint(x: -2.8, y: -1), controlPoint1: NSPoint(x: -5.2, y: -3), controlPoint2: NSPoint(x: -4.6, y: -1.6))
-            rocket.line(to: NSPoint(x: -2.8, y: 1.5))
-            rocket.curve(to: NSPoint(x: 0, y: 8), controlPoint1: NSPoint(x: -2.8, y: 4.2), controlPoint2: NSPoint(x: -1.8, y: 6.4))
-            rocket.close()
-            rocket.fill()
+            // Each tool is drawn along its own axis (x out from the hinge, y across its width), then swung into place.
+            let hinge = CGPoint(x: 20, y: 49)
+            func swing(_ path: CGPath, degrees: CGFloat, flipped: Bool) -> CGPath {
+                var lay = CGAffineTransform(translationX: hinge.x, y: hinge.y).rotated(by: degrees * .pi / 180)
+                if flipped { lay = lay.scaledBy(x: 1, y: -1) }
+                return path.copy(using: &lay)!
+            }
 
-            // Exhaust flame, set just off the base so the two shapes read separately.
-            let flame = NSBezierPath()
-            flame.move(to: NSPoint(x: -1.6, y: -3.9))
-            flame.curve(to: NSPoint(x: 1.6, y: -3.9), controlPoint1: NSPoint(x: -0.8, y: -3.5), controlPoint2: NSPoint(x: 0.8, y: -3.5))
-            flame.curve(to: NSPoint(x: 0, y: -7.5), controlPoint1: NSPoint(x: 1.6, y: -5.3), controlPoint2: NSPoint(x: 0.6, y: -6.5))
-            flame.curve(to: NSPoint(x: -1.6, y: -3.9), controlPoint1: NSPoint(x: -0.6, y: -6.5), controlPoint2: NSPoint(x: -1.6, y: -5.3))
-            flame.close()
-            flame.fill()
+            // Knife, straight out at 90°: spine along the top to a sharp tip, edge underneath.
+            let knife = CGMutablePath()
+            knife.move(to: CGPoint(x: 4, y: 0))
+            knife.addLine(to: CGPoint(x: 42, y: 0))
+            knife.addQuadCurve(to: CGPoint(x: 33, y: 8), control: CGPoint(x: 39, y: 9))
+            knife.addLine(to: CGPoint(x: 4, y: 10))
+            ctx.setLineJoin(.miter)
+            ctx.addPath(swing(knife, degrees: 0, flipped: false))
+            ctx.strokePath()
+
+            // Can opener, up at 45°: a shaft ending in a hooked point with a scooped notch under it.
+            let opener = CGMutablePath()
+            opener.move(to: CGPoint(x: 4, y: 0))
+            opener.addLine(to: CGPoint(x: 39, y: 0))
+            opener.addQuadCurve(to: CGPoint(x: 44, y: 13), control: CGPoint(x: 48, y: 3))
+            opener.addQuadCurve(to: CGPoint(x: 32, y: 13), control: CGPoint(x: 37, y: 5))
+            opener.addLine(to: CGPoint(x: 4, y: 13))
+            ctx.setLineJoin(.round)
+            ctx.addPath(swing(opener, degrees: -45, flipped: true))
+            ctx.strokePath()
+
+            // Clear a gap around the body so the tools tuck behind it, then fill the body.
+            let body = CGRect(x: 4, y: 3, width: 16, height: 58)
+            ctx.setBlendMode(.clear)
+            ctx.addPath(CGPath(roundedRect: body.insetBy(dx: -3, dy: -3), cornerWidth: 11, cornerHeight: 11, transform: nil))
+            ctx.fillPath()
+            ctx.setBlendMode(.normal)
+            ctx.addPath(CGPath(roundedRect: body, cornerWidth: 8, cornerHeight: 8, transform: nil))
+            ctx.fillPath()
+
+            ctx.endTransparencyLayer()
             return true
         }
         image.isTemplate = true
