@@ -15,6 +15,14 @@ pub(super) const MAIN_WINDOW: &str = "AXMainWindow";
 pub(super) const POSITION: &str = "AXPosition";
 pub(super) const SIZE: &str = "AXSize";
 pub(super) const FULL_SCREEN: &str = "AXFullScreen";
+pub(super) const ROLE: &str = "AXRole";
+pub(super) const PARENT: &str = "AXParent";
+/// On any element inside a window: the window.
+pub(super) const WINDOW: &str = "AXWindow";
+pub(super) const FRONTMOST: &str = "AXFrontmost";
+pub(super) const MAIN: &str = "AXMain";
+pub(super) const WINDOW_ROLE: &str = "AXWindow";
+pub(super) const RAISE: &str = "AXRaise";
 /// Set on an app by assistive tech (VoiceOver and others); while on, some apps animate
 /// every frame change, so a set-size/set-position sequence takes visibly long.
 pub(super) const ENHANCED_USER_INTERFACE: &str = "AXEnhancedUserInterface";
@@ -33,6 +41,15 @@ const VALUE_CG_SIZE: u32 = 2;
 unsafe extern "C" {
     pub(super) fn AXIsProcessTrusted() -> u8;
     fn AXUIElementCreateApplication(pid: i32) -> Option<NonNull<CFType>>;
+    fn AXUIElementCreateSystemWide() -> Option<NonNull<CFType>>;
+    fn AXUIElementCopyElementAtPosition(
+        element: &CFType,
+        x: f32,
+        y: f32,
+        found: *mut *const CFType,
+    ) -> AxError;
+    fn AXUIElementGetPid(element: &CFType, pid: *mut i32) -> AxError;
+    fn AXUIElementPerformAction(element: &CFType, action: &CFString) -> AxError;
     fn AXUIElementCopyAttributeValue(
         element: &CFType,
         attribute: &CFString,
@@ -90,6 +107,44 @@ impl Element {
         let element = unsafe { AXUIElementCreateApplication(pid) }?;
         // SAFETY: we own the +1 reference returned above.
         Some(Self(unsafe { CFRetained::from_raw(element) }))
+    }
+
+    /// The whole system, for finding the element at a point on screen.
+    pub fn system_wide() -> Option<Self> {
+        // SAFETY: no arguments; the result follows the Create rule.
+        let element = unsafe { AXUIElementCreateSystemWide() }?;
+        // SAFETY: we own the +1 reference returned above.
+        Some(Self(unsafe { CFRetained::from_raw(element) }))
+    }
+
+    /// The deepest element at `(x, y)` in global top-left coordinates. Call on
+    /// [`Element::system_wide`].
+    pub fn element_at(&self, x: f64, y: f64) -> Result<Element, AxError> {
+        let mut found: *const CFType = ptr::null();
+        // SAFETY: valid element and out pointer; on success `found` holds a +1 reference.
+        result(unsafe {
+            AXUIElementCopyElementAtPosition(&self.0, x as f32, y as f32, &mut found)
+        })?;
+        let found = NonNull::new(found.cast_mut()).ok_or(CANNOT_COMPLETE)?;
+        Ok(Element(unsafe { CFRetained::from_raw(found) }))
+    }
+
+    pub fn pid(&self) -> Option<i32> {
+        let mut pid = 0;
+        // SAFETY: valid element and out pointer.
+        let error = unsafe { AXUIElementGetPid(&self.0, &mut pid) };
+        (error == SUCCESS).then_some(pid)
+    }
+
+    pub fn string(&self, attribute: &str) -> Option<String> {
+        let value = self.copy(attribute).ok()?;
+        value.downcast_ref::<CFString>().map(CFString::to_string)
+    }
+
+    pub fn perform(&self, action: &str) -> Result<(), AxError> {
+        let name = CFString::from_str(action);
+        // SAFETY: valid element and string.
+        result(unsafe { AXUIElementPerformAction(&self.0, &name) })
     }
 
     /// Bounds how long calls on this element wait for an unresponsive app.

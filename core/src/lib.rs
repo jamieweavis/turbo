@@ -42,7 +42,7 @@ pub use launcher::{
 };
 use launcher::{HotkeyManager, Launcher};
 use snippets::SnippetExpander;
-use windows::WindowManager;
+use windows::{WindowDrag, WindowManager};
 
 /// Basic facts about the core, shown in the shell so the FFI is exercised end to end.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -80,6 +80,7 @@ pub struct Core {
     windows: Arc<WindowManager>,
     snippets: SnippetExpander,
     hyper_key: HyperKey,
+    window_drag: WindowDrag,
     keep_awake: Arc<KeepAwake>,
     colors: ColorHistory,
     emoji: EmojiPicker,
@@ -113,6 +114,7 @@ impl Core {
         let files = FileSearch::new(config.launcher.files.clone());
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
         let hyper_key = HyperKey::new(config.hyper_key.clone());
+        let window_drag = WindowDrag::new(config.window_drag.clone(), Arc::clone(&windows));
         let colors = ColorHistory::new(&data_dir);
         let emoji = EmojiPicker::new(&data_dir);
         Ok(Arc::new(Self {
@@ -128,6 +130,7 @@ impl Core {
             windows,
             snippets,
             hyper_key,
+            window_drag,
             keep_awake,
             colors,
             emoji,
@@ -204,6 +207,18 @@ impl Core {
         config.hyper_key = hyper_key.clone();
         self.store.save(&config)?;
         self.hyper_key.set_config(hyper_key)
+    }
+
+    pub fn window_drag_config(&self) -> WindowDragConfig {
+        self.config.lock().unwrap().window_drag.clone()
+    }
+
+    /// Saves the new window drag settings and applies them immediately if input is running.
+    pub fn set_window_drag_config(&self, window_drag: WindowDragConfig) -> Result<(), CoreError> {
+        let mut config = self.config.lock().unwrap();
+        config.window_drag = window_drag.clone();
+        self.store.save(&config)?;
+        self.window_drag.set_config(window_drag)
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {
@@ -389,14 +404,16 @@ impl Core {
         self.launcher.items()
     }
 
-    /// Starts the event taps (mouse, brightness keys, snippet expansion and the Hyper key).
+    /// Starts the event taps (mouse, brightness keys, snippet expansion, the Hyper key and
+    /// window dragging).
     /// Fails with `PermissionDenied` without Accessibility. Calling it while already running
     /// is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
         self.input.start()?;
         self.brightness_keys.start()?;
         self.snippets.start()?;
-        self.hyper_key.start()
+        self.hyper_key.start()?;
+        self.window_drag.start()
     }
 
     /// Also gives the Hyper key back its normal behaviour; call it before quitting.
@@ -405,10 +422,11 @@ impl Core {
         self.brightness_keys.stop();
         self.snippets.stop();
         self.hyper_key.stop();
+        self.window_drag.stop();
     }
 
-    /// True only when the mouse and brightness key taps are running (the snippet and Hyper
-    /// taps only run while those features are on).
+    /// True only when the mouse and brightness key taps are running (the snippet, Hyper and
+    /// window drag taps only run while those features are on).
     pub fn is_input_running(&self) -> bool {
         self.input.is_running() && self.brightness_keys.is_running()
     }

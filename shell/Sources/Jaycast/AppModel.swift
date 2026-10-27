@@ -11,6 +11,7 @@ final class AppModel {
     let displays: DisplaySettings
     let launcher: LauncherSettings
     let hyperKey: HyperKeySettings
+    let windowDrag: WindowDragSettings
     let keepAwake: KeepAwakeState
     let colorPicker: ColorPickerState
     @ObservationIgnored let palette: PaletteWindowController
@@ -29,6 +30,7 @@ final class AppModel {
         brightnessIndicator = BrightnessIndicator(settings: displays)
         launcher = LauncherSettings(core: core)
         hyperKey = HyperKeySettings(core: core)
+        windowDrag = WindowDragSettings(core: core)
         keepAwake = KeepAwakeState(core: core)
         colorPicker = ColorPickerState(core: core)
         palette = PaletteWindowController(core: core, settings: launcher)

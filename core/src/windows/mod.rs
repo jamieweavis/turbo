@@ -13,8 +13,12 @@
 //! frame before Jaycast first moved it (for `Restore`) and its last snap (for cycling
 //! repeated halves, and for keeping a snap when moving to another display) are remembered
 //! per pid and CGWindowID.
+//!
+//! `drag` moves and resizes the window under the cursor with modifiers held and a mouse
+//! button dragged; it shares the per-window memory so `Restore` undoes a drag too.
 
 mod ax;
+mod drag;
 mod layout;
 mod memory;
 
@@ -31,6 +35,8 @@ use crate::error::CoreError;
 use ax::Element;
 use layout::{Plan, PlanError, Rect, Screen};
 use memory::{WindowKey, WindowMemory};
+
+pub(crate) use drag::WindowDrag;
 
 /// How long an Accessibility call waits for the target app. The default is several
 /// seconds, which would freeze the main thread (and the palette) behind a hung app.
@@ -309,6 +315,15 @@ impl WindowManager {
             self.memory.lock().unwrap().put(key, memory, is_open);
         }
         Ok(())
+    }
+
+    /// Remembers a window's frame from before it was dragged, so `Restore` can put it back,
+    /// and forgets its last snap (it's no longer snapped).
+    fn remember_drag(&self, key: WindowKey, before: Rect, after: Rect) {
+        let mut memory = self.memory.lock().unwrap();
+        let mut remembered = memory.get(key);
+        remembered.record(before, None, after);
+        memory.put(key, Some(remembered), is_open);
     }
 }
 

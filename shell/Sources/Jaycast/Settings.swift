@@ -50,7 +50,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, keyboard, mouse, monitor, keepAwake, colorPicker
+    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, windowDrag, keyboard, mouse, monitor, keepAwake, colorPicker
 
     var id: Self { self }
 
@@ -64,6 +64,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "Clipboard"
         case .files: "File Search"
         case .windows: "Window Management"
+        case .windowDrag: "Window Move/Resize"
         case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
         case .monitor: "Brightness"
@@ -83,6 +84,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "Search and paste everything you've copied."
         case .files: "Search for files and folders on your computer."
         case .windows: "Move and resize windows with hotkeys."
+        case .windowDrag: "Move and resize a window by dragging anywhere in it with modifiers held."
         case .keyboard: "Turn one key into ⌃⌥⇧⌘ for shortcuts that never clash."
         case .mouse: "Smooth scrolling, scroll modifiers and button remapping."
         case .monitor: "Adjust your displays' brightness, external monitors included."
@@ -102,6 +104,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: .indigo
         case .files: .blue
         case .windows: .cyan
+        case .windowDrag: .mint
         case .keyboard: .purple
         case .mouse: .pink
         case .monitor: .yellow
@@ -121,7 +124,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .windows: .windows
         case .keepAwake: .keepAwake
         case .colorPicker: .colorPicker
-        case .general, .launcher, .keyboard, .mouse, .monitor: nil
+        case .general, .launcher, .windowDrag, .keyboard, .mouse, .monitor: nil
         }
     }
 
@@ -135,6 +138,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .clipboard: "doc.on.clipboard"
         case .files: "doc.text.magnifyingglass"
         case .windows: "rectangle.lefthalf.filled"
+        case .windowDrag: "arrow.up.and.down.and.arrow.left.and.right"
         case .keyboard: "command.square"
         case .mouse: "computermouse"
         case .monitor: "sun.max"
@@ -176,6 +180,7 @@ struct SettingsView: View {
                 case .clipboard: ClipboardPane(settings: model.launcher)
                 case .files: FileSearchPane(settings: model.launcher)
                 case .windows: WindowsPane(settings: model.launcher)
+                case .windowDrag: WindowDragPane(settings: model.windowDrag, isInputRunning: model.isInputRunning)
                 case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: model.isInputRunning)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
@@ -218,8 +223,8 @@ struct SettingsView: View {
 }
 
 extension SettingsView {
-    /// The pane's on/off switch: its launcher feature's, or the Hyper key, mouse or display
-    /// brightness master switch. Nil for panes that can't be turned off.
+    /// The pane's on/off switch: its launcher feature's, or the window drag, Hyper key, mouse
+    /// or display brightness master switch. Nil for panes that can't be turned off.
     private func isEnabled(_ pane: SettingsPane) -> Binding<Bool>? {
         Self.isEnabled(pane, model: model)
     }
@@ -230,6 +235,9 @@ extension SettingsView {
             return Binding(get: { launcher.isEnabled(feature) }, set: { launcher.setEnabled($0, for: feature) })
         }
         switch pane {
+        case .windowDrag:
+            let windowDrag = model.windowDrag
+            return Binding(get: { windowDrag.config.enabled }, set: { windowDrag.config.enabled = $0 })
         case .keyboard:
             let hyperKey = model.hyperKey
             return Binding(get: { hyperKey.config.enabled }, set: { hyperKey.config.enabled = $0 })

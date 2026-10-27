@@ -24,6 +24,7 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 | 4 | Calculator & conversions, quicklinks & shell commands | ✅ Done |
 | 5 | Clipboard history, file search | ✅ Done |
 | 6 | Window management, snippets / text expansion | ✅ Done |
+| 7 | Window move/resize by modifier + drag (after easy-move-resize) | ✅ Done |
 
 ### Step 1: Mouse
 
@@ -110,6 +111,14 @@ Raycast extension support.
 
 ## Log
 
+- **Window move/resize**: ⌃⌘ (configurable, exact match, Caps Lock/Fn ignored) + left drag
+  moves the window under the cursor, + right drag resizes it; "Swap buttons" reverses them.
+  Own `[window_drag]` config and settings pane, own session-level tap that only runs while on;
+  it swallows the press, drags and release (even over the desktop, where nothing moves) and
+  hands positions to a worker thread that coalesces them to the newest, so a slow app never
+  stalls the cursor. Grabbing raises and focuses the window. Resize always keeps the top-left
+  corner and moves the bottom-right, wherever grabbed; min 100×60. Full-screen and unmovable windows are skipped; `AXEnhancedUserInterface` is off
+  for the drag; Restore puts a dragged window back.
 - **Actions menu**: shell-side `PaletteAction` lists built per mode from the existing model
   methods, so the menu and the ⌘ shortcuts stay in step; the menu floats bottom-right over the
   palette with its own field (filter by words in the title), and the palette grows to fit it

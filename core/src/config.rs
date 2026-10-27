@@ -17,6 +17,7 @@ pub struct Config {
     pub monitor: MonitorConfig,
     pub launcher: LauncherConfig,
     pub hyper_key: HyperKeyConfig,
+    pub window_drag: WindowDragConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
@@ -478,6 +479,35 @@ impl Default for MonitorConfig {
         Self {
             enabled: true,
             brightness_keys: true,
+        }
+    }
+}
+
+/// Moving and resizing a window by dragging anywhere in it with modifiers held.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct WindowDragConfig {
+    /// Off leaves every click alone, keeping the settings for when it's back on.
+    pub enabled: bool,
+    /// Held, exactly, while pressing a mouse button to grab the window under the cursor.
+    pub modifiers: Vec<Modifier>,
+    /// Off: the left button moves and the right button resizes. On: the other way round.
+    pub swap_buttons: bool,
+}
+
+impl WindowDragConfig {
+    /// Without any modifier every click would grab a window, so that counts as off.
+    pub fn is_active(&self) -> bool {
+        self.enabled && !self.modifiers.is_empty()
+    }
+}
+
+impl Default for WindowDragConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            modifiers: vec![Modifier::Control, Modifier::Command],
+            swap_buttons: false,
         }
     }
 }
@@ -958,5 +988,24 @@ mod tests {
             serde_json::from_str::<HyperKeyConfig>(&json).unwrap(),
             config
         );
+    }
+
+    #[test]
+    fn window_drag_round_trips_and_needs_a_modifier() {
+        let dir = temp_dir("window-drag");
+        let store = store(&dir);
+        let mut config = Config::default();
+        config.window_drag.modifiers = vec![Modifier::Option, Modifier::Shift];
+        config.window_drag.swap_buttons = true;
+        store.save(&config).unwrap();
+        assert_eq!(store.load().unwrap(), config);
+        fs::remove_dir_all(dir).unwrap();
+
+        assert!(WindowDragConfig::default().is_active());
+        let no_modifiers = WindowDragConfig {
+            modifiers: Vec::new(),
+            ..WindowDragConfig::default()
+        };
+        assert!(!no_modifiers.is_active());
     }
 }

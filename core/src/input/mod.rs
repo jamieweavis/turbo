@@ -16,6 +16,8 @@ mod tap;
 use crate::config::MouseConfig;
 use crate::error::CoreError;
 
+pub(crate) use actions::modifier_flag;
+
 /// Written to `kCGEventSourceUserData` on every event Jaycast posts, so the tap can let
 /// its own events through untouched instead of processing them again.
 pub(crate) const SYNTHETIC_EVENT_MARKER: i64 = 0x4A41_5943; // "JAYC"
