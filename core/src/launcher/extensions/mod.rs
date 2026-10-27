@@ -132,6 +132,11 @@ pub(crate) fn results(query: &str, config: &LauncherConfig) -> Vec<(i32, SearchR
         .collect()
 }
 
+/// Every quicklink and command as listed with an empty query, in configured order.
+pub(crate) fn all(config: &LauncherConfig) -> Vec<SearchResult> {
+    entries(config).map(|entry| listing(&entry)).collect()
+}
+
 fn score(entry: &Entry, query: &str, folded: &[char]) -> Option<(i32, SearchResult)> {
     if entry.takes_argument()
         && let Some(argument) = template::split_argument(query, entry.trigger())
@@ -152,14 +157,17 @@ fn score(entry: &Entry, query: &str, folded: &[char]) -> Option<(i32, SearchResu
     if keyword.is_some() && folded == fuzzy::fold_query(entry.keyword).as_slice() {
         score += KEYWORD_EXACT_BONUS;
     }
+    Some((score, listing(entry)))
+}
+
+/// The entry by name with its template as subtitle; one taking an argument completes to
+/// its keyword.
+fn listing(entry: &Entry) -> SearchResult {
     let completion = entry
         .takes_argument()
         .then(|| format!("{} ", entry.trigger()));
     let subtitle = template::truncate(entry.template.trim(), SUBTITLE_MAX);
-    Some((
-        score,
-        entry.result(entry.name.to_owned(), subtitle, completion),
-    ))
+    entry.result(entry.name.to_owned(), subtitle, completion)
 }
 
 /// Opens a quicklink or runs a command. `query` is what was typed, from which the argument

@@ -416,7 +416,7 @@ final class PaletteModel {
     @ObservationIgnored private var lastHoverLocation: NSPoint?
     @ObservationIgnored private var closeTask: Task<Void, Never>?
 
-    private static let limit: UInt32 = 20
+    private static let limit: UInt32 = 200
     private static let copiedVisibleFor = Duration.milliseconds(600)
 
     init(core: Core, settings: LauncherSettings) {

@@ -24,7 +24,7 @@ pub(crate) mod running;
 mod settings_panes;
 mod system;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -601,13 +601,21 @@ impl Launcher {
         *self.config.write().unwrap() = Arc::new(config);
     }
 
-    /// Best matches for `query`, apps and system actions together. An empty query returns
-    /// the most used. Fast enough to call on every keystroke (no I/O).
+    /// Best matches for `query`, apps and system actions together, at most `limit`. An empty
+    /// query returns everything, most used first, ignoring `limit`. Fast enough to call on
+    /// every keystroke (no I/O).
     pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
         let index = Arc::clone(&self.index.read().unwrap());
         let config = Arc::clone(&self.config.read().unwrap());
         let mut extra = Vec::new();
-        if !query.trim().is_empty() {
+        if query.trim().is_empty() {
+            extra.extend(extensions::all(&config).into_iter().map(|r| (0, r)));
+            extra.extend(
+                crate::snippets::all(&config.snippets)
+                    .into_iter()
+                    .map(|r| (0, r)),
+            );
+        } else {
             if config.calculator
                 && let Some(calculation) = self.calculator.evaluate(query)
             {
@@ -774,7 +782,8 @@ impl Launcher {
 }
 
 /// Scores every app and system action against `query` (folded), merges in `extra`
-/// (calculator, quicklinks, commands, snippets; already scored) and returns the best.
+/// (calculator, quicklinks, commands, snippets; already scored) and returns the best
+/// `limit`. An empty query lists everything instead (see `most_used`).
 fn rank(
     query: &[char],
     index: &Index,
@@ -786,7 +795,7 @@ fn rank(
     limit: usize,
 ) -> Vec<SearchResult> {
     if query.is_empty() {
-        return most_used(index, system, prefs, usage, now, limit);
+        return most_used(index, system, prefs, extra, usage, now);
     }
 
     struct Scored {
@@ -860,32 +869,38 @@ pub(crate) fn best_score<'a>(
     title.max(secondary)
 }
 
-/// Most frecent results first, then the remaining apps alphabetically.
+/// Everything enabled: the most frecent first, then the remaining apps alphabetically, then
+/// `extra` (quicklinks, commands, snippets) and the built-in entries in their own order.
 fn most_used(
     index: &Index,
     system: &[SystemEntry],
     prefs: &Prefs,
+    extra: Vec<(i32, SearchResult)>,
     usage: &Usage,
     now: f64,
-    limit: usize,
 ) -> Vec<SearchResult> {
+    let extra: Vec<SearchResult> = extra.into_iter().map(|(_, result)| result).collect();
+    let mut seen = HashSet::new();
     let mut results: Vec<SearchResult> = usage
         .most_frecent(now)
         .into_iter()
         .filter(|(id, _)| prefs.is_enabled(id))
         .filter_map(|(id, _)| match index.by_id.get(&id) {
             Some(&i) => Some(app_result(&index.apps[i])),
-            None => system.iter().find(|e| e.id == id).map(SystemEntry::result),
+            None => system
+                .iter()
+                .find(|e| e.id == id)
+                .map(SystemEntry::result)
+                .or_else(|| extra.iter().find(|r| r.id == id).cloned()),
         })
-        .take(limit)
+        .filter(|result| seen.insert(result.id.clone()))
         .collect();
-    for app in &index.apps {
-        if results.len() >= limit {
-            break;
-        }
-        let id = app_result_id(&app.info.bundle_id);
-        if prefs.is_enabled(&id) && !results.iter().any(|r| r.id == id) {
-            results.push(app_result(app));
+    let apps = index.apps.iter().map(app_result);
+    let rest = system.iter().map(SystemEntry::result);
+    for result in apps.chain(extra).chain(rest) {
+        if prefs.is_enabled(&result.id) && !seen.contains(&result.id) {
+            seen.insert(result.id.clone());
+            results.push(result);
         }
     }
     results
@@ -1265,11 +1280,41 @@ mod tests {
         usage.record("system:lock-screen", &[], NOW);
         let results = search(&index, &usage, "");
         assert_eq!(titles(&results)[..3], ["Terminal", "Lock Screen", "Notes"]);
-        assert_eq!(results.len(), 8);
         assert_eq!(
             titles(&search(&index, &Usage::default(), ""))[..2],
             ["Notes", "Safari"]
         );
+    }
+
+    #[test]
+    fn empty_query_lists_everything_enabled_once() {
+        let index = index(NAMES);
+        let mut usage = Usage::default();
+        usage.record("app:test.Terminal", &[], NOW);
+        usage.record("snippet:sig", &[], NOW);
+        let snippet = |id: &str, title: &str| SearchResult {
+            id: id.into(),
+            title: title.into(),
+            subtitle: String::new(),
+            kind: ResultKind::Snippet,
+            path: None,
+            symbol: None,
+            needs_confirmation: false,
+            completion: None,
+        };
+        let extra = vec![
+            (0, snippet("snippet:addr", "Address")),
+            (0, snippet("snippet:sig", "Signature")),
+        ];
+        let mut prefs = Prefs::default();
+        prefs.disabled.insert("app:test.Safari".into());
+        let results = rank(&[], &index, &[lock_screen()], &prefs, extra, &usage, NOW, 3);
+        let titles = titles(&results);
+        // Past the limit, frecent first, then apps, extras and built-ins; each once.
+        assert_eq!(titles.len(), NAMES.len() + 2);
+        assert_eq!(titles[..2], ["Terminal", "Signature"]);
+        assert_eq!(titles[titles.len() - 2..], ["Address", "Lock Screen"]);
+        assert!(!titles.contains(&"Safari"));
     }
 
     #[test]

@@ -75,6 +75,11 @@ pub(crate) fn results(query: &str, config: &SnippetsConfig) -> Vec<(i32, SearchR
         .collect()
 }
 
+/// Every snippet as listed with an empty query, in configured order.
+pub(crate) fn all(config: &SnippetsConfig) -> Vec<SearchResult> {
+    config.snippets.iter().map(result).collect()
+}
+
 fn result(snippet: &Snippet) -> SearchResult {
     let name = snippet.name.trim();
     let keyword = snippet.keyword.trim();
