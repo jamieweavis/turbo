@@ -142,9 +142,9 @@ fn read_bundle(path: &Path, home: Option<&Path>) -> Option<App> {
     let info = value.as_dictionary()?;
 
     let bundle_id = info.get("CFBundleIdentifier")?.as_string()?.to_owned();
-    // Package types vary (Finder is "FNDR"), so agents are recognised by their keys alone.
-    let is_agent = flag(info.get("LSUIElement")) || flag(info.get("LSBackgroundOnly"));
-    if bundle_id.is_empty() || is_agent {
+    // Package types vary (Finder is "FNDR"), so faceless apps are recognised by their key
+    // alone. `LSUIElement` apps stay: Docker, Screenshot and Mission Control are all launchable.
+    if bundle_id.is_empty() || flag(info.get("LSBackgroundOnly")) {
         return None;
     }
 
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_bundles_and_skips_agents() {
+    fn reads_bundles_and_skips_background_only() {
         let dir = std::env::temp_dir().join(format!("jaycast-apps-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let make = |rel: &str, plist: &str| {
@@ -311,19 +311,21 @@ mod tests {
             )
         };
         make("Visual Studio Code.app", &plist(""));
-        make("Agent.app", &plist("<key>LSUIElement</key><true/>"));
+        make("MenuBar.app", &plist("<key>LSUIElement</key><true/>"));
+        make("Daemon.app", &plist("<key>LSBackgroundOnly</key><true/>"));
         fs::create_dir_all(dir.join("NoPlist.app")).unwrap();
 
         let app = read_bundle(&dir.join("Visual Studio Code.app"), None).unwrap();
         assert_eq!(app.info.name, "Visual Studio Code");
         assert_eq!(app.info.bundle_id, "com.example.app");
         assert!(app.alias.is_some(), "CFBundleName kept as an alias");
-        assert!(read_bundle(&dir.join("Agent.app"), None).is_none());
+        assert!(read_bundle(&dir.join("MenuBar.app"), None).is_some());
+        assert!(read_bundle(&dir.join("Daemon.app"), None).is_none());
         assert!(read_bundle(&dir.join("NoPlist.app"), None).is_none());
 
         let mut found = Vec::new();
         collect_bundles(&dir, 1, &mut found);
-        assert_eq!(found.len(), 3, "bundles are found but never entered");
+        assert_eq!(found.len(), 4, "bundles are found but never entered");
         fs::remove_dir_all(dir).unwrap();
     }
 
