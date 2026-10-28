@@ -69,7 +69,7 @@ pub fn default_window_config() -> WindowConfig {
 /// The app's single core instance. The shell creates one at launch and keeps it.
 #[derive(uniffi::Object)]
 pub struct Core {
-    store: ConfigStore,
+    saver: ConfigSaver,
     config: Mutex<Config>,
     input: InputEngine,
     displays: Arc<DisplayManager>,
@@ -94,8 +94,11 @@ impl Core {
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
         let data_dir = PathBuf::from(data_dir);
-        let store = ConfigStore::new(ConfigStore::default_path()?, &data_dir);
-        let config = store.load()?;
+        let saver = ConfigSaver::new(
+            ConfigStore::new(ConfigStore::default_path()?, &data_dir),
+            SAVE_DEBOUNCE,
+        );
+        let config = saver.load()?;
         let input = InputEngine::new(config.mouse.clone());
         let displays = DisplayManager::new(config.monitor.clone());
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
@@ -119,7 +122,7 @@ impl Core {
         let colors = ColorHistory::new(&data_dir);
         let emoji = EmojiPicker::new(&data_dir);
         Ok(Arc::new(Self {
-            store,
+            saver,
             config: Mutex::new(config),
             input,
             displays,
@@ -142,26 +145,26 @@ impl Core {
         self.config.lock().mouse.clone()
     }
 
-    /// Saves the new mouse settings and applies them immediately if input is running.
+    /// Applies the new mouse settings immediately if input is running, and saves them.
     pub fn set_mouse_config(&self, mouse: MouseConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
         config.mouse = mouse.clone();
-        self.store.save(&config)?;
         self.input.set_config(mouse);
-        Ok(())
+        self.saver.save(&config)
     }
 
     pub fn monitor_config(&self) -> MonitorConfig {
         self.config.lock().monitor.clone()
     }
 
-    /// Saves the new monitor settings and applies them immediately.
+    /// Applies the new monitor settings immediately, and saves them.
     pub fn set_monitor_config(&self, monitor: MonitorConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
         config.monitor = monitor.clone();
-        self.store.save(&config)?;
+        let saved = self.saver.save(&config);
         self.displays.set_config(monitor);
-        self.brightness_keys.refresh()
+        self.brightness_keys.refresh()?;
+        saved
     }
 
     /// External displays with their cached brightness. Never blocks on DDC.
@@ -201,36 +204,39 @@ impl Core {
         self.config.lock().hyper_key.clone()
     }
 
-    /// Saves the new Hyper key settings and applies them immediately if input is running.
+    /// Applies the new Hyper key settings immediately if input is running, and saves them.
     /// The settings are saved even if remapping the key fails.
     pub fn set_hyper_key_config(&self, hyper_key: HyperKeyConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
         config.hyper_key = hyper_key.clone();
-        self.store.save(&config)?;
-        self.hyper_key.set_config(hyper_key)
+        let saved = self.saver.save(&config);
+        self.hyper_key.set_config(hyper_key)?;
+        saved
     }
 
     pub fn window_drag_config(&self) -> WindowDragConfig {
         self.config.lock().window_drag.clone()
     }
 
-    /// Saves the new window drag settings and applies them immediately if input is running.
+    /// Applies the new window drag settings immediately if input is running, and saves them.
     pub fn set_window_drag_config(&self, window_drag: WindowDragConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
         config.window_drag = window_drag.clone();
-        self.store.save(&config)?;
-        self.window_drag.set_config(window_drag)
+        let saved = self.saver.save(&config);
+        self.window_drag.set_config(window_drag)?;
+        saved
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {
         self.config.lock().launcher.clone()
     }
 
-    /// Saves the new launcher settings and re-registers hotkeys. Main thread only.
+    /// Applies the new launcher settings and re-registers hotkeys, and saves them. Main
+    /// thread only.
     pub fn set_launcher_config(&self, launcher: LauncherConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
         config.launcher = launcher.clone();
-        self.store.save(&config)?;
+        let saved = self.saver.save(&config);
         launcher::apply_config(&self.hotkeys, &launcher);
         self.clipboard.set_config(launcher.clipboard.clone());
         self.files.set_config(launcher.files.clone());
@@ -238,7 +244,14 @@ impl Core {
         self.snippets.set_config(launcher.snippets.clone());
         let keep_awake = self.keep_awake.set_config(launcher.keep_awake.clone());
         self.launcher.set_config(launcher);
-        keep_awake
+        keep_awake?;
+        saved
+    }
+
+    /// Writes settings changed in the last moment, which are otherwise saved once changes
+    /// settle. The shell calls this before quitting.
+    pub fn flush_config(&self) -> Result<(), CoreError> {
+        self.saver.flush()
     }
 
     /// Whether Keep Awake is keeping the Mac awake.

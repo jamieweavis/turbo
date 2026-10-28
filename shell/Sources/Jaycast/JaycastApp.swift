@@ -68,6 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         model?.stopInput()
+        // Settings are written once changes settle; write any still waiting. There's no
+        // one left to tell if it fails.
+        try? model?.core.flushConfig()
     }
 
     func showOnboarding() {

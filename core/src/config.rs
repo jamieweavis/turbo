@@ -5,7 +5,11 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
+use parking_lot::{Condvar, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
@@ -860,13 +864,141 @@ impl ConfigStore {
 
     /// Writes atomically (temp file + rename) so a crash never leaves a half-written config.
     pub fn save(&self, config: &Config) -> Result<(), CoreError> {
+        self.write(&toml::to_string_pretty(config)?)
+    }
+
+    fn write(&self, text: &str) -> Result<(), CoreError> {
         if let Some(dir) = self.path.parent() {
             fs::create_dir_all(dir)?;
         }
         let tmp = self.path.with_extension("toml.tmp");
-        fs::write(&tmp, toml::to_string_pretty(config)?)?;
+        fs::write(&tmp, text)?;
         fs::rename(&tmp, &self.path)?;
         Ok(())
+    }
+}
+
+/// How long settings must stay unchanged before they're written, so dragging a slider
+/// writes the file once at the end rather than on every tick.
+pub const SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
+
+/// Writes the config on a background thread once changes settle. The caller applies each
+/// change right away; only the file write waits.
+pub struct ConfigSaver {
+    shared: Arc<SaverShared>,
+    thread: Option<JoinHandle<()>>,
+}
+
+struct SaverShared {
+    store: ConfigStore,
+    debounce: Duration,
+    state: Mutex<SaverState>,
+    wake: Condvar,
+    /// Held for the length of a write, so the thread and `flush` never write at once.
+    writing: Mutex<()>,
+}
+
+#[derive(Default)]
+struct SaverState {
+    /// The newest serialized config not yet written, and when it arrived.
+    pending: Option<(String, Instant)>,
+    /// Why the last write failed; cleared by the next one that succeeds.
+    error: Option<String>,
+    shutdown: bool,
+}
+
+impl ConfigSaver {
+    pub fn new(store: ConfigStore, debounce: Duration) -> Self {
+        let shared = Arc::new(SaverShared {
+            store,
+            debounce,
+            state: Mutex::new(SaverState::default()),
+            wake: Condvar::new(),
+            writing: Mutex::new(()),
+        });
+        let thread_shared = Arc::clone(&shared);
+        let thread = thread::Builder::new()
+            .name("jaycast-config-saver".into())
+            .spawn(move || run_saver(&thread_shared))
+            .inspect_err(|error| eprintln!("jaycast: couldn't start the config saver: {error}"))
+            .ok();
+        Self { shared, thread }
+    }
+
+    pub fn load(&self) -> Result<Config, CoreError> {
+        self.shared.store.load()
+    }
+
+    /// Queues `config` to be written once changes settle. Errs if it can't be serialized,
+    /// or if the last write failed, since settings then aren't reaching the file.
+    pub fn save(&self, config: &Config) -> Result<(), CoreError> {
+        let text = toml::to_string_pretty(config)?;
+        let mut state = self.shared.state.lock();
+        state.pending = Some((text, Instant::now()));
+        self.shared.wake.notify_one();
+        match &state.error {
+            Some(message) => Err(CoreError::Io {
+                message: message.clone(),
+            }),
+            None => Ok(()),
+        }
+    }
+
+    /// Writes any queued config now, e.g. before quitting.
+    pub fn flush(&self) -> Result<(), CoreError> {
+        self.shared.write_pending()
+    }
+}
+
+impl Drop for ConfigSaver {
+    fn drop(&mut self) {
+        if let Err(error) = self.flush() {
+            eprintln!("jaycast: couldn't save the config: {error}");
+        }
+        self.shared.state.lock().shutdown = true;
+        self.shared.wake.notify_one();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+impl SaverShared {
+    fn write_pending(&self) -> Result<(), CoreError> {
+        let _writing = self.writing.lock();
+        let Some((text, _)) = self.state.lock().pending.take() else {
+            return Ok(());
+        };
+        let result = self.store.write(&text);
+        self.state.lock().error = result.as_ref().err().map(ToString::to_string);
+        result
+    }
+}
+
+fn run_saver(shared: &SaverShared) {
+    loop {
+        {
+            let mut state = shared.state.lock();
+            loop {
+                if state.shutdown {
+                    return;
+                }
+                match &state.pending {
+                    None => shared.wake.wait(&mut state),
+                    Some((_, changed)) => {
+                        let quiet = changed.elapsed();
+                        if quiet >= shared.debounce {
+                            break;
+                        }
+                        let wait = shared.debounce - quiet;
+                        shared.wake.wait_for(&mut state, wait);
+                    }
+                }
+            }
+        }
+        if let Err(error) = shared.write_pending() {
+            eprintln!("jaycast: couldn't save the config: {error}");
+        }
     }
 }
 
@@ -1011,5 +1143,71 @@ mod tests {
             ..WindowDragConfig::default()
         };
         assert!(!no_modifiers.is_active());
+    }
+
+    fn speed(speed: f64) -> Config {
+        let mut config = Config::default();
+        config.mouse.smooth_scroll.speed = speed;
+        config
+    }
+
+    #[test]
+    fn saver_writes_once_changes_settle() {
+        let dir = temp_dir("saver-settle");
+        let saver = ConfigSaver::new(store(&dir), Duration::from_millis(50));
+        saver.save(&speed(1.5)).unwrap();
+        saver.save(&speed(2.0)).unwrap();
+        assert!(!dir.join("jaycast.toml").exists());
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !dir.join("jaycast.toml").exists() {
+            assert!(Instant::now() < deadline, "the config was never written");
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(store(&dir).load().unwrap(), speed(2.0));
+        drop(saver);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saver_flushes_on_request_and_on_drop() {
+        let dir = temp_dir("saver-flush");
+        let saver = ConfigSaver::new(store(&dir), Duration::from_secs(3600));
+        saver.save(&speed(1.5)).unwrap();
+        saver.flush().unwrap();
+        assert_eq!(store(&dir).load().unwrap(), speed(1.5));
+
+        saver.save(&speed(2.0)).unwrap();
+        drop(saver);
+        assert_eq!(store(&dir).load().unwrap(), speed(2.0));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saver_reports_a_failed_write_until_one_succeeds() {
+        let dir = temp_dir("saver-error");
+        fs::create_dir_all(&dir).unwrap();
+        // A file where the config's directory should be makes every write fail.
+        let blocker = dir.join("config");
+        fs::write(&blocker, "").unwrap();
+        let saver = ConfigSaver::new(
+            ConfigStore::new(blocker.join("jaycast.toml"), &dir),
+            Duration::from_secs(3600),
+        );
+        saver.save(&speed(1.5)).unwrap();
+        assert!(saver.flush().is_err());
+        assert!(saver.save(&speed(2.0)).is_err());
+
+        fs::remove_file(&blocker).unwrap();
+        saver.flush().unwrap();
+        assert!(saver.save(&speed(2.5)).is_ok());
+        drop(saver);
+        assert_eq!(
+            ConfigStore::new(blocker.join("jaycast.toml"), &dir)
+                .load()
+                .unwrap(),
+            speed(2.5)
+        );
+        fs::remove_dir_all(dir).unwrap();
     }
 }
