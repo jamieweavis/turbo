@@ -71,7 +71,7 @@ pub enum ClipboardKind {
 pub(crate) struct ClipboardHistory {
     /// `None` if the database couldn't be opened; history is then unavailable but the
     /// rest of the app carries on.
-    store: Option<Mutex<Store>>,
+    store: Option<Store>,
     config: Mutex<ClipboardConfig>,
     observer: Mutex<Option<Arc<dyn LauncherObserver>>>,
     monitor: Arc<MonitorSignal>,
@@ -82,7 +82,7 @@ impl ClipboardHistory {
     /// thread if enabled. Returns immediately.
     pub fn new(data_dir: &Path, config: ClipboardConfig) -> Arc<Self> {
         let store = match Store::open(&data_dir.join("clipboard")) {
-            Ok(store) => Some(Mutex::new(store)),
+            Ok(store) => Some(store),
             Err(error) => {
                 eprintln!("jaycast: clipboard history unavailable: {error}");
                 None
@@ -126,7 +126,7 @@ impl ClipboardHistory {
         let Some(store) = &self.store else {
             return Vec::new();
         };
-        store.lock().items(query, limit).unwrap_or_else(|error| {
+        store.items(query, limit).unwrap_or_else(|error| {
             eprintln!("jaycast: {error}");
             Vec::new()
         })
@@ -140,13 +140,9 @@ impl ClipboardHistory {
         if paste && unsafe { AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
         }
-        let stored = self
-            .store()?
-            .lock()
-            .stored(id)?
-            .ok_or_else(|| CoreError::Other {
-                message: "that clipboard item no longer exists".into(),
-            })?;
+        let stored = self.store()?.stored(id)?.ok_or_else(|| CoreError::Other {
+            message: "that clipboard item no longer exists".into(),
+        })?;
         // The monitor sees this write and bumps the item to the top, like any re-copy.
         board::write(&stored)?;
         if paste {
@@ -159,7 +155,7 @@ impl ClipboardHistory {
     }
 
     pub fn delete(&self, id: i64) -> Result<(), CoreError> {
-        let deleted = self.store()?.lock().delete(id)?;
+        let deleted = self.store()?.delete(id)?;
         if deleted {
             self.notify();
         }
@@ -167,7 +163,7 @@ impl ClipboardHistory {
     }
 
     pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<(), CoreError> {
-        let changed = self.store()?.lock().set_pinned(id, pinned)?;
+        let changed = self.store()?.set_pinned(id, pinned)?;
         if changed {
             self.notify();
         }
@@ -176,14 +172,14 @@ impl ClipboardHistory {
 
     /// Deletes every unpinned item.
     pub fn clear(&self) -> Result<(), CoreError> {
-        let deleted = self.store()?.lock().clear()?;
+        let deleted = self.store()?.clear()?;
         if deleted > 0 {
             self.notify();
         }
         Ok(())
     }
 
-    fn store(&self) -> Result<&Mutex<Store>, CoreError> {
+    fn store(&self) -> Result<&Store, CoreError> {
         self.store.as_ref().ok_or_else(|| CoreError::Other {
             message: "clipboard history is unavailable".into(),
         })
@@ -198,7 +194,7 @@ impl ClipboardHistory {
         let Some((content, source)) = board::read(&ignored) else {
             return;
         };
-        let result = store.lock().insert(&content, &source, now());
+        let result = store.insert(&content, &source, now());
         match result {
             Ok(()) => {
                 self.prune();
@@ -217,7 +213,7 @@ impl ClipboardHistory {
             let config = self.config.lock();
             (config.max_items, config.retention_days)
         };
-        let result = store.lock().prune(max_items, retention_days, now());
+        let result = store.prune(max_items, retention_days, now());
         result.unwrap_or_else(|error| {
             eprintln!("jaycast: couldn't prune clipboard history: {error}");
             0

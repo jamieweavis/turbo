@@ -5,6 +5,7 @@ use std::fs::{self, DirBuilder};
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
+use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 
 use super::capture::{Content, truncate};
@@ -35,8 +36,13 @@ pub(super) enum Stored {
     Files(Vec<String>),
 }
 
+/// Two connections to one WAL database, so the palette's lookups never wait on a write.
+/// Writes take turns on `writer`, and an image is written to disk while it's held, so
+/// pruning can't remove a file an insert is about to refer to.
 pub(super) struct Store {
-    connection: Connection,
+    writer: Mutex<Connection>,
+    /// Read-only (`query_only`); WAL lets it read while a write is in progress.
+    reader: Mutex<Connection>,
     images: PathBuf,
 }
 
@@ -71,7 +77,16 @@ impl Store {
             }
         }
 
-        let store = Self { connection, images };
+        let reader = Connection::open(&path).map_err(sql_error)?;
+        reader
+            .pragma_update(None, "query_only", true)
+            .map_err(sql_error)?;
+
+        let store = Self {
+            writer: Mutex::new(connection),
+            reader: Mutex::new(reader),
+            images,
+        };
         store.remove_orphaned_images();
         Ok(store)
     }
@@ -80,15 +95,16 @@ impl Store {
     /// and source). Images are written to disk first.
     pub fn insert(&self, content: &Content, source: &Source, now: f64) -> Result<(), CoreError> {
         let hash = content.hash();
-        let image_path = match content {
-            Content::Image { png, .. } => Some(self.write_image(&hash, png)?),
-            _ => None,
-        };
         let file_paths = match content {
             Content::Files(paths) => serde_json::to_string(paths)?,
             _ => "[]".into(),
         };
-        self.connection
+        let writer = self.writer.lock();
+        let image_path = match content {
+            Content::Image { png, .. } => Some(self.write_image(&hash, png)?),
+            _ => None,
+        };
+        writer
             .execute(
                 "INSERT INTO items
                     (kind, text, image_path, file_paths, source_app, source_bundle_id, hash, copied_at)
@@ -139,7 +155,8 @@ impl Store {
              ORDER BY pinned DESC, copied_at DESC
              LIMIT {limit}"
         );
-        let mut statement = self.connection.prepare(&sql).map_err(sql_error)?;
+        let reader = self.reader.lock();
+        let mut statement = reader.prepare(&sql).map_err(sql_error)?;
         let rows = statement
             .query_map(params_from_iter(words.iter()), item_from_row)
             .map_err(sql_error)?;
@@ -149,7 +166,8 @@ impl Store {
     /// The item's payload, or `None` if it no longer exists.
     pub fn stored(&self, id: i64) -> Result<Option<Stored>, CoreError> {
         let row = self
-            .connection
+            .reader
+            .lock()
             .query_row(
                 "SELECT kind, text, image_path, file_paths FROM items WHERE id = ?1",
                 [id],
@@ -176,9 +194,9 @@ impl Store {
 
     /// Whether anything was deleted.
     pub fn delete(&self, id: i64) -> Result<bool, CoreError> {
-        let images = self.image_paths("WHERE id = ?1", [id])?;
-        let deleted = self
-            .connection
+        let writer = self.writer.lock();
+        let images = image_paths(&writer, "WHERE id = ?1", [id])?;
+        let deleted = writer
             .execute("DELETE FROM items WHERE id = ?1", [id])
             .map_err(sql_error)?;
         remove_files(&images);
@@ -188,7 +206,8 @@ impl Store {
     /// Whether anything changed.
     pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<bool, CoreError> {
         let changed = self
-            .connection
+            .writer
+            .lock()
             .execute(
                 "UPDATE items SET pinned = ?2 WHERE id = ?1 AND pinned != ?2",
                 params![id, pinned],
@@ -199,9 +218,9 @@ impl Store {
 
     /// Deletes every unpinned item; returns how many.
     pub fn clear(&self) -> Result<usize, CoreError> {
-        let images = self.image_paths("WHERE pinned = 0", [])?;
-        let deleted = self
-            .connection
+        let writer = self.writer.lock();
+        let images = image_paths(&writer, "WHERE pinned = 0", [])?;
+        let deleted = writer
             .execute("DELETE FROM items WHERE pinned = 0", [])
             .map_err(sql_error)?;
         remove_files(&images);
@@ -222,9 +241,9 @@ impl Store {
         };
         let condition = "WHERE pinned = 0 AND (copied_at < ?1 OR id NOT IN (
                 SELECT id FROM items WHERE pinned = 0 ORDER BY copied_at DESC LIMIT ?2))";
-        let images = self.image_paths(condition, params![cutoff, max_items])?;
-        let deleted = self
-            .connection
+        let writer = self.writer.lock();
+        let images = image_paths(&writer, condition, params![cutoff, max_items])?;
+        let deleted = writer
             .execute(
                 &format!("DELETE FROM items {condition}"),
                 params![cutoff, max_items],
@@ -246,23 +265,9 @@ impl Store {
         Ok(path)
     }
 
-    fn image_paths(
-        &self,
-        condition: &str,
-        params: impl rusqlite::Params,
-    ) -> Result<Vec<PathBuf>, CoreError> {
-        // `condition` always starts with WHERE.
-        let sql = format!("SELECT image_path FROM items {condition} AND image_path IS NOT NULL");
-        let mut statement = self.connection.prepare(&sql).map_err(sql_error)?;
-        let rows = statement
-            .query_map(params, |row| row.get::<_, String>(0))
-            .map_err(sql_error)?;
-        Ok(rows.filter_map(Result::ok).map(PathBuf::from).collect())
-    }
-
     /// Deletes image files no item refers to (e.g. after a crash between steps).
     fn remove_orphaned_images(&self) {
-        let Ok(referenced) = self.image_paths("WHERE 1", []) else {
+        let Ok(referenced) = image_paths(&self.writer.lock(), "WHERE 1", []) else {
             return;
         };
         let Ok(entries) = fs::read_dir(&self.images) else {
@@ -275,6 +280,20 @@ impl Store {
             }
         }
     }
+}
+
+fn image_paths(
+    connection: &Connection,
+    condition: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<PathBuf>, CoreError> {
+    // `condition` always starts with WHERE.
+    let sql = format!("SELECT image_path FROM items {condition} AND image_path IS NOT NULL");
+    let mut statement = connection.prepare(&sql).map_err(sql_error)?;
+    let rows = statement
+        .query_map(params, |row| row.get::<_, String>(0))
+        .map_err(sql_error)?;
+    Ok(rows.filter_map(Result::ok).map(PathBuf::from).collect())
 }
 
 fn migrate(connection: &Connection) -> Result<(), CoreError> {
@@ -556,6 +575,39 @@ mod tests {
         let items = store.items("", 1).unwrap();
         assert_eq!(items[0].text.len(), MAX_RETURNED_TEXT_BYTES);
         assert_eq!(store.stored(items[0].id).unwrap(), Some(Stored::Text(long)));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn lookups_run_while_a_write_is_in_progress() {
+        let dir = temp_dir("concurrent");
+        let store = Store::open(&dir).unwrap();
+        store.insert(&text("committed"), &source("A"), 1.0).unwrap();
+        let writer = store.writer.lock();
+        writer
+            .execute_batch(
+                "BEGIN IMMEDIATE;
+                 INSERT INTO items (kind, text, hash, copied_at) VALUES (0, 'pending', 'p', 2.0);",
+            )
+            .unwrap();
+
+        // On another thread, so a lookup that waits on the writer times out instead of
+        // hanging. The writer is released before asserting, so the scope can always join.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let result = std::thread::scope(|scope| {
+            scope.spawn(|| {
+                let items = store.items("", 10).unwrap();
+                let stored = store.stored(items[0].id).unwrap();
+                let _ = tx.send((items, stored));
+            });
+            let result = rx.recv_timeout(std::time::Duration::from_secs(5));
+            writer.execute_batch("ROLLBACK;").unwrap();
+            drop(writer);
+            result
+        });
+        let (items, stored) = result.expect("lookups waited on the writer");
+        assert_eq!(texts(&items), vec!["committed"]);
+        assert_eq!(stored, Some(Stored::Text("committed".into())));
         fs::remove_dir_all(dir).unwrap();
     }
 }
