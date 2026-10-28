@@ -15,15 +15,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
-use objc2::rc::autoreleasepool;
-use objc2_app_kit::NSEvent;
 use objc2_core_foundation::{
     CFMachPort, CFRetained, CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
 };
 use objc2_core_graphics::{
     CGDirectDisplayID, CGDisplayIsBuiltin, CGError, CGEvent, CGEventFlags, CGEventMask,
-    CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy, CGEventType,
-    CGGetDisplaysWithPoint,
+    CGEventField, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy,
+    CGEventType, CGGetDisplaysWithPoint,
 };
 
 use super::DisplayManager;
@@ -36,6 +34,10 @@ unsafe extern "C" {
 
 /// `NX_SYSDEFINED` (IOLLEvent.h); CoreGraphics has no named `CGEventType` for it.
 const SYSTEM_DEFINED: CGEventType = CGEventType(14);
+/// Undocumented `CGEventField`s holding a system-defined event's `subtype` and `data1`, the
+/// values `NSEvent` reports for them (the round-trip test pins this).
+const FIELD_SUBTYPE: CGEventField = CGEventField(99);
+const FIELD_DATA1: CGEventField = CGEventField(149);
 /// `NX_SUBTYPE_AUX_CONTROL_BUTTONS` (IOLLEvent.h): media, volume and brightness keys.
 const SUBTYPE_AUX_CONTROL_BUTTONS: i16 = 8;
 /// `NX_KEYTYPE_BRIGHTNESS_UP` / `_DOWN` (ev_keymap.h).
@@ -296,16 +298,14 @@ impl TapState {
     }
 }
 
-/// `subtype` and `data1` of a system-defined event. CoreGraphics exposes neither as a
-/// documented field, so this goes through `NSEvent`, which is safe off the main thread
-/// for event conversion.
+/// `subtype` and `data1` of a system-defined event, read straight from the event's
+/// compound-data fields. CoreGraphics names neither field; `NSEvent` would decode them,
+/// but converting a caps-lock event off the main thread trips HIToolbox's main-queue
+/// assertion and kills the process.
 fn aux_fields(event: &CGEvent) -> Option<(i16, isize)> {
-    // The NSEvent is autoreleased; drain it here rather than letting it pile up on a
-    // thread that never returns to a pool.
-    autoreleasepool(|_| {
-        let ns_event = NSEvent::eventWithCGEvent(event)?;
-        Some((ns_event.subtype().0, ns_event.data1()))
-    })
+    let subtype = CGEvent::integer_value_field(Some(event), FIELD_SUBTYPE);
+    let data1 = CGEvent::integer_value_field(Some(event), FIELD_DATA1);
+    Some((i16::try_from(subtype).ok()?, data1 as isize))
 }
 
 /// The display containing the mouse cursor. An event created without a source carries the
@@ -608,6 +608,7 @@ mod tests {
     fn aux_fields_reads_a_real_system_defined_event() {
         use objc2::runtime::AnyObject;
         use objc2::{ClassType, msg_send, rc::Retained};
+        use objc2_app_kit::NSEvent;
         use objc2_core_foundation::CGPoint;
 
         let packed = data1(KEYTYPE_BRIGHTNESS_DOWN, KEY_STATE_DOWN, true);
@@ -628,7 +629,7 @@ mod tests {
         };
         let cg_event = ns_event.unwrap().CGEvent().unwrap();
         let (subtype, data1) = aux_fields(&cg_event).unwrap();
-        assert_eq!(subtype, SUBTYPE_AUX_CONTROL_BUTTONS);
+        assert_eq!((subtype, data1), (SUBTYPE_AUX_CONTROL_BUTTONS, packed));
         assert_eq!(
             decode(subtype, data1),
             Some(BrightnessKey {
