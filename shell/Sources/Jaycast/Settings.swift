@@ -200,8 +200,8 @@ struct SettingsView: View {
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
             // so the selected (bold) "Window Management" fits.
-            .frame(minWidth: 225)
-            .navigationSplitViewColumnWidth(min: 225, ideal: 225, max: 225)
+            .frame(minWidth: 230)
+            .navigationSplitViewColumnWidth(min: 230, ideal: 230, max: 230)
             .toolbar(removing: .sidebarToggle)
             .background(SidebarLimits(maxWidth: 300))
         } detail: {
