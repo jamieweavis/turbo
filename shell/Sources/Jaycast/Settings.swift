@@ -180,6 +180,7 @@ struct SettingsView: View {
     let onShowOnboarding: () -> Void
 
     @State private var history = PaneHistory()
+    @State private var titles = PaneTitleTracker()
 
     var body: some View {
         // A nil selection (a ⌘-click on the selected row) keeps the current pane.
@@ -227,6 +228,7 @@ struct SettingsView: View {
             // Monitor keeps the built-in display's slider usable, and disables the rest itself.
             .disabled(pane != .monitor && isEnabled(pane)?.wrappedValue == false)
             .scrollContentBackground(.hidden)
+            .environment(titles)
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
                     Button("Back", systemImage: "chevron.left") { history.goBack() }
@@ -237,6 +239,11 @@ struct SettingsView: View {
                         .disabled(history.next == nil)
                         .help(history.next.map { "Forward to \($0.title)" } ?? "Forward")
                         .keyboardShortcut("]", modifiers: .command)
+                }
+                // Not on General: with no switch on the right, the title sits off-centre.
+                if pane != .general {
+                    ToolbarItem(placement: .principal) { ToolbarTitle(pane: pane, titles: titles) }
+                        .sharedBackgroundVisibility(.hidden)
                 }
                 ToolbarSpacer(.flexible)
                 if isEnabled(pane) != nil {
@@ -339,6 +346,42 @@ struct PaneHistory {
     }
 }
 
+/// Where each pane's header title is, so the toolbar can take over the title once it scrolls
+/// away. Its own object so only the toolbar title redraws as the pane scrolls.
+@Observable
+final class PaneTitleTracker {
+    var titleFrames: [SettingsPane: CGRect] = [:]
+
+    /// Whether `pane`'s header title has scrolled off the top of the window. Not just under the
+    /// toolbar, which it still shows through.
+    func isTitleHidden(for pane: SettingsPane) -> Bool {
+        guard let frame = titleFrames[pane] else { return false }
+        return frame.maxY <= 0
+    }
+}
+
+/// The pane's title in the middle of the toolbar, sliding up into place once its header's title
+/// has scrolled out of view, so the two never show at once.
+private struct ToolbarTitle: View {
+    let pane: SettingsPane
+    let titles: PaneTitleTracker
+
+    private let height: CGFloat = 22
+
+    var body: some View {
+        let shown = titles.isTitleHidden(for: pane)
+        Text(pane.title)
+            .font(.headline)
+            .offset(y: shown ? 0 : height)
+            .opacity(shown ? 1 : 0)
+            .animation(.easeOut(duration: 0.2), value: shown)
+            .frame(height: height)
+            .clipped()
+            .allowsHitTesting(false)
+            .accessibilityHidden(!shown)
+    }
+}
+
 /// The pane's on/off switch in the toolbar.
 private struct FeatureSwitch: View {
     let pane: SettingsPane
@@ -390,12 +433,20 @@ struct PaneIcon: View {
 struct PaneHeader: View {
     let pane: SettingsPane
 
+    @Environment(PaneTitleTracker.self) private var titles: PaneTitleTracker?
+
     var body: some View {
         VStack(spacing: 8) {
             PaneIcon(pane: pane, size: 56)
                 .padding(.bottom, 4)
             Text(pane.title)
                 .font(.largeTitle.bold())
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                    titles?.titleFrames[pane] = $0
+                }
+                // A form drops rows scrolled well out of view, by which point the title is under
+                // the toolbar.
+                .onDisappear { titles?.titleFrames[pane] = CGRect(x: 0, y: -.infinity, width: 0, height: 0) }
             Text(pane.subtitle)
                 .font(.title3)
                 .foregroundStyle(.secondary)
