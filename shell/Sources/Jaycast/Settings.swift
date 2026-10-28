@@ -366,22 +366,29 @@ final class PaneTitleTracker {
 }
 
 /// The pane's title in the middle of the toolbar, sliding up into place once its header's title
-/// has scrolled out of view, so the two never show at once.
+/// has scrolled out of view, so the two never show at once. It fades as it slides, through a
+/// soft bottom edge rather than a hard clip.
 private struct ToolbarTitle: View {
     let pane: SettingsPane
     let titles: PaneTitleTracker
 
-    private let height: CGFloat = 22
+    private let height: CGFloat = 28
+    /// How much of the bottom edge the text fades through. Clear of the text at rest.
+    private let fade: CGFloat = 0.25
 
     var body: some View {
         let shown = titles.isTitleHidden(for: pane)
         Text(pane.title)
             .font(.headline)
-            .offset(y: shown ? 0 : height)
+            .offset(y: shown ? 0 : height * 0.75)
             .opacity(shown ? 1 : 0)
-            .animation(.easeOut(duration: 0.2), value: shown)
+            .animation(.easeOut(duration: 0.25), value: shown)
             .frame(height: height)
-            .clipped()
+            .mask {
+                LinearGradient(
+                    stops: [.init(color: .black, location: 1 - fade), .init(color: .clear, location: 1)],
+                    startPoint: .top, endPoint: .bottom)
+            }
             .allowsHitTesting(false)
             .accessibilityHidden(!shown)
     }
