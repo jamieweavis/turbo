@@ -39,7 +39,7 @@ final class SettingsWindowController {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 836, height: 560))
+        window.setContentSize(NSSize(width: 840, height: 560))
         window.center()
         window.setFrameAutosaveName("Settings")
         return window
@@ -252,7 +252,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(minWidth: 836, minHeight: 560)
+        .frame(minWidth: 840, minHeight: 560)
         // Turning a feature off from its own pane, or ticking it back on in the Launcher pane's
         // table, can change whether the Mac is kept awake.
         .onChange(of: model.launcher.config.keepAwake.enabled) { model.keepAwake.refresh() }
