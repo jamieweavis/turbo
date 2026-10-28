@@ -22,7 +22,7 @@ mod drag;
 mod layout;
 mod memory;
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use objc2::MainThreadMarker;
 use objc2_app_kit::{NSRunningApplication, NSScreen, NSWorkspace};
@@ -257,7 +257,7 @@ impl WindowManager {
     }
 
     pub fn set_config(&self, config: WindowConfig) {
-        *self.config.lock().unwrap() = config;
+        *self.config.lock() = config;
     }
 
     /// Applies `action` to the focused window of the frontmost app. Fails with
@@ -275,7 +275,7 @@ impl WindowManager {
             return Err(other("no displays found"));
         }
         let (gap, almost_maximize) = {
-            let config = self.config.lock().unwrap();
+            let config = self.config.lock();
             (
                 f64::from(config.gap),
                 f64::from(config.almost_maximize_percent.clamp(10, 100)) / 100.0,
@@ -288,7 +288,7 @@ impl WindowManager {
         // just don't apply to it.
         let key = window.window_id().map(|id| (pid, id));
         let memory = key
-            .map(|key| self.memory.lock().unwrap().get(key))
+            .map(|key| self.memory.lock().get(key))
             .unwrap_or_default();
 
         let plan = layout::plan(action, before, &screens, &memory, gap, almost_maximize).map_err(
@@ -312,7 +312,7 @@ impl WindowManager {
                 memory.record(before, plan.snap, after);
                 Some(memory)
             };
-            self.memory.lock().unwrap().put(key, memory, is_open);
+            self.memory.lock().put(key, memory, is_open);
         }
         Ok(())
     }
@@ -320,7 +320,7 @@ impl WindowManager {
     /// Remembers a window's frame from before it was dragged, so `Restore` can put it back,
     /// and forgets its last snap (it's no longer snapped).
     fn remember_drag(&self, key: WindowKey, before: Rect, after: Rect) {
-        let mut memory = self.memory.lock().unwrap();
+        let mut memory = self.memory.lock();
         let mut remembered = memory.get(key);
         remembered.record(before, None, after);
         memory.put(key, Some(remembered), is_open);

@@ -4,8 +4,8 @@
 //! [`DIM_RANGE`] holds DDC at 0 while scaling the display's gamma down to black. macOS
 //! restores every gamma table when the process exits, so a crash can't leave a screen dark.
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use objc2_core_graphics::{
     CGDirectDisplayID, CGDisplayRestoreColorSyncSettings, CGSetDisplayTransferByFormula,
@@ -53,7 +53,7 @@ pub(super) struct Dimmer {
 impl Dimmer {
     /// Applies `gamma` to a display. Cheap (no DDC), so safe on the key tap's hot path.
     pub fn set(&self, display: CGDirectDisplayID, gamma: f64) {
-        let mut dimmed = self.dimmed.lock().unwrap();
+        let mut dimmed = self.dimmed.lock();
         if gamma < 1.0 {
             dimmed.insert(display, gamma);
             apply(display, gamma);
@@ -65,11 +65,11 @@ impl Dimmer {
 
     /// Forgets a disconnected display.
     pub fn forget(&self, display: CGDirectDisplayID) {
-        self.dimmed.lock().unwrap().remove(&display);
+        self.dimmed.lock().remove(&display);
     }
 
     pub fn reset_all(&self) {
-        let mut dimmed = self.dimmed.lock().unwrap();
+        let mut dimmed = self.dimmed.lock();
         if !dimmed.is_empty() {
             dimmed.clear();
             restore_all(&dimmed);

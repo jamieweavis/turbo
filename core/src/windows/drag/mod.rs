@@ -9,7 +9,8 @@ mod geometry;
 mod tap;
 mod worker;
 
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 use super::WindowManager;
 use super::ax;
@@ -42,7 +43,7 @@ impl WindowDrag {
 
     /// Applied live: turning it off stops the tap, so clicks are untouched.
     pub fn set_config(&self, config: WindowDragConfig) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         self.tap.set_config(config.clone());
         state.config = config;
         self.sync(&state)
@@ -50,7 +51,7 @@ impl WindowDrag {
 
     /// Fails with `PermissionDenied` without Accessibility. A no-op while running.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         // SAFETY: no arguments; reads the process's TCC state.
         if unsafe { ax::AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
@@ -65,7 +66,7 @@ impl WindowDrag {
     }
 
     pub fn stop(&self) {
-        self.state.lock().unwrap().started = false;
+        self.state.lock().started = false;
         self.tap.stop();
     }
 

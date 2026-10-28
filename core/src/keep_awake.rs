@@ -4,9 +4,9 @@
 //! `<data_dir>/keep-awake.json` and taken again at launch, so an update or relaunch doesn't
 //! turn it off.
 
+use parking_lot::Mutex;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -99,11 +99,11 @@ impl KeepAwake {
     }
 
     pub fn is_active(&self) -> bool {
-        self.state.lock().unwrap().assertion.is_some()
+        self.state.lock().assertion.is_some()
     }
 
     pub fn set_active(&self, active: bool) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         match (active, state.assertion) {
             (true, None) => state.assertion = Some(create(state.keep_display_on)?),
             (false, Some(id)) => {
@@ -132,7 +132,7 @@ impl KeepAwake {
         if !config.enabled {
             self.set_active(false)?;
         }
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         if state.keep_display_on == config.keep_display_on {
             return Ok(());
         }
@@ -148,7 +148,7 @@ impl KeepAwake {
 
 impl Drop for KeepAwake {
     fn drop(&mut self) {
-        if let Some(id) = self.state.get_mut().unwrap().assertion.take() {
+        if let Some(id) = self.state.get_mut().assertion.take() {
             release(id);
         }
     }

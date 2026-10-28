@@ -13,7 +13,7 @@ mod scroll_physics;
 mod smooth_scroll;
 mod tap;
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use crate::config::MouseConfig;
 use crate::error::CoreError;
@@ -54,7 +54,7 @@ impl InputEngine {
 
     /// Applied live: turning the mouse off stops the tap.
     pub fn set_config(&self, config: MouseConfig) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         state.enabled = config.enabled;
         self.tap.set_config(config.effective());
         if let Err(error) = self.sync(&state) {
@@ -64,7 +64,7 @@ impl InputEngine {
 
     /// Fails with `PermissionDenied` without Accessibility. A no-op while running.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         // SAFETY: no arguments; reads the process's TCC state.
         if unsafe { AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
@@ -78,13 +78,13 @@ impl InputEngine {
     }
 
     pub fn stop(&self) {
-        self.state.lock().unwrap().started = false;
+        self.state.lock().started = false;
         self.tap.stop();
     }
 
     /// Started, whether or not the tap itself is running (it doesn't while the mouse is off).
     pub fn is_running(&self) -> bool {
-        self.state.lock().unwrap().started
+        self.state.lock().started
     }
 
     /// Runs the tap exactly when it's wanted.

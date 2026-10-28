@@ -18,8 +18,9 @@ mod pasteboard;
 mod snippets;
 mod windows;
 
+use parking_lot::Mutex;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use clipboard::ClipboardHistory;
 pub use clipboard::{ClipboardItem, ClipboardKind};
@@ -138,12 +139,12 @@ impl Core {
     }
 
     pub fn mouse_config(&self) -> MouseConfig {
-        self.config.lock().unwrap().mouse.clone()
+        self.config.lock().mouse.clone()
     }
 
     /// Saves the new mouse settings and applies them immediately if input is running.
     pub fn set_mouse_config(&self, mouse: MouseConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock().unwrap();
+        let mut config = self.config.lock();
         config.mouse = mouse.clone();
         self.store.save(&config)?;
         self.input.set_config(mouse);
@@ -151,12 +152,12 @@ impl Core {
     }
 
     pub fn monitor_config(&self) -> MonitorConfig {
-        self.config.lock().unwrap().monitor.clone()
+        self.config.lock().monitor.clone()
     }
 
     /// Saves the new monitor settings and applies them immediately.
     pub fn set_monitor_config(&self, monitor: MonitorConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock().unwrap();
+        let mut config = self.config.lock();
         config.monitor = monitor.clone();
         self.store.save(&config)?;
         self.displays.set_config(monitor);
@@ -197,37 +198,37 @@ impl Core {
     }
 
     pub fn hyper_key_config(&self) -> HyperKeyConfig {
-        self.config.lock().unwrap().hyper_key.clone()
+        self.config.lock().hyper_key.clone()
     }
 
     /// Saves the new Hyper key settings and applies them immediately if input is running.
     /// The settings are saved even if remapping the key fails.
     pub fn set_hyper_key_config(&self, hyper_key: HyperKeyConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock().unwrap();
+        let mut config = self.config.lock();
         config.hyper_key = hyper_key.clone();
         self.store.save(&config)?;
         self.hyper_key.set_config(hyper_key)
     }
 
     pub fn window_drag_config(&self) -> WindowDragConfig {
-        self.config.lock().unwrap().window_drag.clone()
+        self.config.lock().window_drag.clone()
     }
 
     /// Saves the new window drag settings and applies them immediately if input is running.
     pub fn set_window_drag_config(&self, window_drag: WindowDragConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock().unwrap();
+        let mut config = self.config.lock();
         config.window_drag = window_drag.clone();
         self.store.save(&config)?;
         self.window_drag.set_config(window_drag)
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {
-        self.config.lock().unwrap().launcher.clone()
+        self.config.lock().launcher.clone()
     }
 
     /// Saves the new launcher settings and re-registers hotkeys. Main thread only.
     pub fn set_launcher_config(&self, launcher: LauncherConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock().unwrap();
+        let mut config = self.config.lock();
         config.launcher = launcher.clone();
         self.store.save(&config)?;
         launcher::apply_config(&self.hotkeys, &launcher);
@@ -265,7 +266,7 @@ impl Core {
     /// Records a colour the shell picked (sRGB) and copies it in the configured format.
     /// Returns the copied text.
     pub fn record_picked_color(&self, red: u8, green: u8, blue: u8) -> Result<String, CoreError> {
-        let format = self.config.lock().unwrap().launcher.color_picker.format;
+        let format = self.config.lock().launcher.color_picker.format;
         self.colors.record(red, green, blue, format)
     }
 

@@ -6,12 +6,13 @@
 //! Key presses are rare, so the hot path may take the config lock briefly; it still never
 //! waits on DDC, because `adjust` only queues the write.
 
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::{self, NonNull};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use objc2::rc::autoreleasepool;
@@ -77,7 +78,7 @@ impl BrightnessKeyTap {
 
     /// Fails with `PermissionDenied` without Accessibility. A no-op while running.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut started = self.started.lock().unwrap();
+        let mut started = self.started.lock();
         // SAFETY: no arguments; reads the process's TCC state.
         if unsafe { AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
@@ -91,20 +92,20 @@ impl BrightnessKeyTap {
     }
 
     pub fn stop(&self) {
-        *self.started.lock().unwrap() = false;
+        *self.started.lock() = false;
         self.stop_tap();
     }
 
     /// Call after the monitor settings change: the tap only runs while monitor control and
     /// the brightness keys are both on, so otherwise key presses never pass through Jaycast.
     pub fn refresh(&self) -> Result<(), CoreError> {
-        let started = self.started.lock().unwrap();
+        let started = self.started.lock();
         self.sync(*started)
     }
 
     /// Started, whether or not the tap itself is running (it doesn't while turned off).
     pub fn is_running(&self) -> bool {
-        *self.started.lock().unwrap()
+        *self.started.lock()
     }
 
     fn sync(&self, started: bool) -> Result<(), CoreError> {
@@ -118,7 +119,7 @@ impl BrightnessKeyTap {
     }
 
     fn start_tap(&self) -> Result<(), CoreError> {
-        let mut worker = self.worker.lock().unwrap();
+        let mut worker = self.worker.lock();
         if worker.is_some() {
             return Ok(());
         }
@@ -154,7 +155,7 @@ impl BrightnessKeyTap {
     }
 
     fn stop_tap(&self) {
-        let Some(worker) = self.worker.lock().unwrap().take() else {
+        let Some(worker) = self.worker.lock().take() else {
             return;
         };
         worker.stop.store(true, Ordering::Release);

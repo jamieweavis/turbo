@@ -6,12 +6,13 @@
 //! Every click and drag system-wide passes through the callback, so it never blocks:
 //! config changes are picked up through a generation counter and a `try_lock`.
 
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::{self, NonNull};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use objc2_core_foundation::{
@@ -76,14 +77,14 @@ impl DragTap {
     }
 
     pub fn set_config(&self, config: WindowDragConfig) {
-        *self.shared.config.lock().unwrap() = Arc::new(config);
+        *self.shared.config.lock() = Arc::new(config);
         self.shared.generation.fetch_add(1, Ordering::Release);
     }
 
     /// Idempotent. The caller has checked Accessibility; failing to create the tap anyway
     /// is reported as `PermissionDenied`.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut threads = self.threads.lock().unwrap();
+        let mut threads = self.threads.lock();
         if threads.is_some() {
             return Ok(());
         }
@@ -136,7 +137,7 @@ impl DragTap {
 
     /// Ends a drag in progress where it is.
     pub fn stop(&self) {
-        let Some(threads) = self.threads.lock().unwrap().take() else {
+        let Some(threads) = self.threads.lock().take() else {
             return;
         };
         threads.stop.store(true, Ordering::Release);
@@ -147,7 +148,7 @@ impl DragTap {
 
     #[cfg(test)]
     pub fn is_running(&self) -> bool {
-        self.threads.lock().unwrap().is_some()
+        self.threads.lock().is_some()
     }
 }
 
@@ -164,7 +165,7 @@ fn run_tap_thread(
     ready: mpsc::SyncSender<Result<RunLoopHandle, CoreError>>,
 ) {
     let generation = shared.generation.load(Ordering::Acquire);
-    let config = Arc::clone(&shared.config.lock().unwrap());
+    let config = Arc::clone(&shared.config.lock());
     // The state lives in a Box so the callback can hold a stable pointer to it; it is only
     // ever touched from this thread, and freed after the run loop has stopped.
     let state = Box::into_raw(Box::new(TapState {
@@ -300,7 +301,7 @@ impl TapState {
         if self.shared.generation.load(Ordering::Acquire) == self.generation {
             return;
         }
-        let Ok(config) = self.shared.config.try_lock() else {
+        let Some(config) = self.shared.config.try_lock() else {
             return;
         };
         self.generation = self.shared.generation.load(Ordering::Acquire);

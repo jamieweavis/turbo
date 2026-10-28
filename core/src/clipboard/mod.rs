@@ -13,8 +13,9 @@ mod board;
 mod capture;
 mod store;
 
+use parking_lot::{Condvar, Mutex};
 use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex, Weak};
+use std::sync::{Arc, Weak};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -108,7 +109,7 @@ impl ClipboardHistory {
     /// Applies limits and the enabled switch live (pruning straight away if limits shrink).
     pub fn set_config(&self, config: ClipboardConfig) {
         self.monitor.set_enabled(config.enabled);
-        *self.config.lock().unwrap() = config;
+        *self.config.lock() = config;
         if self.prune() > 0 {
             self.notify();
         }
@@ -116,7 +117,7 @@ impl ClipboardHistory {
 
     /// Receives `clipboard_changed`.
     pub fn set_observer(&self, observer: Option<Arc<dyn LauncherObserver>>) {
-        *self.observer.lock().unwrap() = observer;
+        *self.observer.lock() = observer;
     }
 
     /// Pinned first, then newest first; every word of `query` must appear in the text or
@@ -125,14 +126,10 @@ impl ClipboardHistory {
         let Some(store) = &self.store else {
             return Vec::new();
         };
-        store
-            .lock()
-            .unwrap()
-            .items(query, limit)
-            .unwrap_or_else(|error| {
-                eprintln!("jaycast: {error}");
-                Vec::new()
-            })
+        store.lock().items(query, limit).unwrap_or_else(|error| {
+            eprintln!("jaycast: {error}");
+            Vec::new()
+        })
     }
 
     /// Puts the item back on the clipboard and, if `paste`, sends ⌘V to the frontmost app
@@ -146,7 +143,6 @@ impl ClipboardHistory {
         let stored = self
             .store()?
             .lock()
-            .unwrap()
             .stored(id)?
             .ok_or_else(|| CoreError::Other {
                 message: "that clipboard item no longer exists".into(),
@@ -163,7 +159,7 @@ impl ClipboardHistory {
     }
 
     pub fn delete(&self, id: i64) -> Result<(), CoreError> {
-        let deleted = self.store()?.lock().unwrap().delete(id)?;
+        let deleted = self.store()?.lock().delete(id)?;
         if deleted {
             self.notify();
         }
@@ -171,7 +167,7 @@ impl ClipboardHistory {
     }
 
     pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<(), CoreError> {
-        let changed = self.store()?.lock().unwrap().set_pinned(id, pinned)?;
+        let changed = self.store()?.lock().set_pinned(id, pinned)?;
         if changed {
             self.notify();
         }
@@ -180,7 +176,7 @@ impl ClipboardHistory {
 
     /// Deletes every unpinned item.
     pub fn clear(&self) -> Result<(), CoreError> {
-        let deleted = self.store()?.lock().unwrap().clear()?;
+        let deleted = self.store()?.lock().clear()?;
         if deleted > 0 {
             self.notify();
         }
@@ -198,11 +194,11 @@ impl ClipboardHistory {
         let Some(store) = &self.store else {
             return;
         };
-        let ignored = self.config.lock().unwrap().ignored_apps.clone();
+        let ignored = self.config.lock().ignored_apps.clone();
         let Some((content, source)) = board::read(&ignored) else {
             return;
         };
-        let result = store.lock().unwrap().insert(&content, &source, now());
+        let result = store.lock().insert(&content, &source, now());
         match result {
             Ok(()) => {
                 self.prune();
@@ -218,13 +214,10 @@ impl ClipboardHistory {
             return 0;
         };
         let (max_items, retention_days) = {
-            let config = self.config.lock().unwrap();
+            let config = self.config.lock();
             (config.max_items, config.retention_days)
         };
-        let result = store
-            .lock()
-            .unwrap()
-            .prune(max_items, retention_days, now());
+        let result = store.lock().prune(max_items, retention_days, now());
         result.unwrap_or_else(|error| {
             eprintln!("jaycast: couldn't prune clipboard history: {error}");
             0
@@ -233,7 +226,7 @@ impl ClipboardHistory {
 
     /// Never called with a lock held: the shell may call straight back in.
     fn notify(&self) {
-        let observer = self.observer.lock().unwrap().clone();
+        let observer = self.observer.lock().clone();
         if let Some(observer) = observer {
             observer.clipboard_changed();
         }
@@ -264,7 +257,7 @@ struct MonitorState {
 
 impl MonitorSignal {
     fn set_enabled(&self, enabled: bool) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         if enabled && !state.enabled {
             state.generation += 1;
         }
@@ -273,23 +266,21 @@ impl MonitorSignal {
     }
 
     fn shut_down(&self) {
-        self.state.lock().unwrap().shutdown = true;
+        self.state.lock().shutdown = true;
         self.wake.notify_one();
     }
 
     /// Sleeps for `poll` while enabled; while off, sleeps until turned on or `prune_in` has
     /// passed. Returns `(enabled, generation)`, or `None` once shut down.
     fn wait(&self, poll: Duration, prune_in: Duration) -> Option<(bool, u64)> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         if !state.shutdown {
-            state = if state.enabled {
-                self.wake.wait_timeout(state, poll).unwrap().0
+            if state.enabled {
+                self.wake.wait_for(&mut state, poll);
             } else {
                 self.wake
-                    .wait_timeout_while(state, prune_in, |s| !s.enabled && !s.shutdown)
-                    .unwrap()
-                    .0
-            };
+                    .wait_while_for(&mut state, |s| !s.enabled && !s.shutdown, prune_in);
+            }
         }
         (!state.shutdown).then_some((state.enabled, state.generation))
     }

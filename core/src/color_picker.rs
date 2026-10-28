@@ -2,9 +2,9 @@
 //! system's magnifier loupe) and hands the sRGB result here, which records it, copies it and
 //! keeps the history in `<data_dir>/colors.json`, newest first.
 
+use parking_lot::Mutex;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -98,7 +98,7 @@ impl ColorHistory {
 
     /// Newest first.
     pub fn colors(&self) -> Vec<PickedColor> {
-        self.colors.lock().unwrap().clone()
+        self.colors.lock().clone()
     }
 
     /// The colours whose Hex, RGB or HSL text contains `query`, ignoring case, spaces and
@@ -136,20 +136,20 @@ impl ColorHistory {
         };
         let text = format_color(color, format);
         pasteboard::copy(&text)?;
-        let mut colors = self.colors.lock().unwrap();
+        let mut colors = self.colors.lock();
         insert(&mut colors, color);
         self.save(&colors)?;
         Ok(text)
     }
 
     pub fn delete(&self, color: PickedColor) -> Result<(), CoreError> {
-        let mut colors = self.colors.lock().unwrap();
+        let mut colors = self.colors.lock();
         colors.retain(|c| !c.same_color(&color));
         self.save(&colors)
     }
 
     pub fn clear(&self) -> Result<(), CoreError> {
-        let mut colors = self.colors.lock().unwrap();
+        let mut colors = self.colors.lock();
         colors.clear();
         self.save(&colors)
     }
@@ -273,7 +273,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let history = ColorHistory::new(&dir);
         {
-            let mut colors = history.colors.lock().unwrap();
+            let mut colors = history.colors.lock();
             insert(&mut colors, color(10, 20, 30));
             insert(&mut colors, color(40, 50, 60));
             history.save(&colors).unwrap();

@@ -5,12 +5,13 @@
 //! Every key press system-wide passes through the callback, so it never blocks: config
 //! changes are picked up through a generation counter and a `try_lock`.
 
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::{self, NonNull};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
@@ -80,14 +81,14 @@ impl HyperTap {
     }
 
     pub fn set_config(&self, config: HyperKeyConfig) {
-        *self.shared.config.lock().unwrap() = Arc::new(config);
+        *self.shared.config.lock() = Arc::new(config);
         self.shared.generation.fetch_add(1, Ordering::Release);
     }
 
     /// Idempotent. The caller has checked Accessibility; failing to create the tap anyway
     /// is reported as `PermissionDenied`.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut worker = self.worker.lock().unwrap();
+        let mut worker = self.worker.lock();
         if worker.is_some() {
             return Ok(());
         }
@@ -122,7 +123,7 @@ impl HyperTap {
     }
 
     pub fn stop(&self) {
-        let Some(worker) = self.worker.lock().unwrap().take() else {
+        let Some(worker) = self.worker.lock().take() else {
             return;
         };
         worker.stop.store(true, Ordering::Release);
@@ -132,7 +133,7 @@ impl HyperTap {
 
     #[cfg(test)]
     pub fn is_running(&self) -> bool {
-        self.worker.lock().unwrap().is_some()
+        self.worker.lock().is_some()
     }
 }
 
@@ -148,7 +149,7 @@ fn run_tap_thread(
     ready: mpsc::SyncSender<Result<RunLoopHandle, CoreError>>,
 ) {
     let generation = shared.generation.load(Ordering::Acquire);
-    let config = Arc::clone(&shared.config.lock().unwrap());
+    let config = Arc::clone(&shared.config.lock());
     // The state lives in a Box so the callback can hold a stable pointer to it; it is only
     // ever touched from this thread, and freed after the run loop has stopped.
     let state = Box::into_raw(Box::new(TapState {
@@ -292,7 +293,7 @@ impl TapState {
             return;
         }
         // Never wait on the API thread; pick the change up on the next event instead.
-        if let Ok(config) = self.shared.config.try_lock() {
+        if let Some(config) = self.shared.config.try_lock() {
             self.config = Arc::clone(&config);
             self.generation = generation;
         }

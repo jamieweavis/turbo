@@ -25,7 +25,7 @@ mod matcher;
 mod placeholders;
 mod tap;
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::thread;
 use std::time::Duration;
 
@@ -192,7 +192,7 @@ impl SnippetExpander {
 
     /// Applied live: turning expansion off (or removing every keyword) stops the tap.
     pub fn set_config(&self, config: SnippetsConfig) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         self.tap.set_config(config.clone());
         state.config = config;
         if let Err(error) = self.sync(&state) {
@@ -202,7 +202,7 @@ impl SnippetExpander {
 
     /// Fails with `PermissionDenied` without Accessibility. A no-op while running.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         if !is_trusted() {
             return Err(CoreError::PermissionDenied);
         }
@@ -220,7 +220,7 @@ impl SnippetExpander {
     }
 
     pub fn stop(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         state.started = false;
         self.tap.stop();
     }

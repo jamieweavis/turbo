@@ -2,9 +2,9 @@
 //! the `emojis` crate, searched by name and shortcode, with recently used emoji kept in
 //! `<data_dir>/emoji.json`, newest first.
 
+use parking_lot::Mutex;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use emojis::{Emoji, Group};
 
@@ -59,7 +59,7 @@ impl EmojiPicker {
     /// With an empty query: recently used, then every group in CLDR order. Otherwise one
     /// "Results" section, best matches first.
     pub fn search(&self, query: &str) -> Vec<EmojiSection> {
-        let recent = self.recent.lock().unwrap().clone();
+        let recent = self.recent.lock().clone();
         let words = query_words(query);
         if words.is_empty() {
             let recent = recent.iter().filter_map(|e| emojis::get(e)).map(info);
@@ -107,7 +107,7 @@ impl EmojiPicker {
         } else {
             pasteboard::copy(emoji)?;
         }
-        let mut recent = self.recent.lock().unwrap();
+        let mut recent = self.recent.lock();
         record(&mut recent, emoji);
         self.save(&recent)
     }

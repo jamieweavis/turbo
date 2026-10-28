@@ -12,7 +12,7 @@
 //! Insertions run one at a time (a lock spans write → paste → restore), so a second
 //! snippet never mistakes the first one's text for the user's clipboard.
 
-use std::sync::{Mutex, PoisonError};
+use parking_lot::Mutex;
 use std::thread;
 use std::time::Duration;
 
@@ -46,7 +46,7 @@ static INSERTING: Mutex<()> = Mutex::new(());
 /// the palette to close). Blocks until the clipboard is restored: call it off the main
 /// thread and off any event tap's thread.
 pub(super) fn run(text: &str, erase: usize, delay: Duration) {
-    let _inserting = INSERTING.lock().unwrap_or_else(PoisonError::into_inner);
+    let _inserting = INSERTING.lock();
     thread::sleep(delay);
     autoreleasepool(|_| {
         // Before anything touches the pasteboard, so `{clipboard}` is the user's copy.

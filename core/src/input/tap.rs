@@ -5,12 +5,13 @@
 //! The callback runs on the hot path of every mouse event system-wide, so it never blocks:
 //! config changes are picked up through a generation counter and a `try_lock`.
 
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::{self, NonNull};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
@@ -94,13 +95,13 @@ impl EventTap {
         self.shared
             .scroller
             .set_config(config.smooth_scroll.clone());
-        let mut current = self.shared.config.lock().unwrap();
+        let mut current = self.shared.config.lock();
         *current = Arc::new(config);
         self.shared.generation.fetch_add(1, Ordering::Release);
     }
 
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut worker = self.worker.lock().unwrap();
+        let mut worker = self.worker.lock();
         if worker.is_some() {
             return Ok(());
         }
@@ -140,7 +141,7 @@ impl EventTap {
     }
 
     pub fn stop(&self) {
-        let Some(worker) = self.worker.lock().unwrap().take() else {
+        let Some(worker) = self.worker.lock().take() else {
             return;
         };
         worker.stop.store(true, Ordering::Release);
@@ -150,7 +151,7 @@ impl EventTap {
 
     #[cfg(test)]
     pub fn is_running(&self) -> bool {
-        self.worker.lock().unwrap().is_some()
+        self.worker.lock().is_some()
     }
 }
 
@@ -284,7 +285,7 @@ struct TapState {
 
 impl TapState {
     fn new(shared: Arc<Shared>) -> Self {
-        let config = Arc::clone(&shared.config.lock().unwrap());
+        let config = Arc::clone(&shared.config.lock());
         let generation = shared.generation.load(Ordering::Acquire);
         Self {
             buttons: ButtonMachine::new(active_bindings(&config).to_vec()),
@@ -460,7 +461,7 @@ impl TapState {
         if self.shared.generation.load(Ordering::Acquire) == self.generation {
             return;
         }
-        let Ok(config) = self.shared.config.try_lock() else {
+        let Some(config) = self.shared.config.try_lock() else {
             return;
         };
         self.generation = self.shared.generation.load(Ordering::Acquire);

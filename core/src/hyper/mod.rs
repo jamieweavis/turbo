@@ -13,7 +13,7 @@ mod machine;
 mod remap;
 mod tap;
 
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use crate::config::HyperKeyConfig;
 use crate::error::CoreError;
@@ -52,7 +52,7 @@ impl HyperKey {
 
     /// Applied live: choosing another key remaps it at once, and `None` gives it back.
     pub fn set_config(&self, config: HyperKeyConfig) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         self.tap.set_config(config.clone());
         state.config = config;
         self.sync(&state)
@@ -60,7 +60,7 @@ impl HyperKey {
 
     /// Fails with `PermissionDenied` without Accessibility. A no-op while running.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         // SAFETY: no arguments; reads the process's TCC state.
         if unsafe { AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
@@ -75,7 +75,7 @@ impl HyperKey {
     }
 
     pub fn stop(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         state.started = false;
         self.release();
     }

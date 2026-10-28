@@ -6,12 +6,13 @@
 //! a key by mistake. The callback still does as little as possible: it feeds the
 //! [`Matcher`] and, on a completed keyword, hands the snippet to the worker over a channel.
 
+use parking_lot::Mutex;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr::NonNull;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -93,7 +94,7 @@ impl ExpansionTap {
     }
 
     pub fn set_config(&self, config: SnippetsConfig) {
-        *self.shared.config.lock().unwrap() = Arc::new(config);
+        *self.shared.config.lock() = Arc::new(config);
         self.shared.generation.fetch_add(1, Ordering::Release);
     }
 
@@ -106,7 +107,7 @@ impl ExpansionTap {
     /// Idempotent. The caller has checked Accessibility; failing to create the tap anyway
     /// is reported as `PermissionDenied`.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut worker = self.worker.lock().unwrap();
+        let mut worker = self.worker.lock();
         if worker.is_some() {
             return Ok(());
         }
@@ -141,7 +142,7 @@ impl ExpansionTap {
     }
 
     pub fn stop(&self) {
-        let Some(worker) = self.worker.lock().unwrap().take() else {
+        let Some(worker) = self.worker.lock().take() else {
             return;
         };
         worker.stop.store(true, Ordering::Release);
@@ -151,7 +152,7 @@ impl ExpansionTap {
 
     #[cfg(test)]
     pub fn is_running(&self) -> bool {
-        self.worker.lock().unwrap().is_some()
+        self.worker.lock().is_some()
     }
 }
 
@@ -269,7 +270,7 @@ struct TapState {
 
 impl TapState {
     fn new(shared: Arc<Shared>, jobs: mpsc::Sender<Job>) -> Self {
-        let config = Arc::clone(&shared.config.lock().unwrap());
+        let config = Arc::clone(&shared.config.lock());
         let generation = shared.generation.load(Ordering::Acquire);
         Self {
             matcher: matcher_for(&config),
@@ -353,7 +354,7 @@ impl TapState {
         if self.shared.generation.load(Ordering::Acquire) == self.generation {
             return;
         }
-        let Ok(config) = self.shared.config.try_lock() else {
+        let Some(config) = self.shared.config.try_lock() else {
             return;
         };
         self.generation = self.shared.generation.load(Ordering::Acquire);

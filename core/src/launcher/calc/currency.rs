@@ -8,10 +8,11 @@
 //! Fetching uses Foundation (`NSData` from a URL) on the background thread rather than an HTTP
 //! crate: it adds no TLS stack to the binary and honours the system's proxy and VPN settings.
 
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, Weak};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -172,11 +173,11 @@ impl RateStore {
     }
 
     pub fn current(&self) -> Option<Arc<Rates>> {
-        self.rates.read().unwrap().clone()
+        self.rates.read().clone()
     }
 
     fn set(&self, rates: Rates) {
-        *self.rates.write().unwrap() = Some(Arc::new(rates));
+        *self.rates.write() = Some(Arc::new(rates));
     }
 }
 

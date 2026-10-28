@@ -6,11 +6,12 @@
 //! permission. Carbon delivers the presses to the application event target, i.e. on the
 //! main thread through the app's run loop.
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::NSString;
@@ -123,7 +124,7 @@ impl HotkeyManager {
 
     /// Receives `toggle_palette` when the palette hotkey is pressed.
     pub fn set_observer(&self, observer: Option<Arc<dyn LauncherObserver>>) {
-        *self.inner.observer.lock().unwrap() = observer;
+        *self.inner.observer.lock() = observer;
     }
 
     /// Replaces every registered hotkey with the ones in `config`.
@@ -132,7 +133,7 @@ impl HotkeyManager {
             eprintln!("jaycast: hotkeys can only be registered on the main thread");
             return;
         }
-        let mut carbon = self.carbon.lock().unwrap();
+        let mut carbon = self.carbon.lock();
         carbon.config = Some(config.clone());
         if carbon.handler.is_null() {
             carbon.handler = install_handler(&self.inner);
@@ -155,20 +156,20 @@ impl HotkeyManager {
             }
         }
         carbon.failed = failed;
-        *self.inner.targets.lock().unwrap() = targets;
+        *self.inner.targets.lock() = targets;
     }
 
     /// Hotkeys from the last `apply` that couldn't be registered: duplicates within the
     /// config, or combinations Carbon refused (usually taken by another app).
     pub fn failed(&self) -> Vec<Hotkey> {
-        self.carbon.lock().unwrap().failed.clone()
+        self.carbon.lock().failed.clone()
     }
 
     /// Unregisters every hotkey while paused (for shortcut recorders); resuming re-applies
     /// the latest config. Main thread only.
     pub fn set_paused(&self, paused: bool) {
         let config = {
-            let mut carbon = self.carbon.lock().unwrap();
+            let mut carbon = self.carbon.lock();
             if carbon.paused == paused {
                 return;
             }
@@ -183,7 +184,7 @@ impl HotkeyManager {
 
 impl Drop for HotkeyManager {
     fn drop(&mut self) {
-        let mut carbon = self.carbon.lock().unwrap();
+        let mut carbon = self.carbon.lock();
         if carbon.handler.is_null() {
             return;
         }
@@ -204,16 +205,16 @@ impl Inner {
     /// Runs the hotkey's target. Called on the main thread; never holds a lock while calling
     /// out, since the shell may call back into the core.
     fn fire(&self, id: u32) {
-        let target = self.targets.lock().unwrap().get(&id).cloned();
+        let target = self.targets.lock().get(&id).cloned();
         match target {
             Some(Target::Palette) => {
-                let observer = self.observer.lock().unwrap().clone();
+                let observer = self.observer.lock().clone();
                 if let Some(observer) = observer {
                     observer.toggle_palette();
                 }
             }
             Some(Target::Mode(mode)) => {
-                let observer = self.observer.lock().unwrap().clone();
+                let observer = self.observer.lock().clone();
                 if let Some(observer) = observer {
                     observer.show_mode(mode);
                 }
@@ -238,13 +239,13 @@ impl Inner {
                 if let Err(error) = self.keep_awake.set_active(active) {
                     eprintln!("jaycast: keep awake hotkey {command:?}: {error}");
                 }
-                let observer = self.observer.lock().unwrap().clone();
+                let observer = self.observer.lock().clone();
                 if let Some(observer) = observer {
                     observer.keep_awake_changed(self.keep_awake.is_active());
                 }
             }
             Some(Target::PickColor) => {
-                let observer = self.observer.lock().unwrap().clone();
+                let observer = self.observer.lock().clone();
                 if let Some(observer) = observer {
                     observer.pick_color();
                 }
@@ -896,6 +897,6 @@ mod tests {
         );
         manager.apply(&LauncherConfig::default());
         assert!(manager.failed().is_empty());
-        assert!(manager.carbon.lock().unwrap().handler.is_null());
+        assert!(manager.carbon.lock().handler.is_null());
     }
 }

@@ -16,8 +16,9 @@ mod ddc;
 mod dimming;
 pub(crate) mod keys;
 
+use parking_lot::{Condvar, Mutex};
 use std::ffi::c_void;
-use std::sync::{Arc, Condvar, Mutex, Weak};
+use std::sync::{Arc, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -138,7 +139,7 @@ impl DisplayManager {
 
     pub fn set_config(&self, config: MonitorConfig) {
         let enabled = config.enabled;
-        let was_enabled = std::mem::replace(&mut *self.config.lock().unwrap(), config).enabled;
+        let was_enabled = std::mem::replace(&mut *self.config.lock(), config).enabled;
         if enabled == was_enabled {
             return;
         }
@@ -153,7 +154,7 @@ impl DisplayManager {
     /// brightness is kept, so the sliders stay put and turning control on restores it.
     fn release_all(&self) {
         {
-            let state = self.state.lock().unwrap();
+            let state = self.state.lock();
             for entry in state.displays.iter().filter(|e| e.info.supports_ddc) {
                 if let Some(worker) = &entry.worker {
                     worker.write(entry.max);
@@ -166,7 +167,7 @@ impl DisplayManager {
     /// Re-applies the cached brightness after control is turned back on.
     fn restore_all(&self) {
         let values: Vec<(u32, f64)> = {
-            let state = self.state.lock().unwrap();
+            let state = self.state.lock();
             state
                 .displays
                 .iter()
@@ -180,11 +181,11 @@ impl DisplayManager {
     }
 
     pub fn config(&self) -> MonitorConfig {
-        self.config.lock().unwrap().clone()
+        self.config.lock().clone()
     }
 
     pub fn set_observer(&self, observer: Option<Arc<dyn DisplayObserver>>) {
-        *self.observer.lock().unwrap() = observer;
+        *self.observer.lock() = observer;
     }
 
     /// The external displays, with cached brightness (never blocks on DDC).
@@ -195,7 +196,7 @@ impl DisplayManager {
     /// Sets brightness (clamped to 0.0–1.0). Returns immediately; the DDC write happens on a
     /// background thread, coalescing rapid changes (e.g. slider drags) to the latest value.
     pub fn set_brightness(&self, display_id: u32, brightness: f64) -> Result<(), CoreError> {
-        if !self.config.lock().unwrap().enabled {
+        if !self.config.lock().enabled {
             return Err(CoreError::Other {
                 message: "monitor control is turned off".into(),
             });
@@ -214,7 +215,7 @@ impl DisplayManager {
     /// Must not block: the key tap calls it on its hot path. Notifies the observer with
     /// `from_keys: true`.
     pub fn adjust(&self, display_id: u32, delta: f64) -> Option<f64> {
-        if !self.config.lock().unwrap().enabled {
+        if !self.config.lock().enabled {
             return None;
         }
         let value = self.apply(display_id, |current| step(current, delta))?;
@@ -226,7 +227,7 @@ impl DisplayManager {
     /// `None` for an unknown display or one without DDC.
     fn apply(&self, display_id: u32, f: impl FnOnce(f64) -> f64) -> Option<f64> {
         let (value, split) = {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock();
             let entry = state
                 .displays
                 .iter_mut()
@@ -243,12 +244,12 @@ impl DisplayManager {
     }
 
     fn snapshot(&self) -> Vec<DisplayInfo> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         state.displays.iter().map(|e| e.info.clone()).collect()
     }
 
     fn observer(&self) -> Option<Arc<dyn DisplayObserver>> {
-        self.observer.lock().unwrap().clone()
+        self.observer.lock().clone()
     }
 
     fn notify_brightness(&self, display_id: u32, brightness: f64, from_keys: bool) {
@@ -269,7 +270,7 @@ impl DisplayManager {
         let removed;
         let notify;
         {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock();
             let before: Vec<u32> = state.displays.iter().map(|e| e.info.id).collect();
             let found_ids: Vec<u32> = found.iter().map(|f| f.id).collect();
             let diff = diff_ids(&before, &found_ids);
@@ -321,7 +322,7 @@ impl DisplayManager {
 
     fn finish_read(&self, display_id: u32, reading: Option<Reading>) {
         let notify = {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock();
             let mut first = false;
             if let Some(entry) = state.displays.iter_mut().find(|e| e.info.id == display_id) {
                 first = !entry.reported;
@@ -455,12 +456,12 @@ struct ScanState {
 
 impl ScanSignal {
     fn poke(&self) {
-        self.state.lock().unwrap().debounce.poke(Instant::now());
+        self.state.lock().debounce.poke(Instant::now());
         self.wake.notify_one();
     }
 
     fn shut_down(&self) {
-        self.state.lock().unwrap().shutdown = true;
+        self.state.lock().shutdown = true;
         self.wake.notify_one();
     }
 }
@@ -496,15 +497,17 @@ fn run_scanner(signal: &ScanSignal, manager: &Weak<DisplayManager>) {
     }
     loop {
         {
-            let mut state = signal.state.lock().unwrap();
+            let mut state = signal.state.lock();
             loop {
                 if state.shutdown {
                     return;
                 }
                 match state.debounce.check(Instant::now()) {
                     Ok(()) => break,
-                    Err(Some(wait)) => state = signal.wake.wait_timeout(state, wait).unwrap().0,
-                    Err(None) => state = signal.wake.wait(state).unwrap(),
+                    Err(Some(wait)) => {
+                        signal.wake.wait_for(&mut state, wait);
+                    }
+                    Err(None) => signal.wake.wait(&mut state),
                 }
             }
         }

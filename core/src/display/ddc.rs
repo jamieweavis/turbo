@@ -2,7 +2,8 @@
 //! "latest value wins" write slot, so slider drags and key repeats coalesce into a few
 //! writes instead of queueing behind a slow I2C bus.
 
-use std::sync::{Arc, Condvar, Mutex};
+use parking_lot::{Condvar, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -125,7 +126,7 @@ impl Worker {
 
     /// Queues a raw brightness value, replacing any value not yet written. Never blocks on DDC.
     pub fn write(&self, raw: u16) {
-        self.shared.state.lock().unwrap().slot.put(raw);
+        self.shared.state.lock().slot.put(raw);
         self.shared.wake.notify_one();
     }
 }
@@ -133,7 +134,7 @@ impl Worker {
 impl Drop for Worker {
     /// Waits for a DDC transaction in flight to finish (at most a few hundred ms).
     fn drop(&mut self) {
-        self.shared.state.lock().unwrap().shutdown = true;
+        self.shared.state.lock().shutdown = true;
         self.shared.wake.notify_one();
         if let Some(thread) = self.thread.take() {
             // The worker's own read callback can end up releasing the last reference to the
@@ -163,11 +164,10 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
         }
         let delay = delays.next().unwrap_or(RECOVERY_MAX);
         {
-            let state = shared.state.lock().unwrap();
-            let (state, _) = shared
+            let mut state = shared.state.lock();
+            shared
                 .wake
-                .wait_timeout_while(state, delay, |state| !state.shutdown)
-                .unwrap();
+                .wait_while_for(&mut state, |state| !state.shutdown, delay);
             if state.shutdown {
                 return;
             }
@@ -179,7 +179,7 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
     };
 
     {
-        let mut state = shared.state.lock().unwrap();
+        let mut state = shared.state.lock();
         state.slot.record(reading.current, true);
         // Anything queued before the range was known is meaningless.
         state.slot.take();
@@ -187,7 +187,7 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
 
     loop {
         let raw = {
-            let mut state = shared.state.lock().unwrap();
+            let mut state = shared.state.lock();
             loop {
                 if state.shutdown {
                     return;
@@ -195,7 +195,7 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
                 if let Some(raw) = state.slot.take() {
                     break raw;
                 }
-                state = shared.wake.wait(state).unwrap();
+                shared.wake.wait(&mut state);
             }
         };
 
@@ -204,7 +204,7 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
             thread::sleep(RETRY_DELAY);
             write_brightness(&mut monitor, raw)
         };
-        shared.state.lock().unwrap().slot.record(raw, ok);
+        shared.state.lock().slot.record(raw, ok);
         thread::sleep(WRITE_GAP);
     }
 }

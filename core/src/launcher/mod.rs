@@ -24,9 +24,10 @@ pub(crate) mod running;
 mod settings_panes;
 mod system;
 
+use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -585,28 +586,28 @@ impl Launcher {
                         launcher.reindex(false);
                     }
                 });
-                *launcher.watcher.lock().unwrap() = watcher;
+                *launcher.watcher.lock() = watcher;
             })
             .expect("failed to spawn the app index thread");
         launcher
     }
 
     pub fn set_observer(&self, observer: Option<Arc<dyn LauncherObserver>>) {
-        *self.observer.lock().unwrap() = observer;
+        *self.observer.lock() = observer;
     }
 
     /// Quicklinks, commands, snippets and the calculator switch come from here.
     pub fn set_config(&self, config: LauncherConfig) {
-        *self.prefs.write().unwrap() = Arc::new(Prefs::new(&config));
-        *self.config.write().unwrap() = Arc::new(config);
+        *self.prefs.write() = Arc::new(Prefs::new(&config));
+        *self.config.write() = Arc::new(config);
     }
 
     /// Best matches for `query`, apps and system actions together, at most `limit`. An empty
     /// query returns everything, most used first, ignoring `limit`. Fast enough to call on
     /// every keystroke (no I/O).
     pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
-        let index = Arc::clone(&self.index.read().unwrap());
-        let config = Arc::clone(&self.config.read().unwrap());
+        let index = Arc::clone(&self.index.read());
+        let config = Arc::clone(&self.config.read());
         let mut extra = Vec::new();
         if query.trim().is_empty() {
             extra.extend(extensions::all(&config).into_iter().map(|r| (0, r)));
@@ -624,9 +625,9 @@ impl Launcher {
             extra.extend(extensions::results(query, &config));
             extra.extend(crate::snippets::results(query, &config.snippets));
         }
-        let prefs = Arc::clone(&self.prefs.read().unwrap());
+        let prefs = Arc::clone(&self.prefs.read());
         extra.retain(|(_, result)| prefs.is_enabled(&result.id));
-        let usage = self.usage.lock().unwrap();
+        let usage = self.usage.lock();
         rank(
             &fuzzy::fold_query(query),
             &index,
@@ -662,11 +663,11 @@ impl Launcher {
                 text: text.to_owned(),
             });
         } else if id.starts_with("quicklink:") || id.starts_with("command:") {
-            let config = Arc::clone(&self.config.read().unwrap());
-            let observer = self.observer.lock().unwrap().clone();
+            let config = Arc::clone(&self.config.read());
+            let observer = self.observer.lock().clone();
             outcome = extensions::open(id, query, &config, observer)?;
         } else if let Some(bundle_id) = id.strip_prefix("app:") {
-            let index = Arc::clone(&self.index.read().unwrap());
+            let index = Arc::clone(&self.index.read());
             let app = index
                 .by_id
                 .get(id)
@@ -685,7 +686,7 @@ impl Launcher {
             })?;
             self.windows.perform(action)?;
         } else if id.starts_with("snippet:") {
-            let paste = self.config.read().unwrap().snippets.paste_on_open;
+            let paste = self.config.read().snippets.paste_on_open;
             return self.open_snippet(id, query, paste);
         } else {
             return Err(CoreError::Other {
@@ -705,7 +706,7 @@ impl Launcher {
         paste: bool,
     ) -> Result<OpenOutcome, CoreError> {
         let snippet_id = id.strip_prefix("snippet:").unwrap_or(id);
-        let config = Arc::clone(&self.config.read().unwrap());
+        let config = Arc::clone(&self.config.read());
         let snippet = config
             .snippets
             .snippets
@@ -730,7 +731,7 @@ impl Launcher {
     pub fn reset_ranking(&self, id: &str) -> Result<(), CoreError> {
         let now = now();
         let snapshot = {
-            let mut usage = self.usage.lock().unwrap();
+            let mut usage = self.usage.lock();
             usage.forget(id);
             usage.clone()
         };
@@ -739,14 +740,14 @@ impl Launcher {
 
     /// Every indexed app, sorted by name (for choosing app hotkeys in settings).
     pub fn apps(&self) -> Vec<AppInfo> {
-        let index = Arc::clone(&self.index.read().unwrap());
+        let index = Arc::clone(&self.index.read());
         index.apps.iter().map(|app| app.info.clone()).collect()
     }
 
     /// Every app and built-in command, for the launcher settings: apps by name, then the
     /// commands in palette order.
     pub fn items(&self) -> Vec<LauncherItem> {
-        let index = Arc::clone(&self.index.read().unwrap());
+        let index = Arc::clone(&self.index.read());
         let apps = index.apps.iter().map(|app| LauncherItem {
             id: app_result_id(&app.info.bundle_id),
             title: app.info.name.clone(),
@@ -777,7 +778,7 @@ impl Launcher {
     fn record(&self, id: &str, query: &str) {
         let now = now();
         let snapshot = {
-            let mut usage = self.usage.lock().unwrap();
+            let mut usage = self.usage.lock();
             usage.record(id, &fuzzy::fold_query(query), now);
             usage.clone()
         };
@@ -789,13 +790,13 @@ impl Launcher {
     fn reindex(&self, first: bool) {
         let fresh = Index::new(apps::index());
         let changed = {
-            let mut index = self.index.write().unwrap();
+            let mut index = self.index.write();
             let changed = !index.same_apps(&fresh);
             *index = Arc::new(fresh);
             changed
         };
         if first || changed {
-            let observer = self.observer.lock().unwrap().clone();
+            let observer = self.observer.lock().clone();
             if let Some(observer) = observer {
                 observer.apps_changed();
             }

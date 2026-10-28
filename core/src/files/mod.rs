@@ -9,8 +9,8 @@ mod query;
 mod rank;
 mod spotlight;
 
+use parking_lot::Mutex;
 use std::path::Path;
-use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use objc2::rc::autoreleasepool;
@@ -49,7 +49,7 @@ impl FileSearch {
     }
 
     pub fn set_config(&self, config: FileSearchConfig) {
-        *self.config.lock().unwrap() = config;
+        *self.config.lock() = config;
     }
 
     /// Spotlight matches for `query` inside the configured folders, best first. Blocks for
@@ -59,7 +59,7 @@ impl FileSearch {
             return Ok(Vec::new());
         };
         let home = home_dir();
-        let scopes = existing_scopes(&self.config.lock().unwrap().scopes, &home);
+        let scopes = existing_scopes(&self.config.lock().scopes, &home);
         // No folders means no results, never "search everything".
         if scopes.is_empty() || limit == 0 {
             return Ok(Vec::new());

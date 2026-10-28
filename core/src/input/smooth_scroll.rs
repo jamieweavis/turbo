@@ -4,7 +4,8 @@
 //! that posts the events. The thread sleeps on a condition variable whenever nothing is
 //! animating, so smooth scrolling costs no CPU at rest.
 
-use std::sync::{Arc, Condvar, Mutex};
+use parking_lot::{Condvar, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -63,12 +64,7 @@ impl SmoothScroller {
     }
 
     pub fn set_config(&self, config: SmoothScrollConfig) {
-        self.shared
-            .state
-            .lock()
-            .unwrap()
-            .physics
-            .set_config(&config);
+        self.shared.state.lock().physics.set_config(&config);
     }
 
     /// One wheel tick from a mouse (never a trackpad or our own events). Deltas are in lines,
@@ -80,7 +76,7 @@ impl SmoothScroller {
         let now = clock();
         let display = pointer_display();
         let (width, height) = (CGDisplayPixelsWide(display), CGDisplayPixelsHigh(display));
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self.shared.state.lock();
         state.physics.set_screen(width as f64, height as f64);
         state.physics.feed(now, vertical, horizontal, precise);
         drop(state);
@@ -89,7 +85,7 @@ impl SmoothScroller {
 
     /// Cancels any animation in flight, e.g. when the user clicks or input stops.
     pub fn stop(&self) {
-        let mut state = self.shared.state.lock().unwrap();
+        let mut state = self.shared.state.lock();
         let frames = state.physics.cancel();
         state.outbox.extend(frames);
         drop(state);
@@ -100,7 +96,7 @@ impl SmoothScroller {
 impl Drop for SmoothScroller {
     fn drop(&mut self) {
         self.stop();
-        self.shared.state.lock().unwrap().shutdown = true;
+        self.shared.state.lock().shutdown = true;
         self.shared.wake.notify_one();
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
@@ -116,9 +112,9 @@ fn clock() -> f64 {
 
 fn run_emitter(shared: &Shared) {
     loop {
-        let mut state = shared.state.lock().unwrap();
+        let mut state = shared.state.lock();
         while state.physics.is_idle() && state.outbox.is_empty() && !state.shutdown {
-            state = shared.wake.wait(state).unwrap();
+            shared.wake.wait(&mut state);
         }
         // Flush closing events before honouring shutdown, so no gesture is left open.
         if state.shutdown && state.outbox.is_empty() {
@@ -132,7 +128,7 @@ fn run_emitter(shared: &Shared) {
         let mut lines = LineCarry::default();
         let mut deadline = Instant::now();
         loop {
-            let mut state = shared.state.lock().unwrap();
+            let mut state = shared.state.lock();
             let mut frames = std::mem::take(&mut state.outbox);
             frames.extend(state.physics.tick(clock()));
             let idle = state.physics.is_idle();
