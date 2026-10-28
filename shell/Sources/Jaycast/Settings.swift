@@ -183,9 +183,12 @@ struct SettingsView: View {
     let onShowOnboarding: () -> Void
 
     @State private var selection: SettingsPane? = .general
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
-        NavigationSplitView {
+        // Dragging the divider or View > Hide Sidebar still collapse the sidebar without the
+        // toggle button, so snap it back whenever that happens.
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $selection) {
                 ForEach(SettingsSection.allCases) { section in
                     if let title = section.title {
@@ -239,6 +242,9 @@ struct SettingsView: View {
             }
         }
         .frame(minWidth: 680, minHeight: 460)
+        .onChange(of: columnVisibility) {
+            if columnVisibility != .all { columnVisibility = .all }
+        }
         // Turning a feature off from its own pane, or ticking it back on in the Launcher pane's
         // table, can change whether the Mac is kept awake.
         .onChange(of: model.launcher.config.keepAwake.enabled) { model.keepAwake.refresh() }
