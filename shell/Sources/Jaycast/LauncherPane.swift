@@ -10,6 +10,7 @@ struct LauncherPane: View {
     @State private var category: String?
     /// Empty keeps the core's order: apps by name, then the commands grouped by category.
     @State private var sortOrder: [KeyPathComparator<ItemRowModel>] = []
+    @Environment(\.appearsActive) private var appearsActive
 
     private static let categories = ["Application", "Jaycast", "System", "Window", "System Settings"]
 
@@ -49,7 +50,7 @@ struct LauncherPane: View {
 
             HStack(spacing: 8) {
                 TextField("Search", text: $filter, prompt: Text("Search apps and commands"))
-                    .textFieldStyle(.roundedBorder)
+                    .translucentField()
                 Picker("Show", selection: $show) {
                     ForEach(ItemFilter.allCases) { Text($0.title).tag($0) }
                 }
@@ -106,7 +107,12 @@ struct LauncherPane: View {
                 }
                 .width(min: 150, ideal: 160)
             }
-            .alternatingRowBackgrounds()
+            // The table's background and the stripes on every other row are opaque, so when the
+            // window goes inactive and its background lightens, they turn into a dark block. Swap
+            // them for a translucent tint, which lightens along with the window, until it's back.
+            .alternatingRowBackgrounds(appearsActive ? .enabled : .disabled)
+            .scrollContentBackground(appearsActive ? .automatic : .hidden)
+            .background(appearsActive ? .clear : Color.primary.opacity(0.05))
             .overlay {
                 if rows.isEmpty {
                     Text(settings.items.isEmpty ? "Indexing apps…" : "No matches")
@@ -233,7 +239,7 @@ private struct AliasField: View {
     var body: some View {
         TextField("Alias", text: $text, prompt: Text("Add alias"))
             .labelsHidden()
-            .textFieldStyle(.roundedBorder)
+            .translucentField()
             .focused($isFocused)
             .onAppear { text = aliases.joined(separator: ", ") }
             .onChange(of: aliases) { _, aliases in
@@ -253,6 +259,31 @@ private struct AliasField: View {
         if parsed != aliases { onCommit(parsed) }
         text = parsed.joined(separator: ", ")
     }
+}
+
+/// A text field on a translucent fill instead of the bordered style's opaque one, so it stays
+/// in step with the window background as the window goes inactive and lightens.
+private struct TranslucentField: ViewModifier {
+    @FocusState private var isFocused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .focused($isFocused)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 6))
+            // The plain style has no focus ring of its own.
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .opacity(isFocused ? 1 : 0)
+            }
+    }
+}
+
+private extension View {
+    func translucentField() -> some View { modifier(TranslucentField()) }
 }
 
 /// A recorder for an optional global hotkey, with a button to clear it.
