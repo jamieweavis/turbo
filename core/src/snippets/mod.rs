@@ -135,6 +135,14 @@ pub(crate) fn insert(snippet: &Snippet) -> Result<(), CoreError> {
     insert_expanding(snippet.text.clone())
 }
 
+/// Expands the snippet's placeholders and copies the text (`{cursor}` dropped). Returns
+/// what was copied.
+pub(crate) fn copy(snippet: &Snippet) -> Result<String, CoreError> {
+    let text = insert::expand_now(&snippet.text).text;
+    crate::pasteboard::copy(&text)?;
+    Ok(text)
+}
+
 /// Types `text` into the frontmost app as it is, like a snippet without placeholders.
 pub(crate) fn insert_text(text: &str) -> Result<(), CoreError> {
     insert_expanding(text.replace('{', "{{").replace('}', "}}"))
@@ -245,6 +253,7 @@ mod tests {
         SnippetsConfig {
             enabled: true,
             expansion: true,
+            paste_on_open: true,
             snippets,
         }
     }

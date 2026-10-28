@@ -330,6 +330,17 @@ impl Core {
         self.launcher.open(&id, &query)
     }
 
+    /// Opens a snippet result, pasting it or (`paste` false) only copying it, whatever the
+    /// snippets' paste setting says (the palette's ⌘↩).
+    pub fn open_snippet(
+        &self,
+        id: String,
+        query: String,
+        paste: bool,
+    ) -> Result<OpenOutcome, CoreError> {
+        self.launcher.open_snippet(&id, &query, paste)
+    }
+
     /// Forgets a result's usage history (the actions menu's Reset Ranking).
     pub fn reset_result_ranking(&self, id: String) -> Result<(), CoreError> {
         self.launcher.reset_ranking(&id)

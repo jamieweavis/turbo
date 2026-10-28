@@ -84,7 +84,7 @@ pub enum ResultKind {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum OpenOutcome {
     Done,
-    /// The text was copied to the clipboard (calculator results).
+    /// The text was copied to the clipboard (calculator results, copied snippets).
     Copied {
         text: String,
     },
@@ -684,22 +684,44 @@ impl Launcher {
                 message: format!("unknown window action {action}"),
             })?;
             self.windows.perform(action)?;
-        } else if let Some(snippet_id) = id.strip_prefix("snippet:") {
-            let config = Arc::clone(&self.config.read().unwrap());
-            let snippet = config
-                .snippets
-                .snippets
-                .iter()
-                .find(|s| s.id == snippet_id)
-                .ok_or_else(|| CoreError::Other {
-                    message: format!("no snippet with id {snippet_id}"),
-                })?;
-            crate::snippets::insert(snippet)?;
+        } else if id.starts_with("snippet:") {
+            let paste = self.config.read().unwrap().snippets.paste_on_open;
+            return self.open_snippet(id, query, paste);
         } else {
             return Err(CoreError::Other {
                 message: format!("unknown result {id}"),
             });
         }
+        self.record(id, query);
+        Ok(outcome)
+    }
+
+    /// Pastes a snippet result into the frontmost app, or with `paste` false only copies it,
+    /// and records the choice for ranking.
+    pub fn open_snippet(
+        &self,
+        id: &str,
+        query: &str,
+        paste: bool,
+    ) -> Result<OpenOutcome, CoreError> {
+        let snippet_id = id.strip_prefix("snippet:").unwrap_or(id);
+        let config = Arc::clone(&self.config.read().unwrap());
+        let snippet = config
+            .snippets
+            .snippets
+            .iter()
+            .find(|s| s.id == snippet_id)
+            .ok_or_else(|| CoreError::Other {
+                message: format!("no snippet with id {snippet_id}"),
+            })?;
+        let outcome = if paste {
+            crate::snippets::insert(snippet)?;
+            OpenOutcome::Done
+        } else {
+            OpenOutcome::Copied {
+                text: crate::snippets::copy(snippet)?,
+            }
+        };
         self.record(id, query);
         Ok(outcome)
     }

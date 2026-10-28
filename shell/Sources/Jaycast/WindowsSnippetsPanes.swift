@@ -139,7 +139,15 @@ struct SnippetsPane: View {
             Section {
                 Toggle("Expand keywords as you type", isOn: $settings.config.snippets.expansion)
             } footer: {
-                Text("Type a snippet's keyword in any app and it's replaced with the snippet. Needs Accessibility access. Snippets are also in launcher search: press ↩ to paste one.")
+                Text("Type a snippet's keyword in any app and it's replaced with the snippet. Needs Accessibility access.")
+            }
+
+            Section {
+                Toggle("Choosing an item pastes it", isOn: $settings.config.snippets.pasteOnOpen)
+            } footer: {
+                Text(settings.config.snippets.pasteOnOpen
+                    ? "Snippets are also in launcher search: ↩ pastes into the app in front; ⌘↩ only copies. Pasting needs Accessibility access."
+                    : "Snippets are also in launcher search: ↩ only copies; ⌘↩ pastes into the app in front. Pasting needs Accessibility access.")
             }
 
             Section {

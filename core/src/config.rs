@@ -276,6 +276,9 @@ pub struct SnippetsConfig {
     /// Expand a snippet's keyword as soon as it's typed in any app (needs Accessibility).
     /// Snippets stay in palette search either way.
     pub expansion: bool,
+    /// Choosing a snippet in the palette pastes it into the frontmost app; otherwise it's
+    /// only copied.
+    pub paste_on_open: bool,
     pub snippets: Vec<Snippet>,
 }
 
@@ -284,6 +287,7 @@ impl Default for SnippetsConfig {
         Self {
             enabled: true,
             expansion: true,
+            paste_on_open: true,
             snippets: Vec::new(),
         }
     }

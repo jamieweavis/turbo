@@ -83,7 +83,7 @@ pub(super) fn run(text: &str, erase: usize, delay: Duration) {
 
 /// Fills placeholders with the current clipboard text and the date and time in the user's
 /// locale formats. Only reads what the snippet uses.
-fn expand_now(text: &str) -> Expanded {
+pub(super) fn expand_now(text: &str) -> Expanded {
     let date = |date, time| {
         let formatter = NSDateFormatter::new();
         formatter.setDateStyle(date);

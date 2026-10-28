@@ -59,12 +59,12 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .general: "General"
         case .launcher: "Launcher"
         case .quicklinks: "Quicklinks"
-        case .commands: "Commands"
+        case .commands: "Shell Commands"
         case .snippets: "Snippets"
         case .clipboard: "Clipboard"
         case .files: "File Search"
         case .windows: "Window Management"
-        case .windowDrag: "Window Move/Resize"
+        case .windowDrag: "Window Transform"
         case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
         case .monitor: "Brightness"
@@ -99,7 +99,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .general: .gray
         case .launcher: .blue
         case .quicklinks: .teal
-        case .commands: .black
+        case .commands: .green
         case .snippets: .orange
         case .clipboard: .indigo
         case .files: .blue

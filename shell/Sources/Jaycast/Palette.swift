@@ -429,6 +429,7 @@ final class PaletteModel {
     }
 
     var clipboardConfig: ClipboardConfig { settings.config.clipboard }
+    var snippetsPasteOnOpen: Bool { settings.config.snippets.pasteOnOpen }
     var fileScopes: [String] { settings.config.files.scopes }
     var colorFormat: ColorFormat { settings.config.colorPicker.format }
 
@@ -672,6 +673,10 @@ final class PaletteModel {
             confirming = result
             return
         }
+        if result.kind == .snippet {
+            openSnippet(result, paste: snippetsPasteOnOpen)
+            return
+        }
         if result.actsOnFrontApp {
             openInFrontApp(result)
             return
@@ -736,8 +741,41 @@ final class PaletteModel {
         }
     }
 
-    /// Window actions and snippets act on the app that was in front, so the palette closes
-    /// first; a failure reopens it to show why.
+    /// What ⏎ will do with `result`, for the action bar and actions menu: a snippet's
+    /// depends on the paste setting.
+    func primaryAction(for result: SearchResult) -> (label: String, key: String) {
+        if result.kind == .snippet, result.completion == nil, !snippetsPasteOnOpen {
+            return ("Copy Snippet", "↩")
+        }
+        return result.primaryAction
+    }
+
+    /// Pasting a snippet closes the palette first, like `openInFrontApp`; copying one keeps
+    /// it open to confirm.
+    func openSnippet(_ result: SearchResult, paste: Bool) {
+        confirming = nil
+        error = nil
+        guard paste else {
+            do {
+                if case .copied(let text) = try core.openSnippet(id: result.id, query: query, paste: false) {
+                    showCopied(text)
+                }
+            } catch {
+                self.error = error.userMessage
+            }
+            return
+        }
+        onClose?()
+        do {
+            _ = try core.openSnippet(id: result.id, query: query, paste: true)
+        } catch {
+            onReopen?()
+            self.error = error.userMessage
+        }
+    }
+
+    /// Window actions act on the app that was in front, so the palette closes first; a
+    /// failure reopens it to show why.
     private func openInFrontApp(_ result: SearchResult) {
         confirming = nil
         error = nil
@@ -1192,7 +1230,7 @@ private struct ActionBar: View {
 
     private var actions: [FloatingAction] {
         guard let result = model.selectedResult else { return [] }
-        let action = result.primaryAction
+        let action = model.primaryAction(for: result)
         return [
             FloatingAction(label: action.label, keys: [action.key]) { model.openSelected() },
             .showActions(model),
@@ -1288,9 +1326,10 @@ extension Hotkey {
 }
 
 extension SearchResult {
-    /// Window actions and snippets act on the frontmost app, so the palette closes first.
+    /// Window actions act on the frontmost app, so the palette closes first. Snippets do too
+    /// when pasted (`PaletteModel.openSnippet`).
     var actsOnFrontApp: Bool {
-        kind == .windowAction || kind == .snippet
+        kind == .windowAction
     }
 
     /// What ⏎ will do with this result, for the action bar.

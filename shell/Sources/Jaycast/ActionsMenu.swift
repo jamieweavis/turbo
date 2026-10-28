@@ -123,12 +123,21 @@ extension PaletteModel {
     }
 
     private func searchActions(_ result: SearchResult) -> [PaletteAction] {
-        let primary = result.primaryAction
+        let primary = primaryAction(for: result)
+        let primarySymbol = result.kind == .snippet && !snippetsPasteOnOpen ? "doc.on.doc" : result.primarySymbol
         var actions = [
-            PaletteAction(title: primary.label, symbol: result.primarySymbol, keys: [primary.key]) {
+            PaletteAction(title: primary.label, symbol: primarySymbol, keys: [primary.key]) {
                 self.open(result)
             },
         ]
+        if result.kind == .snippet {
+            let pastes = snippetsPasteOnOpen
+            actions.append(PaletteAction(title: pastes ? "Copy to Clipboard" : Self.pasteTitle,
+                                         symbol: pastes ? "doc.on.doc" : "text.insert",
+                                         keys: ActionKeys.alternate) {
+                self.openSnippet(result, paste: !pastes)
+            })
+        }
         if result.kind == .application, let path = result.path {
             let bundleId = String(result.id.dropFirst("app:".count))
             actions += [
