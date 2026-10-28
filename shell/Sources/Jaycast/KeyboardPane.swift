@@ -6,6 +6,9 @@ import SwiftUI
 @MainActor
 @Observable
 final class HyperKeySettings {
+    /// The app's one instance, so shortcuts anywhere can show ⬥ for the modifiers it presses.
+    static private(set) var current: HyperKeySettings?
+
     var config: HyperKeyConfig {
         didSet {
             if config != oldValue { save() }
@@ -17,6 +20,7 @@ final class HyperKeySettings {
     init(core: Core) {
         self.core = core
         config = core.hyperKeyConfig()
+        Self.current = self
     }
 
     private func save() {

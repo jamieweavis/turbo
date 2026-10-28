@@ -169,7 +169,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .files: "doc.text.magnifyingglass"
         case .windows: "rectangle.lefthalf.filled"
         case .windowDrag: "arrow.up.and.down.and.arrow.left.and.right"
-        case .keyboard: "command.square"
+        case .keyboard: "diamond.fill"
         case .mouse: "computermouse"
         case .monitor: "sun.max"
         case .keepAwake: "eye"
@@ -339,8 +339,10 @@ struct PaneIcon: View {
                 // The same drawn screen as the Left Half action, rather than a symbol.
                 WindowActionIcon(action: .leftHalf, width: size * 0.6)
             } else {
+                // The diamond fills more of its box than other symbols, which shows at sidebar size.
+                let scale = pane == .keyboard && size <= 20 ? 0.35 : 0.5
                 Image(systemName: pane.systemImage)
-                    .font(.system(size: size * 0.5, weight: .medium))
+                    .font(.system(size: size * scale, weight: .medium))
             }
         }
         .foregroundStyle(.white)

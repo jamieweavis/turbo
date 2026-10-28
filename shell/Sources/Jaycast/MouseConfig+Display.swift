@@ -52,6 +52,23 @@ extension Modifier: CaseIterable, Identifiable {
         }
     }
 
+    /// The Hyper key's symbol, shown in place of the modifiers it presses while it's on.
+    static let hyperSymbol = "⬥"
+
+    /// One symbol per modifier, in menu order, with ⬥ standing in for ⌃⌥⇧⌘ (or ⌃⌥⌘ when
+    /// Hyper leaves Shift out, so ⇧ can follow it) while the Hyper key is on.
+    @MainActor
+    static func symbols(for modifiers: [Modifier]) -> [String] {
+        let held = Set(modifiers)
+        if let hyper = HyperKeySettings.current?.config, hyper.enabled {
+            let pressed: Set<Modifier> = hyper.includeShift ? [.control, .option, .shift, .command] : [.control, .option, .command]
+            if pressed.isSubset(of: held) {
+                return [hyperSymbol] + allCases.filter { held.contains($0) && !pressed.contains($0) }.map(\.symbol)
+            }
+        }
+        return allCases.filter(held.contains).map(\.symbol)
+    }
+
     static func from(_ flags: NSEvent.ModifierFlags) -> [Modifier] {
         allCases.filter { modifier in
             switch modifier {
@@ -195,7 +212,7 @@ struct Shortcut: Equatable {
 
     @MainActor
     var title: String {
-        Modifier.allCases.filter(modifiers.contains).map(\.symbol).joined() + KeyNames.name(for: keyCode)
+        Modifier.symbols(for: modifiers).joined() + KeyNames.name(for: keyCode)
     }
 }
 

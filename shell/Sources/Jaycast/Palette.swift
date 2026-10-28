@@ -1328,7 +1328,7 @@ extension Hotkey {
     /// One cap per modifier, in menu order, then the key.
     @MainActor
     var keycaps: [String] {
-        Modifier.allCases.filter(modifiers.contains).map(\.symbol) + [KeyNames.name(for: keyCode)]
+        Modifier.symbols(for: modifiers) + [KeyNames.name(for: keyCode)]
     }
 }
 

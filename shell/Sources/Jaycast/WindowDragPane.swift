@@ -41,7 +41,7 @@ struct WindowDragPane: View {
     let isInputRunning: Bool
 
     private var modifiers: String {
-        settings.config.modifiers.map(\.symbol).joined()
+        Modifier.symbols(for: settings.config.modifiers).joined()
     }
 
     var body: some View {

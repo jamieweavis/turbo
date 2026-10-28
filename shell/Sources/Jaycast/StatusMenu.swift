@@ -91,7 +91,7 @@ struct StatusMenu: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 4) {
-                MenuToggle(title: "Hyper key", systemImage: "command", isOn: $hyperKey.config.enabled)
+                MenuToggle(title: "Hyper key", systemImage: "diamond.fill", isOn: $hyperKey.config.enabled)
 
                 Text(hyperKey.config.key.title)
                     .font(.caption)
