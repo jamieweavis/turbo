@@ -19,7 +19,7 @@ struct MonitorPane: View {
                     Text("Brightness keys control the display under the cursor")
                     Text("The built-in display, and displays without DDC/CI, keep the keys' normal behaviour.")
                 }
-                .disabled(!settings.config.enabled)
+                .switchedOff(!settings.config.enabled)
             } footer: {
                 Text("Brightness is set over DDC/CI, which most external monitors support.")
             }
@@ -44,7 +44,7 @@ struct MonitorPane: View {
                         }
                     }
                 }
-                .disabled(!settings.config.enabled)
+                .switchedOff(!settings.config.enabled)
 
                 if let error = settings.brightnessError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

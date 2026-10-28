@@ -10,11 +10,33 @@ final class SettingsWindowController {
     private let model: AppModel
     private let onShowOnboarding: () -> Void
     private var window: NSWindow?
+    private let switchedOff = SwitchedOffContent()
+    private var clickMonitor: Any?
     private var closeObserver: (any NSObjectProtocol)?
 
     init(model: AppModel, onShowOnboarding: @escaping () -> Void) {
         self.model = model
         self.onShowOnboarding = onShowOnboarding
+        // A disabled control ignores the click, so it's caught here instead, before the window
+        // sends it on.
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.nudgeIfSwitchedOff(event)
+            return event
+        }
+    }
+
+    /// Pulses the pane's switch when a click lands on content that's disabled because it's off.
+    private func nudgeIfSwitchedOff(_ event: NSEvent) {
+        guard let window, event.window === window,
+              // Not the toolbar, which the content scrolls under.
+              window.contentLayoutRect.contains(event.locationInWindow),
+              let contentView = window.contentView
+        else { return }
+        // SwiftUI's global space is the content view's, from the top left.
+        let point = CGPoint(x: event.locationInWindow.x, y: contentView.bounds.height - event.locationInWindow.y)
+        if switchedOff.frames.values.contains(where: { $0.contains(point) }) {
+            switchedOff.nudges += 1
+        }
     }
 
     func show() {
@@ -26,7 +48,7 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let view = SettingsView(model: model, onShowOnboarding: onShowOnboarding)
+        let view = SettingsView(model: model, switchedOff: switchedOff, onShowOnboarding: onShowOnboarding)
         let hosting = NSHostingController(rootView: view)
         // Only the minimum size: following the panes' ideal sizes would resize the window
         // whenever one is long (the Launcher pane's table), pushing content under the title bar.
@@ -183,6 +205,7 @@ enum SettingsPane: CaseIterable, Identifiable {
 
 struct SettingsView: View {
     let model: AppModel
+    let switchedOff: SwitchedOffContent
     let onShowOnboarding: () -> Void
 
     @State private var history = PaneHistory()
@@ -239,9 +262,10 @@ struct SettingsView: View {
                 }
             }
             // Monitor keeps the built-in display's slider usable, and disables the rest itself.
-            .disabled(pane != .monitor && isEnabled(pane)?.wrappedValue == false)
+            .switchedOff(pane != .monitor && isEnabled(pane)?.wrappedValue == false)
             .scrollContentBackground(.hidden)
             .environment(titles)
+            .environment(switchedOff)
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
                     Button("Back", systemImage: "chevron.left") { history.goBack() }
@@ -260,7 +284,7 @@ struct SettingsView: View {
                 }
                 ToolbarSpacer(.flexible)
                 if isEnabled(pane) != nil {
-                    ToolbarItem { FeatureSwitch(pane: pane, model: model) }
+                    ToolbarItem { FeatureSwitch(pane: pane, model: model, switchedOff: switchedOff) }
                         .sharedBackgroundVisibility(.hidden)
                 }
             }
@@ -373,6 +397,46 @@ final class PaneTitleTracker {
     }
 }
 
+/// Where the content disabled by a pane's switch being off is, so a click on it can draw the eye
+/// to the switch.
+@Observable
+final class SwitchedOffContent {
+    var frames: [UUID: CGRect] = [:]
+    /// Counts the clicks on switched-off content, each one pulsing the switch.
+    var nudges = 0
+}
+
+extension View {
+    /// Disables the view while its pane's switch is off, and pulses the switch when it's clicked.
+    func switchedOff(_ off: Bool) -> some View {
+        modifier(SwitchedOff(off: off))
+    }
+}
+
+private struct SwitchedOff: ViewModifier {
+    let off: Bool
+
+    @Environment(SwitchedOffContent.self) private var content: SwitchedOffContent?
+    @State private var id = UUID()
+    @State private var frame = CGRect.zero
+
+    func body(content view: Content) -> some View {
+        view
+            .disabled(off)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                frame = $0
+                update()
+            }
+            .onChange(of: off) { update() }
+            // A form drops rows scrolled well out of view.
+            .onDisappear { content?.frames[id] = nil }
+    }
+
+    private func update() {
+        content?.frames[id] = off ? frame : nil
+    }
+}
+
 /// The pane's title in the middle of the toolbar, sliding up into place once its header's title
 /// has scrolled out of view, so the two never show at once. It fades as it slides, through a
 /// soft bottom edge rather than a hard clip.
@@ -406,6 +470,7 @@ private struct ToolbarTitle: View {
 private struct FeatureSwitch: View {
     let pane: SettingsPane
     let model: AppModel
+    let switchedOff: SwitchedOffContent
 
     /// Whether the switch has had its first update.
     @State private var updated = false
@@ -416,14 +481,53 @@ private struct FeatureSwitch: View {
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .labelsHidden()
+                .help(isOn.wrappedValue ? "Turn \(pane.title) off" : "Turn \(pane.title) on")
+                // Before the padding below, so the ring hugs the switch.
+                .keyframeAnimator(initialValue: Nudge(), trigger: switchedOff.nudges) { view, nudge in
+                    view
+                        // A ring in the accent colour around the switch, fading out after it.
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(.tint, lineWidth: 2)
+                                .padding(-2)
+                                .opacity(nudge.ring)
+                        }
+                        .scaleEffect(nudge.scale)
+                        .offset(x: nudge.wiggle)
+                } keyframes: { _ in
+                    KeyframeTrack(\.scale) {
+                        SpringKeyframe(1.4, duration: 0.15)
+                        SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+                    }
+                    // A small shake while it's grown, settling as it shrinks back.
+                    KeyframeTrack(\.wiggle) {
+                        CubicKeyframe(0, duration: 0.1)
+                        CubicKeyframe(2, duration: 0.06)
+                        CubicKeyframe(-2, duration: 0.08)
+                        CubicKeyframe(1.5, duration: 0.08)
+                        CubicKeyframe(-1, duration: 0.08)
+                        CubicKeyframe(0, duration: 0.08)
+                    }
+                    KeyframeTrack(\.ring) {
+                        LinearKeyframe(1, duration: 0.1)
+                        LinearKeyframe(1, duration: 0.5)
+                        LinearKeyframe(0, duration: 0.4)
+                    }
+                }
                 // The toolbar pads the item 9pt more each side when it first lays it out than
                 // when it updates it, so the switch drifted right on its first flip. Updating
                 // straight away with that padding added keeps it in the same place for good.
                 .padding(.horizontal, updated ? 9 : 0)
-                .help(isOn.wrappedValue ? "Turn \(pane.title) off" : "Turn \(pane.title) on")
                 .task { updated = true }
         }
     }
+}
+
+/// The switch's pulse when switched-off content is clicked.
+private struct Nudge {
+    var scale = 1.0
+    var wiggle = 0.0
+    var ring = 0.0
 }
 
 /// The pane's white symbol on a rounded square of its colour, in the header and the sidebar.
