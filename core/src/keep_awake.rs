@@ -84,7 +84,7 @@ impl KeepAwake {
             .unwrap_or_default();
         let assertion = if saved.active && config.enabled {
             create(config.keep_display_on)
-                .inspect_err(|error| eprintln!("jaycast: couldn't restore Keep Awake: {error}"))
+                .inspect_err(|error| log::error!("couldn't restore Keep Awake: {error}"))
                 .ok()
         } else {
             None
@@ -112,6 +112,7 @@ impl KeepAwake {
             }
             _ => return Ok(()),
         }
+        log::info!("Keep Awake {}", if active { "on" } else { "off" });
         self.save(active)
     }
 
@@ -182,7 +183,7 @@ fn release(id: IOPMAssertionID) {
     // SAFETY: `id` came from a successful `IOPMAssertionCreateWithName` and is released once.
     let status = unsafe { IOPMAssertionRelease(id) };
     if status != 0 {
-        eprintln!("jaycast: couldn't release the Keep Awake assertion ({status:#x})");
+        log::error!("couldn't release the Keep Awake assertion ({status:#x})");
     }
 }
 

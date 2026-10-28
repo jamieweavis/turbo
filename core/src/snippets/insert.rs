@@ -51,6 +51,11 @@ pub(super) fn run(text: &str, erase: usize, delay: Duration) {
     autoreleasepool(|_| {
         // Before anything touches the pasteboard, so `{clipboard}` is the user's copy.
         let expanded = expand_now(text);
+        // Lengths only: snippets can hold anything, and `{clipboard}` the user's copy.
+        log::debug!(
+            "inserting a snippet: {} chars, erasing {erase}",
+            expanded.text.chars().count()
+        );
         post_key_repeatedly(KEY_DELETE, CGEventFlags::empty(), erase);
         if expanded.text.is_empty() {
             return;
@@ -60,7 +65,7 @@ pub(super) fn run(text: &str, erase: usize, delay: Duration) {
         let saved = Snapshot::take(&pasteboard);
         let Some(written) = write_transient(&pasteboard, &expanded.text) else {
             saved.restore(&pasteboard);
-            eprintln!("jaycast: couldn't put the snippet on the clipboard");
+            log::error!("couldn't put the snippet on the clipboard");
             return;
         };
         post_key_repeatedly(KEY_V, CGEventFlags::MaskCommand, 1);
@@ -170,7 +175,7 @@ impl Snapshot {
             })
             .collect();
         if !pasteboard.writeObjects(&NSArray::from_retained_slice(&items)) {
-            eprintln!("jaycast: couldn't restore the clipboard after a snippet");
+            log::error!("couldn't restore the clipboard after a snippet");
         }
     }
 }

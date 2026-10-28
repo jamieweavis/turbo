@@ -39,7 +39,7 @@ impl HyperKey {
     /// Also removes a remapping left behind if Jaycast didn't get to quit cleanly.
     pub fn new(config: HyperKeyConfig) -> Self {
         if let Err(error) = remap::apply(None) {
-            eprintln!("jaycast: couldn't restore the Hyper key: {error}");
+            log::error!("couldn't restore the Hyper key: {error}");
         }
         Self {
             tap: HyperTap::new(config.clone()),
@@ -97,7 +97,7 @@ impl HyperKey {
 
     fn release(&self) {
         if let Err(error) = remap::apply(None) {
-            eprintln!("jaycast: couldn't restore the Hyper key: {error}");
+            log::error!("couldn't restore the Hyper key: {error}");
         }
         self.tap.stop();
     }

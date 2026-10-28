@@ -287,6 +287,7 @@ impl TapState {
         if event_type == CGEventType::TapDisabledByTimeout
             || event_type == CGEventType::TapDisabledByUserInput
         {
+            log::warn!("snippet tap disabled by the system ({event_type:?}); re-enabling");
             // Keys typed while disabled were missed, so the buffer no longer matches.
             if let Some(port) = &self.port {
                 CGEvent::tap_enable(port, true);

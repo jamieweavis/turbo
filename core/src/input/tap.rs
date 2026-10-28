@@ -301,6 +301,7 @@ impl TapState {
         if event_type == CGEventType::TapDisabledByTimeout
             || event_type == CGEventType::TapDisabledByUserInput
         {
+            log::warn!("mouse tap disabled by the system ({event_type:?}); re-enabling");
             // We missed events while disabled, so any half-tracked press is stale.
             if let Some(port) = &self.port {
                 CGEvent::tap_enable(port, true);

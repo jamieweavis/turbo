@@ -204,6 +204,9 @@ fn run(shared: &Shared, monitor: SendMonitor, mut on_read: impl FnMut(Option<Rea
             thread::sleep(RETRY_DELAY);
             write_brightness(&mut monitor, raw)
         };
+        if !ok {
+            log::warn!("DDC brightness write of {raw} failed twice");
+        }
         shared.state.lock().slot.record(raw, ok);
         thread::sleep(WRITE_GAP);
     }

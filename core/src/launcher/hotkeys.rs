@@ -130,7 +130,7 @@ impl HotkeyManager {
     /// Replaces every registered hotkey with the ones in `config`.
     pub fn apply(&self, config: &LauncherConfig) {
         if !is_main_thread() {
-            eprintln!("jaycast: hotkeys can only be registered on the main thread");
+            log::warn!("hotkeys can only be registered on the main thread");
             return;
         }
         let mut carbon = self.carbon.lock();
@@ -154,6 +154,13 @@ impl HotkeyManager {
                 }
                 None => failed.push(planned.hotkey),
             }
+        }
+        log::info!("registered {} hotkeys", carbon.registered.len());
+        if !failed.is_empty() {
+            log::warn!(
+                "{} hotkeys couldn't be registered: {failed:?}",
+                failed.len()
+            );
         }
         carbon.failed = failed;
         *self.inner.targets.lock() = targets;
@@ -221,23 +228,23 @@ impl Inner {
             }
             Some(Target::App(bundle_id)) => {
                 if let Err(error) = toggle_app(&bundle_id) {
-                    eprintln!("jaycast: app hotkey for {bundle_id}: {error}");
+                    log::error!("app hotkey for {bundle_id} failed: {error}");
                 }
             }
             Some(Target::System(action)) => {
                 if let Err(error) = system::perform(&action) {
-                    eprintln!("jaycast: system action hotkey {action}: {error}");
+                    log::error!("system action hotkey {action} failed: {error}");
                 }
             }
             Some(Target::Window(action)) => {
                 if let Err(error) = self.windows.perform(action) {
-                    eprintln!("jaycast: window hotkey {action:?}: {error}");
+                    log::error!("couldn't register window hotkey {action:?}: {error}");
                 }
             }
             Some(Target::KeepAwake(command)) => {
                 let active = command.resolve(self.keep_awake.is_active());
                 if let Err(error) = self.keep_awake.set_active(active) {
-                    eprintln!("jaycast: keep awake hotkey {command:?}: {error}");
+                    log::error!("couldn't register keep awake hotkey {command:?}: {error}");
                 }
                 let observer = self.observer.lock().clone();
                 if let Some(observer) = observer {
@@ -252,7 +259,7 @@ impl Inner {
             }
             Some(Target::Settings(pane)) => {
                 if let Err(error) = settings_panes::open(&pane) {
-                    eprintln!("jaycast: settings hotkey {pane}: {error}");
+                    log::error!("settings hotkey {pane} failed: {error}");
                 }
             }
             None => {}
@@ -549,7 +556,7 @@ fn install_handler(inner: &Arc<Inner>) -> EventHandlerRef {
         )
     };
     if status != NO_ERR {
-        eprintln!("jaycast: couldn't install the hotkey handler ({status})");
+        log::error!("couldn't install the hotkey handler ({status})");
         return ptr::null_mut();
     }
     handler

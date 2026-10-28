@@ -190,8 +190,8 @@ fn spawn(id: &str, program: &str, args: &[&str]) -> Result<(), CoreError> {
         }
         match child.wait() {
             Ok(status) if status.success() => {}
-            Ok(status) => eprintln!("jaycast: system action {id} failed ({status}): {stderr}"),
-            Err(error) => eprintln!("jaycast: system action {id} failed: {error}"),
+            Ok(status) => log::warn!("system action {id} failed ({status}): {stderr}"),
+            Err(error) => log::warn!("system action {id} failed: {error}"),
         }
     });
     Ok(())

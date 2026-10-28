@@ -196,7 +196,7 @@ impl SnippetExpander {
         self.tap.set_config(config.clone());
         state.config = config;
         if let Err(error) = self.sync(&state) {
-            eprintln!("jaycast: couldn't start snippet expansion: {error}");
+            log::error!("couldn't start snippet expansion: {error}");
         }
     }
 

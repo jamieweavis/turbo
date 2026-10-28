@@ -251,6 +251,7 @@ impl TapState {
         if event_type == CGEventType::TapDisabledByTimeout
             || event_type == CGEventType::TapDisabledByUserInput
         {
+            log::warn!("Hyper key tap disabled by the system ({event_type:?}); re-enabling");
             // We may have missed the Hyper key's key-up while disabled; better to drop
             // Hyper than to leave every key stuck with four modifiers.
             if let Some(port) = &self.port {

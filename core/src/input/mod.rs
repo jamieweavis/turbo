@@ -58,7 +58,7 @@ impl InputEngine {
         state.enabled = config.enabled;
         self.tap.set_config(config.effective());
         if let Err(error) = self.sync(&state) {
-            eprintln!("jaycast: couldn't start the mouse event tap: {error}");
+            log::error!("couldn't start the mouse event tap: {error}");
         }
     }
 

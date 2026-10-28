@@ -303,6 +303,7 @@ impl WindowManager {
         // The memory lock isn't held across these calls: a slow app shouldn't block the
         // other caller.
         let after = with_enhanced_ui_off(&app, || apply(&window, &plan))?;
+        log::debug!("{action:?}: {before:?} → {after:?} (planned {plan:?})");
 
         if let Some(key) = key {
             let mut memory = memory;
@@ -430,14 +431,14 @@ fn apply(window: &Element, plan: &Plan) -> Result<Rect, CoreError> {
     // an app can clamp the first resize to the display the window was still on. A window
     // that can't be resized just keeps its size; that's handled below, not an error.
     let resizable = window.is_settable(ax::SIZE);
-    if resizable {
-        let _ = window.set_size(size);
+    if resizable && let Err(error) = window.set_size(size) {
+        log::debug!("first resize to {size:?} failed ({error})");
     }
     window
         .set_position(CGPoint::new(target.x, target.y))
         .map_err(ax_error)?;
-    if resizable {
-        let _ = window.set_size(size);
+    if resizable && let Err(error) = window.set_size(size) {
+        log::debug!("second resize to {size:?} failed ({error})");
     }
 
     let actual = frame(window).map_err(ax_error)?;

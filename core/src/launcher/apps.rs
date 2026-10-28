@@ -240,10 +240,13 @@ impl Watcher {
                     let _ = tx.send(());
                 }
             })
+            .inspect_err(|error| log::error!("couldn't start the app watcher: {error}"))
             .ok()?;
         for folder in watched_folders() {
             // A folder that can't be watched just won't refresh live; the rest still do.
-            let _ = watcher.watch(&folder, RecursiveMode::Recursive);
+            if let Err(error) = watcher.watch(&folder, RecursiveMode::Recursive) {
+                log::warn!("couldn't watch {} for new apps: {error}", folder.display());
+            }
         }
         thread::Builder::new()
             .name("jaycast-app-watcher".into())

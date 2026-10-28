@@ -45,7 +45,7 @@ impl EmojiPicker {
         let path = data_dir.join("emoji.json");
         let recent = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
-                eprintln!("jaycast: ignoring unreadable emoji history: {error}");
+                log::warn!("ignoring unreadable emoji history: {error}");
                 Vec::new()
             }),
             Err(_) => Vec::new(),

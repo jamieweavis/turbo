@@ -14,6 +14,7 @@ mod hyper;
 mod input;
 mod keep_awake;
 mod launcher;
+mod logging;
 mod pasteboard;
 mod snippets;
 mod windows;
@@ -93,6 +94,12 @@ impl Core {
     /// Support/Jaycast); the config itself is `~/.config/jaycast.toml`.
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
+        logging::init();
+        log::info!(
+            "starting {} {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION")
+        );
         let data_dir = PathBuf::from(data_dir);
         let saver = ConfigSaver::new(
             ConfigStore::new(ConfigStore::default_path()?, &data_dir),
@@ -434,15 +441,18 @@ impl Core {
     /// Fails with `PermissionDenied` without Accessibility. Calling it while already running
     /// is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
-        self.input.start()?;
-        self.brightness_keys.start()?;
-        self.snippets.start()?;
-        self.hyper_key.start()?;
-        self.window_drag.start()
+        started("mouse", self.input.start())?;
+        started("brightness key", self.brightness_keys.start())?;
+        started("snippet", self.snippets.start())?;
+        started("Hyper key", self.hyper_key.start())?;
+        started("window drag", self.window_drag.start())?;
+        log::info!("input taps started");
+        Ok(())
     }
 
     /// Also gives the Hyper key back its normal behaviour; call it before quitting.
     pub fn stop_input(&self) {
+        log::info!("stopping input taps");
         self.input.stop();
         self.brightness_keys.stop();
         self.snippets.stop();
@@ -455,6 +465,10 @@ impl Core {
     pub fn is_input_running(&self) -> bool {
         self.input.is_running() && self.brightness_keys.is_running()
     }
+}
+
+fn started(tap: &str, result: Result<(), CoreError>) -> Result<(), CoreError> {
+    result.inspect_err(|error| log::error!("couldn't start the {tap} tap: {error}"))
 }
 
 #[cfg(test)]

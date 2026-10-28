@@ -53,6 +53,10 @@ impl Machine {
                 // A repeat whose key-down we missed (tap re-enabled mid-press) starts a press
                 // too, but never a quick one.
                 if self.held_since.is_none() {
+                    log::debug!(
+                        "Hyper down{}",
+                        if repeat { " (missed key-down)" } else { "" }
+                    );
                     self.held_since = Some(now);
                     self.used = repeat;
                 }
@@ -63,6 +67,7 @@ impl Machine {
                     Some(since) => !self.used && now.duration_since(since) < QUICK_PRESS_TIMEOUT,
                     None => false,
                 };
+                log::debug!("Hyper up (quick: {quick}, used: {})", self.used);
                 match config.quick_press {
                     QuickPress::Nothing => Outcome::Swallow,
                     action if quick => Outcome::SwallowAndQuickPress(action),

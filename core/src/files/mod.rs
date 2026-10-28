@@ -11,7 +11,7 @@ mod spotlight;
 
 use parking_lot::Mutex;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use objc2::rc::autoreleasepool;
 use objc2_app_kit::NSWorkspace;
@@ -23,6 +23,9 @@ use crate::error::CoreError;
 /// Spotlight is asked for more than the caller wants, since some matches are filtered out
 /// (hidden, inside packages) and ranking needs a pool to choose from.
 const SPOTLIGHT_MAX: usize = 400;
+
+/// Spotlight queries slower than this are logged (at debug level).
+const SLOW_SEARCH: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct FileResult {
@@ -65,7 +68,9 @@ impl FileSearch {
             return Ok(Vec::new());
         }
 
-        let results = spotlight::run(&query_string, &scopes, SPOTLIGHT_MAX)?
+        let started = Instant::now();
+        let results: Vec<FileResult> = spotlight::run(&query_string, &scopes, SPOTLIGHT_MAX)
+            .inspect_err(|error| log::error!("Spotlight search failed: {error}"))?
             .into_iter()
             .filter(|hit| !rank::is_excluded(&hit.path, &home))
             .map(|hit| FileResult {
@@ -76,6 +81,14 @@ impl FileSearch {
                 modified: hit.modified,
             })
             .collect();
+        // The time and count only: never the query.
+        if started.elapsed() > SLOW_SEARCH {
+            log::debug!(
+                "slow file search: {} hits in {:?}",
+                results.len(),
+                started.elapsed()
+            );
+        }
         Ok(rank::rank(query, results, now(), limit))
     }
 

@@ -135,9 +135,13 @@ fn dock_notification(name: &'static str) {
 
 /// Launches off the tap thread so a slow `open` never stalls input.
 fn open_app(path: &'static str) {
-    std::thread::spawn(move || {
-        let _ = Command::new("/usr/bin/open").arg(path).status();
-    });
+    std::thread::spawn(
+        move || match Command::new("/usr/bin/open").arg(path).status() {
+            Ok(status) if status.success() => {}
+            Ok(status) => log::warn!("open {path} failed ({status})"),
+            Err(error) => log::warn!("open {path} failed: {error}"),
+        },
+    );
 }
 
 #[cfg(test)]

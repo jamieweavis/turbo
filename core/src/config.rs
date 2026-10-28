@@ -844,15 +844,23 @@ impl ConfigStore {
     /// load and left in place.
     pub fn load(&self) -> Result<Config, CoreError> {
         match fs::read_to_string(&self.path) {
-            Ok(text) => Ok(toml::from_str(&text)?),
+            Ok(text) => {
+                log::info!("loading config from {}", self.path.display());
+                toml::from_str(&text).map_err(|error| {
+                    log::error!("couldn't parse {}: {error}", self.path.display());
+                    error.into()
+                })
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 match fs::read(&self.legacy_path) {
                     Ok(bytes) => {
+                        log::info!("moving the legacy JSON config to {}", self.path.display());
                         let config = serde_json::from_slice(&bytes)?;
                         self.save(&config)?;
                         Ok(config)
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        log::info!("no config at {}; using defaults", self.path.display());
                         Ok(Config::default())
                     }
                     Err(error) => Err(error.into()),
@@ -920,7 +928,7 @@ impl ConfigSaver {
         let thread = thread::Builder::new()
             .name("jaycast-config-saver".into())
             .spawn(move || run_saver(&thread_shared))
-            .inspect_err(|error| eprintln!("jaycast: couldn't start the config saver: {error}"))
+            .inspect_err(|error| log::error!("couldn't start the config saver: {error}"))
             .ok();
         Self { shared, thread }
     }
@@ -953,7 +961,7 @@ impl ConfigSaver {
 impl Drop for ConfigSaver {
     fn drop(&mut self) {
         if let Err(error) = self.flush() {
-            eprintln!("jaycast: couldn't save the config: {error}");
+            log::error!("couldn't save the config: {error}");
         }
         self.shared.state.lock().shutdown = true;
         self.shared.wake.notify_one();
@@ -997,7 +1005,7 @@ fn run_saver(shared: &SaverShared) {
             }
         }
         if let Err(error) = shared.write_pending() {
-            eprintln!("jaycast: couldn't save the config: {error}");
+            log::error!("couldn't save the config: {error}");
         }
     }
 }

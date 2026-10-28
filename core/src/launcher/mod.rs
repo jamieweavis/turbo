@@ -29,7 +29,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSWorkspace, NSWorkspaceOpenConfiguration};
@@ -122,6 +122,9 @@ type ModeEntry = (
     &'static [&'static str],
     &'static str,
 );
+
+/// Searches slower than this are logged (at debug level).
+const SLOW_SEARCH: Duration = Duration::from_millis(50);
 
 const MODES: &[ModeEntry] = &[
     (
@@ -606,6 +609,7 @@ impl Launcher {
     /// query returns everything, most used first, ignoring `limit`. Fast enough to call on
     /// every keystroke (no I/O).
     pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
+        let started = Instant::now();
         let index = Arc::clone(&self.index.read());
         let config = Arc::clone(&self.config.read());
         let mut extra = Vec::new();
@@ -628,7 +632,7 @@ impl Launcher {
         let prefs = Arc::clone(&self.prefs.read());
         extra.retain(|(_, result)| prefs.is_enabled(&result.id));
         let usage = self.usage.lock();
-        rank(
+        let results = rank(
             &fuzzy::fold_query(query),
             &index,
             &self.system,
@@ -637,7 +641,16 @@ impl Launcher {
             &usage,
             now(),
             limit,
-        )
+        );
+        // The time and count only: never the query.
+        if started.elapsed() > SLOW_SEARCH {
+            log::debug!(
+                "slow search: {} results in {:?}",
+                results.len(),
+                started.elapsed()
+            );
+        }
+        results
     }
 
     /// Opens a result from `search` and records the choice for ranking.
@@ -693,6 +706,9 @@ impl Launcher {
                 message: format!("unknown result {id}"),
             });
         }
+        // Ids come from the app index and the config, never from what was typed (calculator
+        // results, which embed it, returned above).
+        log::info!("opened {id}");
         self.record(id, query);
         Ok(outcome)
     }
@@ -723,6 +739,11 @@ impl Launcher {
                 text: crate::snippets::copy(snippet)?,
             }
         };
+        log::debug!(
+            "{} {id} ({} chars)",
+            if paste { "pasted" } else { "copied" },
+            snippet.text.chars().count()
+        );
         self.record(id, query);
         Ok(outcome)
     }
@@ -783,18 +804,27 @@ impl Launcher {
             usage.clone()
         };
         // Losing a ranking hint isn't worth failing the open over.
-        let _ = self.store.save(&snapshot, now);
+        if let Err(error) = self.store.save(&snapshot, now) {
+            log::warn!("couldn't save launcher usage: {error}");
+        }
     }
 
     /// Rebuilds the index; tells the observer after the first build or when anything changed.
     fn reindex(&self, first: bool) {
+        let started = Instant::now();
         let fresh = Index::new(apps::index());
+        let count = fresh.apps.len();
         let changed = {
             let mut index = self.index.write();
             let changed = !index.same_apps(&fresh);
             *index = Arc::new(fresh);
             changed
         };
+        log::info!(
+            "indexed {count} apps in {:?}{}",
+            started.elapsed(),
+            if changed { "" } else { " (unchanged)" }
+        );
         if first || changed {
             let observer = self.observer.lock().clone();
             if let Some(observer) = observer {

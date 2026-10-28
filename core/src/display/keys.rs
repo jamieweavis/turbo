@@ -19,8 +19,8 @@ use objc2_core_foundation::{
     CFMachPort, CFRetained, CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
 };
 use objc2_core_graphics::{
-    CGDirectDisplayID, CGDisplayIsBuiltin, CGError, CGEvent, CGEventFlags, CGEventMask,
-    CGEventField, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy,
+    CGDirectDisplayID, CGDisplayIsBuiltin, CGError, CGEvent, CGEventField, CGEventFlags,
+    CGEventMask, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy,
     CGEventType, CGGetDisplaysWithPoint,
 };
 
@@ -263,6 +263,7 @@ impl TapState {
         if event_type == CGEventType::TapDisabledByTimeout
             || event_type == CGEventType::TapDisabledByUserInput
         {
+            log::warn!("brightness key tap disabled by the system ({event_type:?}); re-enabling");
             // We may have missed key-ups while disabled, so held presses are stale.
             if let Some(port) = &self.port {
                 CGEvent::tap_enable(port, true);

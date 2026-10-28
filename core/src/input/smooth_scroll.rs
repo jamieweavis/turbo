@@ -124,9 +124,14 @@ fn run_emitter(shared: &Shared) {
 
         // Animate until idle, then go back to sleep. The refresh rate is re-read per burst,
         // from the display being scrolled, so mixed 60 Hz and 120 Hz setups both stay smooth.
-        let interval = Duration::from_secs_f64(1.0 / refresh_rate(pointer_display()));
+        let hz = refresh_rate(pointer_display());
+        let interval = Duration::from_secs_f64(1.0 / hz);
         let mut lines = LineCarry::default();
-        let mut deadline = Instant::now();
+        let started = Instant::now();
+        let mut deadline = started;
+        let mut posted = 0;
+        let mut resyncs = 0;
+        log::debug!("scroll burst started at {hz} Hz");
         loop {
             let mut state = shared.state.lock();
             let mut frames = std::mem::take(&mut state.outbox);
@@ -137,7 +142,12 @@ fn run_emitter(shared: &Shared) {
             for frame in &frames {
                 post(frame, &mut lines);
             }
+            posted += frames.len();
             if idle {
+                log::debug!(
+                    "scroll burst ended: {posted} frames in {:?}, {resyncs} resyncs",
+                    started.elapsed()
+                );
                 break;
             }
 
@@ -146,6 +156,7 @@ fn run_emitter(shared: &Shared) {
             if deadline <= now {
                 // Fell behind (system busy): resync rather than bursting to catch up.
                 deadline = now + interval;
+                resyncs += 1;
             }
             thread::sleep(deadline - now);
         }

@@ -167,7 +167,7 @@ impl RateStore {
             .name("jaycast-currency-rates".into())
             .spawn(move || refresh_loop(&weak, &path));
         if let Err(error) = spawned {
-            eprintln!("jaycast: couldn't start the currency rate thread: {error}");
+            log::error!("couldn't start the currency rate thread: {error}");
         }
         store
     }
@@ -199,6 +199,7 @@ fn refresh_loop(store: &Weak<RateStore>, path: &Path) {
         if now() >= due {
             match fetch() {
                 Some(rates) => {
+                    log::info!("fetched currency rates for {}", rates.date);
                     save(path, &rates);
                     match store.upgrade() {
                         Some(store) => store.set(rates),
@@ -206,7 +207,10 @@ fn refresh_loop(store: &Weak<RateStore>, path: &Path) {
                     }
                     due = now() + REFRESH_AFTER;
                 }
-                None => due = now() + RETRY_AFTER,
+                None => {
+                    log::warn!("couldn't fetch currency rates; retrying later");
+                    due = now() + RETRY_AFTER;
+                }
             }
         }
         thread::sleep(POLL);
@@ -235,8 +239,8 @@ fn save(path: &Path, rates: &Rates) {
         let _ = fs::create_dir_all(dir);
     }
     let tmp = path.with_extension("json.tmp");
-    if fs::write(&tmp, json).is_ok() {
-        let _ = fs::rename(&tmp, path);
+    if let Err(error) = fs::write(&tmp, json).and_then(|()| fs::rename(&tmp, path)) {
+        log::warn!("couldn't cache currency rates: {error}");
     }
 }
 

@@ -46,6 +46,7 @@ pub(super) fn run(program: &str, args: &[&str], dir: &str, timeout: Duration) ->
     let mut child = match spawned {
         Ok(child) => child,
         Err(error) => {
+            log::warn!("couldn't start {program}: {error}");
             return RunResult {
                 success: false,
                 stdout: String::new(),
@@ -88,6 +89,11 @@ pub(super) fn run(program: &str, args: &[&str], dir: &str, timeout: Duration) ->
         }
     };
 
+    // The program only: arguments can carry the user's query.
+    match &problem {
+        None => log::info!("{program} finished in {:?}", started.elapsed()),
+        Some(problem) => log::warn!("{program} failed after {:?}: {problem}", started.elapsed()),
+    }
     RunResult {
         success,
         stdout: stdout.recv_timeout(DRAIN_GRACE).unwrap_or_default(),

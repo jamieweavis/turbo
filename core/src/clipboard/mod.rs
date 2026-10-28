@@ -84,7 +84,7 @@ impl ClipboardHistory {
         let store = match Store::open(&data_dir.join("clipboard")) {
             Ok(store) => Some(store),
             Err(error) => {
-                eprintln!("jaycast: clipboard history unavailable: {error}");
+                log::warn!("clipboard history unavailable: {error}");
                 None
             }
         };
@@ -127,7 +127,7 @@ impl ClipboardHistory {
             return Vec::new();
         };
         store.items(query, limit).unwrap_or_else(|error| {
-            eprintln!("jaycast: {error}");
+            log::error!("couldn't read clipboard history: {error}");
             Vec::new()
         })
     }
@@ -200,7 +200,7 @@ impl ClipboardHistory {
                 self.prune();
                 self.notify();
             }
-            Err(error) => eprintln!("jaycast: couldn't record a copy: {error}"),
+            Err(error) => log::error!("couldn't record a copy: {error}"),
         }
     }
 
@@ -215,7 +215,7 @@ impl ClipboardHistory {
         };
         let result = store.prune(max_items, retention_days, now());
         result.unwrap_or_else(|error| {
-            eprintln!("jaycast: couldn't prune clipboard history: {error}");
+            log::error!("couldn't prune clipboard history: {error}");
             0
         })
     }

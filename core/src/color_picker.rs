@@ -85,7 +85,7 @@ impl ColorHistory {
         let path = data_dir.join("colors.json");
         let colors = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|error| {
-                eprintln!("jaycast: ignoring unreadable colour history: {error}");
+                log::warn!("ignoring unreadable colour history: {error}");
                 Vec::new()
             }),
             Err(_) => Vec::new(),

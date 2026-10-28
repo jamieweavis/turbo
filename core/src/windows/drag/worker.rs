@@ -67,6 +67,14 @@ fn handle(message: Message, session: &mut Option<Session>, windows: &WindowManag
             } else {
                 Session::begin(point, mode, false)
             };
+            log::debug!(
+                "drag {mode:?} at {point:?}: {}",
+                if session.is_some() {
+                    "grabbed a window"
+                } else {
+                    "nothing to grab"
+                }
+            );
         }
         Message::Drag { point } => {
             *session = session.take().and_then(|mut session| {
@@ -94,6 +102,7 @@ fn finish(session: Option<Session>, windows: &WindowManager) {
         session.end()
     };
     if let Some((key, before, after)) = moved {
+        log::debug!("drag ended: {before:?} → {after:?}");
         windows.remember_drag(key, before, after);
     }
 }

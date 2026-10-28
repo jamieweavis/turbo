@@ -275,6 +275,17 @@ impl DisplayManager {
             let found_ids: Vec<u32> = found.iter().map(|f| f.id).collect();
             let diff = diff_ids(&before, &found_ids);
             let changed = !diff.added.is_empty() || !diff.removed.is_empty();
+            if changed {
+                log::info!(
+                    "external displays changed: added {:?}, removed {:?}",
+                    found
+                        .iter()
+                        .filter(|f| diff.added.contains(&f.id))
+                        .map(|f| (f.id, &f.name, f.monitor.is_some()))
+                        .collect::<Vec<_>>(),
+                    diff.removed
+                );
+            }
 
             let (gone, kept): (Vec<Entry>, Vec<Entry>) = std::mem::take(&mut state.displays)
                 .into_iter()
@@ -409,6 +420,7 @@ fn enumerate() -> Vec<FoundDisplay> {
     let error =
         unsafe { CGGetActiveDisplayList(MAX_DISPLAYS as u32, ids.as_mut_ptr(), &mut count) };
     if error != CGError::Success {
+        log::error!("couldn't list displays ({error:?})");
         return Vec::new();
     }
     let external: Vec<u32> = ids[..count as usize]

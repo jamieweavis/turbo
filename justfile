@@ -46,6 +46,14 @@ run: app
     @while [ -n "$(lsappinfo find bundleid={{bundle_id}})" ]; do sleep 0.1; done
     open {{app}}
 
+# Stream the app's logs; `just logs info` hides the debug ones
+logs level="debug":
+    log stream --style compact --level {{level}} --predicate 'subsystem == "{{bundle_id}}"'
+
+# Show the last `period` of the app's logs (debug ones aren't kept)
+logs-recent period="1h":
+    log show --style compact --info --last {{period}} --predicate 'subsystem == "{{bundle_id}}"'
+
 # Run all tests
 test:
     cargo test --workspace

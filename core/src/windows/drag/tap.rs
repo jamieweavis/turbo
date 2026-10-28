@@ -263,6 +263,7 @@ impl TapState {
         if event_type == CGEventType::TapDisabledByTimeout
             || event_type == CGEventType::TapDisabledByUserInput
         {
+            log::warn!("window drag tap disabled by the system ({event_type:?}); re-enabling");
             // We may have missed the release while disabled: end the drag where it is.
             if let Some(port) = &self.port {
                 CGEvent::tap_enable(port, true);
