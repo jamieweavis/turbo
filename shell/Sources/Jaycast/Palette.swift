@@ -371,6 +371,9 @@ enum PaletteLayout {
 @Observable
 final class PaletteModel {
     private(set) var mode: PaletteMode = .search
+    /// Whether `mode` was picked from search (so Esc goes back there) rather than opened by
+    /// its own hotkey (so Esc closes).
+    private var enteredFromSearch = false
     var query = "" {
         didSet {
             if query != oldValue { refresh() }
@@ -510,8 +513,9 @@ final class PaletteModel {
     }
 
     /// Switches mode in place, starting from an empty query.
-    func enter(_ mode: PaletteMode) {
+    func enter(_ mode: PaletteMode, fromSearch: Bool = false) {
         self.mode = mode
+        enteredFromSearch = fromSearch
         actionsMenu = nil
         confirming = nil
         error = nil
@@ -691,7 +695,7 @@ final class PaletteModel {
             case .copied(let text):
                 showCopied(text)
             case .showMode(let mode):
-                enter(mode)
+                enter(mode, fromSearch: true)
             case .pickColor:
                 pickColor()
             case .keepAwake(let active):
@@ -705,7 +709,8 @@ final class PaletteModel {
     }
 
     /// Esc: close the actions menu, back out of a confirmation or error, then clear the
-    /// query, then leave clipboard, file, colour or emoji mode for search, then close.
+    /// query, then leave clipboard, file, colour or emoji mode for search if it was opened from
+    /// there, then close.
     func cancel() {
         if actionsMenu != nil {
             closeActions()
@@ -720,7 +725,7 @@ final class PaletteModel {
             emoji.error = nil
         } else if !query.isEmpty {
             query = ""
-        } else if mode != .search {
+        } else if mode != .search, enteredFromSearch {
             enter(.search)
         } else {
             onClose?()
