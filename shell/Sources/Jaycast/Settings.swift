@@ -101,7 +101,7 @@ enum SettingsPane: CaseIterable, Identifiable {
     /// Under the title in the pane's header.
     var subtitle: String {
         switch self {
-        case .general: "Startup, permissions and version."
+        case .general: "Startup and permissions."
         case .launcher: "Search apps, commands and System Settings, with hotkeys and aliases."
         case .quicklinks: "Open websites and searches by keyword."
         case .commands: "Run shell commands from the launcher."
@@ -199,6 +199,13 @@ struct SettingsView: View {
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
             // so the selected (bold) "Window Management" fits.
             .frame(minWidth: 230)
+            .safeAreaInset(edge: .bottom) {
+                Text("Version \(coreInfo().version)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
             .navigationSplitViewColumnWidth(min: 230, ideal: 230, max: 230)
             .toolbar(removing: .sidebarToggle)
             .background(SidebarLimits(width: 230))
@@ -525,12 +532,6 @@ private struct GeneralPane: View {
                     // The form spaces header-only sections tightly, which crowds the next heading.
                     .padding(.bottom, 16)
                 }
-            }
-
-            Section {
-                LabeledContent("Version", value: coreInfo().version)
-            } header: {
-                SectionHeading("About")
             }
         }
         .formStyle(.grouped)
