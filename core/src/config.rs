@@ -1010,6 +1010,91 @@ fn run_saver(shared: &SaverShared) {
     }
 }
 
+/// A setting that differs between two configs, for the log.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Change {
+    /// A feature switch (a boolean): worth logging at info. Anything else is a value,
+    /// often one a slider changes on every tick, so it's for debug.
+    pub toggle: bool,
+    pub description: String,
+}
+
+/// Every setting that differs, by dotted path. Scalars show both values. Lists show the
+/// path only: they hold snippets, quicklinks and commands, which can contain anything, and
+/// every free-text field lives in one.
+pub(crate) fn changes(old: &Config, new: &Config) -> Vec<Change> {
+    let (Ok(old), Ok(new)) = (toml::Value::try_from(old), toml::Value::try_from(new)) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    diff("", Some(&old), Some(&new), &mut out);
+    out
+}
+
+fn diff(path: &str, old: Option<&toml::Value>, new: Option<&toml::Value>, out: &mut Vec<Change>) {
+    use toml::Value;
+    if old == new {
+        return;
+    }
+    match (old, new) {
+        (Some(Value::Table(old)), Some(Value::Table(new))) => {
+            let mut keys: Vec<&String> = old.keys().chain(new.keys()).collect();
+            keys.sort();
+            keys.dedup();
+            for key in keys {
+                let path = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                diff(&path, old.get(key), new.get(key), out);
+            }
+        }
+        (Some(Value::Array(_) | Value::Table(_)), _)
+        | (_, Some(Value::Array(_) | Value::Table(_))) => {
+            out.push(Change {
+                toggle: false,
+                description: format!("{path} changed"),
+            });
+        }
+        _ => {
+            let show = |value: Option<&Value>| {
+                value.map_or_else(|| "(unset)".to_owned(), Value::to_string)
+            };
+            out.push(Change {
+                toggle: matches!(old, Some(Value::Boolean(_)))
+                    || matches!(new, Some(Value::Boolean(_))),
+                description: format!("{path}: {} → {}", show(old), show(new)),
+            });
+        }
+    }
+}
+
+/// Logs each setting that changed: switches at info, values and lists at debug.
+pub(crate) fn log_changes(old: &Config, new: &Config) {
+    for change in changes(old, new) {
+        if change.toggle {
+            log::info!("{}", change.description);
+        } else {
+            log::debug!("{}", change.description);
+        }
+    }
+}
+
+/// Logs the settings that differ from the defaults, in one line.
+pub(crate) fn log_non_defaults(config: &Config) {
+    let changes = changes(&Config::default(), config);
+    if changes.is_empty() {
+        log::info!("all settings are the defaults");
+    } else {
+        let list: Vec<String> = changes.into_iter().map(|c| c.description).collect();
+        log::info!(
+            "settings that differ from the defaults: {}",
+            list.join("; ")
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1217,5 +1302,35 @@ mod tests {
             speed(2.5)
         );
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn changes_show_scalars_and_hide_lists() {
+        let old = Config::default();
+        let mut new = old.clone();
+        new.mouse.enabled = !old.mouse.enabled;
+        new.launcher.windows.gap = old.launcher.windows.gap + 4;
+        new.launcher.snippets.snippets.push(Snippet {
+            id: "s".into(),
+            name: "s".into(),
+            keyword: String::new(),
+            text: "secret".into(),
+        });
+        let found = changes(&old, &new);
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert!(found.contains(&Change {
+            toggle: true,
+            description: format!(
+                "mouse.enabled: {} → {}",
+                old.mouse.enabled, new.mouse.enabled
+            ),
+        }));
+        assert!(
+            found
+                .iter()
+                .any(|c| !c.toggle && c.description.starts_with("launcher.windows.gap: "))
+        );
+        assert!(found.iter().all(|c| !c.description.contains("secret")));
+        assert!(changes(&old, &old).is_empty());
     }
 }

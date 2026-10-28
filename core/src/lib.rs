@@ -106,6 +106,7 @@ impl Core {
             SAVE_DEBOUNCE,
         );
         let config = saver.load()?;
+        config::log_non_defaults(&config);
         let input = InputEngine::new(config.mouse.clone());
         let displays = DisplayManager::new(config.monitor.clone());
         let brightness_keys = BrightnessKeyTap::new(Arc::clone(&displays));
@@ -155,7 +156,9 @@ impl Core {
     /// Applies the new mouse settings immediately if input is running, and saves them.
     pub fn set_mouse_config(&self, mouse: MouseConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
+        let before = config.clone();
         config.mouse = mouse.clone();
+        config::log_changes(&before, &config);
         self.input.set_config(mouse);
         self.saver.save(&config)
     }
@@ -167,7 +170,9 @@ impl Core {
     /// Applies the new monitor settings immediately, and saves them.
     pub fn set_monitor_config(&self, monitor: MonitorConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
+        let before = config.clone();
         config.monitor = monitor.clone();
+        config::log_changes(&before, &config);
         let saved = self.saver.save(&config);
         self.displays.set_config(monitor);
         self.brightness_keys.refresh()?;
@@ -215,7 +220,9 @@ impl Core {
     /// The settings are saved even if remapping the key fails.
     pub fn set_hyper_key_config(&self, hyper_key: HyperKeyConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
+        let before = config.clone();
         config.hyper_key = hyper_key.clone();
+        config::log_changes(&before, &config);
         let saved = self.saver.save(&config);
         self.hyper_key.set_config(hyper_key)?;
         saved
@@ -228,7 +235,9 @@ impl Core {
     /// Applies the new window drag settings immediately if input is running, and saves them.
     pub fn set_window_drag_config(&self, window_drag: WindowDragConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
+        let before = config.clone();
         config.window_drag = window_drag.clone();
+        config::log_changes(&before, &config);
         let saved = self.saver.save(&config);
         self.window_drag.set_config(window_drag)?;
         saved
@@ -242,7 +251,9 @@ impl Core {
     /// thread only.
     pub fn set_launcher_config(&self, launcher: LauncherConfig) -> Result<(), CoreError> {
         let mut config = self.config.lock();
+        let before = config.clone();
         config.launcher = launcher.clone();
+        config::log_changes(&before, &config);
         let saved = self.saver.save(&config);
         launcher::apply_config(&self.hotkeys, &launcher);
         self.clipboard.set_config(launcher.clipboard.clone());
