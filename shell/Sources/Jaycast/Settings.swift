@@ -200,7 +200,7 @@ struct SettingsView: View {
             // so the selected (bold) "Window Management" fits.
             .frame(minWidth: 230)
             .safeAreaInset(edge: .bottom) {
-                Text("Version \(coreInfo().version)")
+                Text("Jaycast \(coreInfo().version)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
