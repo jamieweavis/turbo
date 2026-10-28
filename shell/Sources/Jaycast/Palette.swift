@@ -940,13 +940,6 @@ private struct PaletteView: View {
                 Image(systemName: model.mode.symbol)
                     .font(.system(size: 19, weight: .regular))
                     .foregroundStyle(.secondary)
-                if let title = model.mode.chipTitle {
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(.primary.opacity(0.1), in: .capsule)
-                }
                 SearchField(
                     text: $model.query,
                     placeholder: model.mode.placeholder,
@@ -1034,17 +1027,6 @@ extension PaletteMode {
         }
     }
 
-    /// The label shown in front of the field outside search mode.
-    var chipTitle: String? {
-        switch self {
-        case .search: nil
-        case .clipboard: "Clipboard"
-        case .files: "Files"
-        case .colors: "Colours"
-        case .emoji: "Emoji"
-        }
-    }
-
     /// Colours and emoji are grids, where ← and → move the selection.
     var isGrid: Bool {
         self == .colors || self == .emoji
@@ -1053,9 +1035,9 @@ extension PaletteMode {
     var placeholder: String {
         switch self {
         case .search: "Search for apps and commands…"
-        case .clipboard: "Search clipboard history"
-        case .files: "Search files"
-        case .colors: "Search picked colours"
+        case .clipboard: "Search clipboard history…"
+        case .files: "Search files…"
+        case .colors: "Search picked colours…"
         case .emoji: "Search emoji…"
         }
     }
