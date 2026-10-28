@@ -148,6 +148,7 @@ impl EventTap {
         let _ = worker.thread.join();
     }
 
+    #[cfg(test)]
     pub fn is_running(&self) -> bool {
         self.worker.lock().unwrap().is_some()
     }

@@ -6,7 +6,7 @@
 //! - `store`: the database and image files.
 //!
 //! The pasteboard has no change notification, so the monitor polls its change counter,
-//! which is a cheap read. Copies marked concealed or transient by their source (password
+//! which is a cheap read. While history is off it doesn't poll at all. Copies marked concealed or transient by their source (password
 //! managers do this) and copies made in ignored apps are never recorded.
 
 mod board;
@@ -14,7 +14,7 @@ mod capture;
 mod store;
 
 use std::path::Path;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -73,6 +73,7 @@ pub(crate) struct ClipboardHistory {
     store: Option<Mutex<Store>>,
     config: Mutex<ClipboardConfig>,
     observer: Mutex<Option<Arc<dyn LauncherObserver>>>,
+    monitor: Arc<MonitorSignal>,
 }
 
 impl ClipboardHistory {
@@ -86,23 +87,27 @@ impl ClipboardHistory {
                 None
             }
         };
+        let monitor = Arc::new(MonitorSignal::default());
+        monitor.set_enabled(config.enabled);
         let history = Arc::new(Self {
             store,
             config: Mutex::new(config),
             observer: Mutex::new(None),
+            monitor: Arc::clone(&monitor),
         });
         history.prune();
 
         let weak = Arc::downgrade(&history);
         thread::Builder::new()
             .name("jaycast-clipboard".into())
-            .spawn(move || run_monitor(&weak))
+            .spawn(move || run_monitor(&monitor, &weak))
             .expect("failed to spawn the clipboard thread");
         history
     }
 
     /// Applies limits and the enabled switch live (pruning straight away if limits shrink).
     pub fn set_config(&self, config: ClipboardConfig) {
+        self.monitor.set_enabled(config.enabled);
         *self.config.lock().unwrap() = config;
         if self.prune() > 0 {
             self.notify();
@@ -188,10 +193,6 @@ impl ClipboardHistory {
         })
     }
 
-    fn is_enabled(&self) -> bool {
-        self.config.lock().unwrap().enabled
-    }
-
     /// Records whatever was just copied, if it should be kept.
     fn capture(&self) {
         let Some(store) = &self.store else {
@@ -239,25 +240,87 @@ impl ClipboardHistory {
     }
 }
 
-/// Polls the pasteboard's change counter while enabled. Holds only a weak reference between
-/// polls, so dropping the history ends the thread.
-fn run_monitor(history: &Weak<ClipboardHistory>) {
+impl Drop for ClipboardHistory {
+    fn drop(&mut self) {
+        self.monitor.shut_down();
+    }
+}
+
+/// Tells the monitor thread whether to poll, and wakes it when that changes.
+#[derive(Default)]
+struct MonitorSignal {
+    state: Mutex<MonitorState>,
+    wake: Condvar,
+}
+
+#[derive(Default)]
+struct MonitorState {
+    enabled: bool,
+    /// Bumped each time history is turned on, so the monitor takes a fresh baseline even if
+    /// it never saw it off.
+    generation: u64,
+    shutdown: bool,
+}
+
+impl MonitorSignal {
+    fn set_enabled(&self, enabled: bool) {
+        let mut state = self.state.lock().unwrap();
+        if enabled && !state.enabled {
+            state.generation += 1;
+        }
+        state.enabled = enabled;
+        self.wake.notify_one();
+    }
+
+    fn shut_down(&self) {
+        self.state.lock().unwrap().shutdown = true;
+        self.wake.notify_one();
+    }
+
+    /// Sleeps for `poll` while enabled; while off, sleeps until turned on or `prune_in` has
+    /// passed. Returns `(enabled, generation)`, or `None` once shut down.
+    fn wait(&self, poll: Duration, prune_in: Duration) -> Option<(bool, u64)> {
+        let mut state = self.state.lock().unwrap();
+        if !state.shutdown {
+            state = if state.enabled {
+                self.wake.wait_timeout(state, poll).unwrap().0
+            } else {
+                self.wake
+                    .wait_timeout_while(state, prune_in, |s| !s.enabled && !s.shutdown)
+                    .unwrap()
+                    .0
+            };
+        }
+        (!state.shutdown).then_some((state.enabled, state.generation))
+    }
+}
+
+/// Polls the pasteboard's change counter while enabled, and leaves the pasteboard alone
+/// while not. Holds only a weak reference to the history between polls.
+fn run_monitor(signal: &MonitorSignal, history: &Weak<ClipboardHistory>) {
     // `None` until a baseline is taken: what was on the clipboard before monitoring
     // started (or while it was off) isn't recorded.
     let mut last_change = None;
+    let mut last_generation = None;
     let mut last_prune = Instant::now();
     loop {
+        let prune_in = PRUNE_INTERVAL.saturating_sub(last_prune.elapsed());
+        let Some((enabled, generation)) = signal.wait(POLL_INTERVAL, prune_in) else {
+            return;
+        };
         let Some(history) = history.upgrade() else {
             return;
         };
-        if history.is_enabled() {
+        if last_generation != Some(generation) {
+            last_generation = Some(generation);
+            last_change = None;
+        }
+        if enabled {
             let count = board::change_count();
             if last_change.is_some_and(|last| last != count) {
                 history.capture();
             }
             last_change = Some(count);
-        } else {
-            last_change = None;
         }
         if last_prune.elapsed() >= PRUNE_INTERVAL {
             last_prune = Instant::now();
@@ -265,8 +328,6 @@ fn run_monitor(history: &Weak<ClipboardHistory>) {
                 history.notify();
             }
         }
-        drop(history);
-        thread::sleep(POLL_INTERVAL);
     }
 }
 

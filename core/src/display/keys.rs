@@ -50,6 +50,8 @@ const FINE_STEP: f64 = 1.0 / 64.0;
 
 pub(crate) struct BrightnessKeyTap {
     displays: Arc<DisplayManager>,
+    /// `start` was called (and `stop` hasn't been since).
+    started: Mutex<bool>,
     worker: Mutex<Option<Worker>>,
 }
 
@@ -68,19 +70,57 @@ impl BrightnessKeyTap {
     pub fn new(displays: Arc<DisplayManager>) -> Self {
         Self {
             displays,
+            started: Mutex::new(false),
             worker: Mutex::new(None),
         }
     }
 
-    /// Fails with `PermissionDenied` without Accessibility. Idempotent.
+    /// Fails with `PermissionDenied` without Accessibility. A no-op while running.
     pub fn start(&self) -> Result<(), CoreError> {
-        let mut worker = self.worker.lock().unwrap();
-        if worker.is_some() {
-            return Ok(());
-        }
+        let mut started = self.started.lock().unwrap();
         // SAFETY: no arguments; reads the process's TCC state.
         if unsafe { AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
+        }
+        *started = true;
+        let result = self.sync(*started);
+        if result.is_err() {
+            *started = false;
+        }
+        result
+    }
+
+    pub fn stop(&self) {
+        *self.started.lock().unwrap() = false;
+        self.stop_tap();
+    }
+
+    /// Call after the monitor settings change: the tap only runs while monitor control and
+    /// the brightness keys are both on, so otherwise key presses never pass through Jaycast.
+    pub fn refresh(&self) -> Result<(), CoreError> {
+        let started = self.started.lock().unwrap();
+        self.sync(*started)
+    }
+
+    /// Started, whether or not the tap itself is running (it doesn't while turned off).
+    pub fn is_running(&self) -> bool {
+        *self.started.lock().unwrap()
+    }
+
+    fn sync(&self, started: bool) -> Result<(), CoreError> {
+        let config = self.displays.config();
+        if started && config.enabled && config.brightness_keys {
+            self.start_tap()
+        } else {
+            self.stop_tap();
+            Ok(())
+        }
+    }
+
+    fn start_tap(&self) -> Result<(), CoreError> {
+        let mut worker = self.worker.lock().unwrap();
+        if worker.is_some() {
+            return Ok(());
         }
 
         let stop = Arc::new(AtomicBool::new(false));
@@ -113,17 +153,13 @@ impl BrightnessKeyTap {
         }
     }
 
-    pub fn stop(&self) {
+    fn stop_tap(&self) {
         let Some(worker) = self.worker.lock().unwrap().take() else {
             return;
         };
         worker.stop.store(true, Ordering::Release);
         worker.run_loop.0.stop();
         let _ = worker.thread.join();
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.worker.lock().unwrap().is_some()
     }
 }
 

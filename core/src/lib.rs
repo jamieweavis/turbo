@@ -160,7 +160,7 @@ impl Core {
         config.monitor = monitor.clone();
         self.store.save(&config)?;
         self.displays.set_config(monitor);
-        Ok(())
+        self.brightness_keys.refresh()
     }
 
     /// External displays with their cached brightness. Never blocks on DDC.
@@ -416,7 +416,7 @@ impl Core {
     }
 
     /// Starts the event taps (mouse, brightness keys, snippet expansion, the Hyper key and
-    /// window dragging).
+    /// window dragging). Each tap only runs while its feature is on.
     /// Fails with `PermissionDenied` without Accessibility. Calling it while already running
     /// is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
@@ -436,8 +436,8 @@ impl Core {
         self.window_drag.stop();
     }
 
-    /// True only when the mouse and brightness key taps are running (the snippet, Hyper and
-    /// window drag taps only run while those features are on).
+    /// True once input has started (with Accessibility), whether or not any feature currently
+    /// needs a tap running.
     pub fn is_input_running(&self) -> bool {
         self.input.is_running() && self.brightness_keys.is_running()
     }
