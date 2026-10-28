@@ -49,10 +49,40 @@ final class SettingsWindowController {
     }
 }
 
-enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, snippets, clipboard, files, windows, windowDrag, keyboard, mouse, monitor, keepAwake, colorPicker
+/// A sidebar group of panes, in sidebar order.
+enum SettingsSection: CaseIterable, Identifiable {
+    case main, launcher, utilities, input
 
     var id: Self { self }
+
+    /// The sidebar subheading; `nil` for the untitled group at the top.
+    var title: String? {
+        switch self {
+        case .main: nil
+        case .launcher: "Launcher"
+        case .utilities: "Utilities"
+        case .input: "Input"
+        }
+    }
+
+    var panes: [SettingsPane] {
+        SettingsPane.allCases.filter { $0.section == self }
+    }
+}
+
+enum SettingsPane: CaseIterable, Identifiable {
+    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, windowDrag, keyboard, mouse, monitor, keepAwake, colorPicker
+
+    var id: Self { self }
+
+    var section: SettingsSection {
+        switch self {
+        case .general: .main
+        case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows: .launcher
+        case .keyboard, .mouse: .input
+        case .windowDrag, .monitor, .keepAwake, .colorPicker: .utilities
+        }
+    }
 
     var title: String {
         switch self {
@@ -156,18 +186,13 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: $selection) { pane in
-                Label {
-                    HStack {
-                        Text(pane.title)
-                        Spacer()
-                        if isEnabled(pane)?.wrappedValue == false {
-                            Text("Off")
-                                .foregroundStyle(.secondary)
-                        }
+            List(selection: $selection) {
+                ForEach(SettingsSection.allCases) { section in
+                    if let title = section.title {
+                        Section(title) { rows(section) }
+                    } else {
+                        Section { rows(section) }
                     }
-                } icon: {
-                    PaneIcon(pane: pane, size: 20)
                 }
             }
             // The column width alone is ignored here; the frame is what actually widens the sidebar,
@@ -230,6 +255,23 @@ struct SettingsView: View {
 }
 
 extension SettingsView {
+    private func rows(_ section: SettingsSection) -> some View {
+        ForEach(section.panes) { pane in
+            Label {
+                HStack {
+                    Text(pane.title)
+                    Spacer()
+                    if isEnabled(pane)?.wrappedValue == false {
+                        Text("Off")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } icon: {
+                PaneIcon(pane: pane, size: 20)
+            }
+        }
+    }
+
     /// The pane's on/off switch: its launcher feature's, or the window drag, Hyper key, mouse
     /// or display brightness master switch. Nil for panes that can't be turned off.
     private func isEnabled(_ pane: SettingsPane) -> Binding<Bool>? {
