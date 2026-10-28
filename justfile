@@ -42,7 +42,8 @@ app: build
 # Build, then (re)launch the app
 run: app
     -pkill -x Jaycast
-    @while pgrep -x Jaycast >/dev/null; do sleep 0.1; done
+    # Wait for LaunchServices, not just the kernel, to see the old instance gone, or open fails with -600.
+    @while [ -n "$(lsappinfo find bundleid={{bundle_id}})" ]; do sleep 0.1; done
     open {{app}}
 
 # Run all tests
