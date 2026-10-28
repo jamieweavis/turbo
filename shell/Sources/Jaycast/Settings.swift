@@ -10,6 +10,7 @@ final class SettingsWindowController {
     private let model: AppModel
     private let onShowOnboarding: () -> Void
     private var window: NSWindow?
+    private var closeObserver: (any NSObjectProtocol)?
 
     init(model: AppModel, onShowOnboarding: @escaping () -> Void) {
         self.model = model
@@ -20,6 +21,7 @@ final class SettingsWindowController {
         model.accessibility.refresh()
         let window = self.window ?? makeWindow()
         self.window = window
+        Logger.settings.info("settings window \(window.isVisible ? "brought forward" : "opened", privacy: .public)")
         RegularAppWindows.show(window)
     }
 
@@ -43,6 +45,11 @@ final class SettingsWindowController {
         window.setContentSize(NSSize(width: 944, height: 560))
         window.center()
         window.setFrameAutosaveName("Settings")
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { _ in
+            Logger.settings.info("settings window closed")
+        }
         return window
     }
 }
