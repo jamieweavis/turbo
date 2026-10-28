@@ -36,9 +36,6 @@ final class SettingsWindowController {
         // shows its own title instead.
         window.title = "Jaycast Settings"
         window.titleVisibility = .hidden
-        // No toolbar band behind the pane switch: it floats at the top right over the pane.
-        window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
@@ -182,11 +179,16 @@ struct SettingsView: View {
     let model: AppModel
     let onShowOnboarding: () -> Void
 
-    @State private var selection: SettingsPane? = .general
+    @State private var history = PaneHistory()
 
     var body: some View {
+        // A nil selection (a ⌘-click on the selected row) keeps the current pane.
+        let selection = Binding<SettingsPane?>(
+            get: { history.current },
+            set: { if let pane = $0 { history.visit(pane) } }
+        )
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: selection) {
                 ForEach(SettingsSection.allCases) { section in
                     if let title = section.title {
                         Section(title) { rows(section) }
@@ -202,11 +204,11 @@ struct SettingsView: View {
             .toolbar(removing: .sidebarToggle)
             .background(SidebarLimits(maxWidth: 300))
         } detail: {
-            let pane = selection ?? .general
+            let pane = history.current
             Group {
                 switch pane {
                 case .general:
-                    GeneralPane(model: model, onShowOnboarding: onShowOnboarding) { selection = $0 }
+                    GeneralPane(model: model, onShowOnboarding: onShowOnboarding) { history.visit($0) }
                 case .launcher: LauncherPane(settings: model.launcher)
                 case .quicklinks: QuicklinksPane(settings: model.launcher)
                 case .commands: CommandsPane(settings: model.launcher)
@@ -225,18 +227,21 @@ struct SettingsView: View {
             // Monitor keeps the built-in display's slider usable, and disables the rest itself.
             .disabled(pane != .monitor && isEnabled(pane)?.wrappedValue == false)
             .scrollContentBackground(.hidden)
-            // Every pane has a toolbar item, even an invisible one: without one the toolbar
-            // collapses and the traffic lights lose their inset position.
             .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button("Back", systemImage: "chevron.left") { history.goBack() }
+                        .disabled(history.previous == nil)
+                        .help(history.previous.map { "Back to \($0.title)" } ?? "Back")
+                        .keyboardShortcut("[", modifiers: .command)
+                    Button("Forward", systemImage: "chevron.right") { history.goForward() }
+                        .disabled(history.next == nil)
+                        .help(history.next.map { "Forward to \($0.title)" } ?? "Forward")
+                        .keyboardShortcut("]", modifiers: .command)
+                }
                 ToolbarSpacer(.flexible)
                 if isEnabled(pane) != nil {
                     ToolbarItem { FeatureSwitch(pane: pane, model: model) }
                         .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem {
-                        Color.clear.frame(width: 1, height: 1)
-                    }
-                    .sharedBackgroundVisibility(.hidden)
                 }
             }
         }
@@ -304,6 +309,36 @@ extension SettingsView {
     }
 }
 
+/// The panes visited, for the toolbar's back and forward buttons, like a browser's history.
+struct PaneHistory {
+    private var back: [SettingsPane] = []
+    private(set) var current: SettingsPane = .general
+    private var forward: [SettingsPane] = []
+
+    var previous: SettingsPane? { back.last }
+    var next: SettingsPane? { forward.last }
+
+    /// Opens `pane`, dropping the forward history.
+    mutating func visit(_ pane: SettingsPane) {
+        guard pane != current else { return }
+        back.append(current)
+        current = pane
+        forward.removeAll()
+    }
+
+    mutating func goBack() {
+        guard let pane = back.popLast() else { return }
+        forward.append(current)
+        current = pane
+    }
+
+    mutating func goForward() {
+        guard let pane = forward.popLast() else { return }
+        back.append(current)
+        current = pane
+    }
+}
+
 /// The pane's on/off switch in the toolbar.
 private struct FeatureSwitch: View {
     let pane: SettingsPane
@@ -367,8 +402,9 @@ struct PaneHeader: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        // Pulled up into the grouped form's top margin, which sits below the toolbar's safe area.
-        .padding(.top, -24)
+        // Pulled up into the grouped form's top margin, which sits below the toolbar's safe area,
+        // but not so far that the toolbar's edge clips the icon.
+        .padding(.top, -12)
         .padding(.bottom, 12)
     }
 }
