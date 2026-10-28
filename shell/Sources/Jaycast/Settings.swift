@@ -183,12 +183,9 @@ struct SettingsView: View {
     let onShowOnboarding: () -> Void
 
     @State private var selection: SettingsPane? = .general
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
 
     var body: some View {
-        // Dragging the divider or View > Hide Sidebar still collapse the sidebar without the
-        // toggle button, so snap it back whenever that happens.
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView {
             List(selection: $selection) {
                 ForEach(SettingsSection.allCases) { section in
                     if let title = section.title {
@@ -203,6 +200,7 @@ struct SettingsView: View {
             .frame(minWidth: 220)
             .navigationSplitViewColumnWidth(min: 220, ideal: 220, max: 220)
             .toolbar(removing: .sidebarToggle)
+            .background(SidebarLimits(maxWidth: 300))
         } detail: {
             let pane = selection ?? .general
             Group {
@@ -242,9 +240,6 @@ struct SettingsView: View {
             }
         }
         .frame(minWidth: 680, minHeight: 460)
-        .onChange(of: columnVisibility) {
-            if columnVisibility != .all { columnVisibility = .all }
-        }
         // Turning a feature off from its own pane, or ticking it back on in the Launcher pane's
         // table, can change whether the Mac is kept awake.
         .onChange(of: model.launcher.config.keepAwake.enabled) { model.keepAwake.refresh() }
@@ -442,6 +437,49 @@ private struct GeneralPane: View {
         } catch {
             launchAtLoginError = error.localizedDescription
             launchAtLogin = service.status == .enabled
+        }
+    }
+}
+
+/// Stops the divider being dragged to collapse the sidebar or to widen it past `maxWidth`, which
+/// `NavigationSplitView` ignores: it finds the AppKit split view item behind the sidebar and
+/// sets those limits on it directly.
+private struct SidebarLimits: NSViewRepresentable {
+    let maxWidth: CGFloat
+
+    func makeNSView(context: Context) -> NSView { Probe(maxWidth: maxWidth) }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class Probe: NSView {
+        let maxWidth: CGFloat
+        private var observations: [NSKeyValueObservation] = []
+
+        init(maxWidth: CGFloat) {
+            self.maxWidth = maxWidth
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        // Not `viewDidMoveToWindow`: the probe isn't inside the split view yet at that point.
+        override func layout() {
+            super.layout()
+            guard observations.isEmpty else { return }
+            var view = superview
+            while let current = view, !(current is NSSplitView) { view = current.superview }
+            guard let controller = (view as? NSSplitView)?.delegate as? NSSplitViewController,
+                  let sidebar = controller.splitViewItems.first(where: { $0.behavior == .sidebar })
+            else { return }
+            // SwiftUI resets both after this runs, so keep setting them back.
+            let maxWidth = maxWidth
+            observations = [
+                sidebar.observe(\.canCollapse, options: [.initial]) { item, _ in
+                    if item.canCollapse { item.canCollapse = false }
+                },
+                sidebar.observe(\.maximumThickness, options: [.initial]) { item, _ in
+                    if item.maximumThickness != maxWidth { item.maximumThickness = maxWidth }
+                },
+            ]
         }
     }
 }
