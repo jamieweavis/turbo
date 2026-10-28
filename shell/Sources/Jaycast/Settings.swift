@@ -48,7 +48,7 @@ final class SettingsWindowController {
 
 /// A sidebar group of panes, in sidebar order.
 enum SettingsSection: CaseIterable, Identifiable {
-    case main, launcher, utilities, input
+    case main, launcher, utilities
 
     var id: Self { self }
 
@@ -58,7 +58,6 @@ enum SettingsSection: CaseIterable, Identifiable {
         case .main: nil
         case .launcher: "Launcher"
         case .utilities: "Utilities"
-        case .input: "Input"
         }
     }
 
@@ -68,16 +67,15 @@ enum SettingsSection: CaseIterable, Identifiable {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, windowDrag, keyboard, mouse, monitor, keepAwake, colorPicker
+    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, windowDrag, keyboard, mouse, monitor
 
     var id: Self { self }
 
     var section: SettingsSection {
         switch self {
         case .general: .main
-        case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows: .launcher
-        case .keyboard, .mouse: .input
-        case .windowDrag, .monitor, .keepAwake, .colorPicker: .utilities
+        case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows, .keepAwake, .colorPicker: .launcher
+        case .windowDrag, .keyboard, .mouse, .monitor: .utilities
         }
     }
 
