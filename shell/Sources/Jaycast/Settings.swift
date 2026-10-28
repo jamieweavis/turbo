@@ -158,7 +158,14 @@ struct SettingsView: View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: $selection) { pane in
                 Label {
-                    Text(pane.title)
+                    HStack {
+                        Text(pane.title)
+                        Spacer()
+                        if isEnabled(pane)?.wrappedValue == false {
+                            Text("Off")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 } icon: {
                     PaneIcon(pane: pane, size: 20)
                 }
