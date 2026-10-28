@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import os
 
 @main
 struct JaycastApp: App {
@@ -41,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model = try AppModel()
             startupError = nil
         } catch {
+            Logger.app.fault("couldn't start the core: \(error, privacy: .public)")
             model = nil
             startupError = error
         }
@@ -59,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        Logger.app.info("launched; Accessibility \(model.accessibility.isGranted ? "granted" : "not granted", privacy: .public)")
         model.palette.onShowSettings = { [weak self] in self?.showSettings() }
         model.start()
         if !model.accessibility.isGranted {
@@ -69,8 +72,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         model?.stopInput()
         // Settings are written once changes settle; write any still waiting. There's no
-        // one left to tell if it fails.
-        try? model?.core.flushConfig()
+        // one left to tell if it fails, so it's only logged.
+        do {
+            try model?.core.flushConfig()
+        } catch {
+            Logger.app.error("couldn't write settings on quit: \(error, privacy: .public)")
+        }
+        Logger.app.info("quitting")
     }
 
     func showOnboarding() {

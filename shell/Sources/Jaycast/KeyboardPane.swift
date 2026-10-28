@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import os
 
 /// The Hyper key settings the UI edits. Every change is written through to the core, which
 /// saves it and remaps the key at once.
@@ -28,6 +29,7 @@ final class HyperKeySettings {
             try core.setHyperKeyConfig(hyperKey: config)
             saveError = nil
         } catch {
+            Logger.settings.error("couldn't save Hyper key settings: \(error, privacy: .public)")
             saveError = error.userMessage
         }
     }

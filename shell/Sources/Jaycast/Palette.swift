@@ -3,6 +3,7 @@ import Carbon.HIToolbox
 import Observation
 import Quartz
 import SwiftUI
+import os
 
 /// The launcher palette: a floating Liquid Glass panel with a search field and results.
 /// It has five modes (search, clipboard history, file search, picked colours, emoji) sharing
@@ -703,6 +704,7 @@ final class PaletteModel {
                 onKeepAwakeChanged?(active)
             }
         } catch {
+            Logger.palette.error("couldn't open a \(String(describing: result.kind), privacy: .public) result: \(error, privacy: .public)")
             confirming = nil
             self.error = error.userMessage
         }
@@ -741,6 +743,7 @@ final class PaletteModel {
         do {
             try core.pasteClipboardItem(id: item.id, paste: paste)
         } catch {
+            Logger.palette.error("couldn't \(paste ? "paste" : "copy") a clipboard item: \(error, privacy: .public)")
             onReopen?()
             self.error = error.userMessage
         }
@@ -766,6 +769,7 @@ final class PaletteModel {
                     showCopied(text)
                 }
             } catch {
+                Logger.palette.error("couldn't copy a snippet: \(error, privacy: .public)")
                 self.error = error.userMessage
             }
             return
@@ -774,6 +778,7 @@ final class PaletteModel {
         do {
             _ = try core.openSnippet(id: result.id, query: query, paste: true)
         } catch {
+            Logger.palette.error("couldn't paste a snippet: \(error, privacy: .public)")
             onReopen?()
             self.error = error.userMessage
         }
@@ -788,6 +793,7 @@ final class PaletteModel {
         do {
             _ = try core.openResult(id: result.id, query: query)
         } catch {
+            Logger.palette.error("couldn't run a \(String(describing: result.kind), privacy: .public) action on the front app: \(error, privacy: .public)")
             onReopen?()
             self.error = error.userMessage
         }
@@ -799,6 +805,7 @@ final class PaletteModel {
             try core.openFile(path: file.path)
             onClose?()
         } catch {
+            Logger.palette.error("couldn't open \(file.path, privacy: .private): \(error, privacy: .public)")
             self.error = error.userMessage
         }
     }
@@ -809,6 +816,7 @@ final class PaletteModel {
             try core.revealFile(path: file.path)
             onClose?()
         } catch {
+            Logger.palette.error("couldn't reveal \(file.path, privacy: .private): \(error, privacy: .public)")
             self.error = error.userMessage
         }
     }
@@ -833,6 +841,7 @@ final class PaletteModel {
             try core.copyColor(color: color, format: colorFormat)
             showCopied(formatColor(color: color, format: colorFormat))
         } catch {
+            Logger.palette.error("couldn't copy a colour: \(error, privacy: .public)")
             self.error = error.userMessage
         }
     }
@@ -859,6 +868,7 @@ final class PaletteModel {
             try core.insertEmoji(emoji: selected.emoji, paste: paste)
             if !paste { showCopied(selected.emoji) }
         } catch {
+            Logger.palette.error("couldn't \(paste ? "paste" : "copy") an emoji: \(error, privacy: .public)")
             if paste { onReopen?() }
             self.error = error.userMessage
         }
@@ -871,6 +881,7 @@ final class PaletteModel {
 
     /// Shows an error from an action under the search field.
     func report(_ error: Error) {
+        Logger.palette.error("palette action failed: \(error, privacy: .public)")
         self.error = error.userMessage
     }
 

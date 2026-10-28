@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// Owns the Rust core and the state the UI observes. Created once at launch.
 @MainActor
@@ -97,10 +98,13 @@ final class AppModel {
             do {
                 try core.startInput()
                 inputError = nil
+                Logger.input.info("input started")
             } catch {
+                Logger.input.error("couldn't start input: \(error, privacy: .public)")
                 inputError = error.userMessage
             }
         } else {
+            Logger.input.info("input stopped")
             core.stopInput()
             inputError = nil
         }
@@ -148,6 +152,7 @@ final class MouseSettings {
             try core.setMouseConfig(mouse: config)
             saveError = nil
         } catch {
+            Logger.settings.error("couldn't save mouse settings: \(error, privacy: .public)")
             saveError = error.userMessage
         }
     }

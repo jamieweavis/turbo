@@ -1,6 +1,7 @@
 import AppKit
 import ServiceManagement
 import SwiftUI
+import os
 
 /// A plain AppKit window rather than a SwiftUI `Settings` scene, which is unreliable for
 /// menu-bar-only (accessory) apps.
@@ -554,6 +555,7 @@ private struct GeneralPane: View {
             }
             launchAtLoginError = nil
         } catch {
+            Logger.settings.error("couldn't \(enabled ? "enable" : "disable") launch at login: \(error, privacy: .public)")
             launchAtLoginError = error.localizedDescription
             launchAtLogin = service.status == .enabled
         }

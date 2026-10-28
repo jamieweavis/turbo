@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import os
 
 /// The launcher settings the UI edits, and the apps and commands to set hotkeys for. Settings
 /// changes are written through to the core, which saves them and re-registers the hotkeys.
@@ -398,6 +399,7 @@ final class LauncherSettings {
             saveError = nil
             refreshFailed()
         } catch {
+            Logger.settings.error("couldn't save launcher settings: \(error, privacy: .public)")
             saveError = error.userMessage
         }
     }

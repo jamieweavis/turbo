@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import os
 
 /// The window drag settings the UI edits, written through to the core, which saves them and
 /// applies them to the running tap.
@@ -31,6 +32,7 @@ final class WindowDragSettings {
             try core.setWindowDragConfig(windowDrag: config)
             saveError = nil
         } catch {
+            Logger.settings.error("couldn't save window drag settings: \(error, privacy: .public)")
             saveError = error.userMessage
         }
     }

@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import os
 
 /// Whether the core is keeping the Mac awake. Hotkeys change it behind the UI's back, so
 /// the core is the source of truth and this is refreshed when they fire.
@@ -20,6 +21,7 @@ final class KeepAwakeState {
             try core.setKeepAwakeActive(active: active)
             error = nil
         } catch {
+            Logger.keepAwake.error("couldn't turn Keep Awake \(active ? "on" : "off"): \(error, privacy: .public)")
             self.error = error.userMessage
         }
         refresh()

@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Observation
+import os
 
 /// Tracks whether Jaycast is trusted for Accessibility, which the event tap,
 /// window management and text expansion all need.
@@ -18,7 +19,10 @@ final class AccessibilityPermission {
         // Assign only on change: @Observable notifies on every set, and observers start or
         // stop the event tap in response.
         let trusted = AXIsProcessTrusted()
-        if trusted != isGranted { isGranted = trusted }
+        if trusted != isGranted {
+            Logger.app.info("Accessibility \(trusted ? "granted" : "revoked", privacy: .public)")
+            isGranted = trusted
+        }
     }
 
     /// Shows the system prompt, which adds Jaycast to the Accessibility list.

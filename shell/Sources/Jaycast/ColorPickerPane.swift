@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import os
 
 /// Picks colours with the system's magnifier and shows the core's history of them.
 @MainActor
@@ -76,6 +77,7 @@ final class ColorPickerState {
             try action()
             error = nil
         } catch {
+            Logger.settings.error("colour picker action failed: \(error, privacy: .public)")
             self.error = error.userMessage
         }
     }

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import os
 
 struct ClipboardPane: View {
     let settings: LauncherSettings
@@ -102,6 +103,7 @@ struct ClipboardPane: View {
                     try settings.clearClipboardHistory()
                     clearError = nil
                 } catch {
+                    Logger.clipboard.error("couldn't clear clipboard history: \(error, privacy: .public)")
                     clearError = error.userMessage
                 }
             }

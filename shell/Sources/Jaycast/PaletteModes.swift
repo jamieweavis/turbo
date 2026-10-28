@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import os
 
 // MARK: - Clipboard history
 
@@ -44,6 +45,7 @@ final class ClipboardBrowser {
             try core.setClipboardItemPinned(id: item.id, pinned: !item.pinned)
             refresh(query: query)
         } catch {
+            Logger.clipboard.error("couldn't pin a clipboard item: \(error, privacy: .public)")
             self.error = error.userMessage
         }
     }
@@ -56,6 +58,7 @@ final class ClipboardBrowser {
         do {
             try core.deleteClipboardItem(id: item.id)
         } catch {
+            Logger.clipboard.error("couldn't delete a clipboard item: \(error, privacy: .public)")
             self.error = error.userMessage
             refresh(query: query)
         }
@@ -476,6 +479,7 @@ final class ColorBrowser {
         do {
             try core.deletePickedColor(color: color)
         } catch {
+            Logger.palette.error("couldn't delete a picked colour: \(error, privacy: .public)")
             self.error = error.userMessage
             refresh(query: query)
         }

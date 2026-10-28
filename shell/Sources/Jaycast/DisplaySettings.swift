@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// External displays and the monitor settings the UI edits. Settings changes are written
 /// through to the core; brightness changes are throttled to one write per frame per display.
@@ -64,6 +65,7 @@ final class DisplaySettings {
             try core.setBuiltinBrightness(brightness: brightness)
             brightnessError = nil
         } catch {
+            Logger.display.error("couldn't set built-in brightness: \(error, privacy: .public)")
             brightnessError = error.userMessage
         }
     }
@@ -104,6 +106,7 @@ final class DisplaySettings {
                 try core.setBrightness(displayId: displayID, brightness: brightness)
                 brightnessError = nil
             } catch {
+                Logger.display.error("couldn't set brightness of display \(displayID): \(error, privacy: .public)")
                 brightnessError = error.userMessage
             }
             try? await Task.sleep(for: Self.writeInterval)
@@ -116,6 +119,7 @@ final class DisplaySettings {
             try core.setMonitorConfig(monitor: config)
             saveError = nil
         } catch {
+            Logger.settings.error("couldn't save monitor settings: \(error, privacy: .public)")
             saveError = error.userMessage
         }
     }
