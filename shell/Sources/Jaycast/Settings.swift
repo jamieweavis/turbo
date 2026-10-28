@@ -203,7 +203,7 @@ struct SettingsView: View {
             .frame(minWidth: 230)
             .navigationSplitViewColumnWidth(min: 230, ideal: 230, max: 230)
             .toolbar(removing: .sidebarToggle)
-            .background(SidebarLimits(maxWidth: 300))
+            .background(SidebarLimits(width: 230))
         } detail: {
             let pane = history.current
             Group {
@@ -628,21 +628,21 @@ private struct FeatureCardButtonStyle: ButtonStyle {
     }
 }
 
-/// Stops the divider being dragged to collapse the sidebar or to widen it past `maxWidth`, which
-/// `NavigationSplitView` ignores: it finds the AppKit split view item behind the sidebar and
-/// sets those limits on it directly.
+/// Fixes the sidebar at `width` so the divider can't be dragged to collapse or resize it, which
+/// `NavigationSplitView` doesn't enforce: it finds the AppKit split view item behind the sidebar and
+/// pins its limits directly.
 private struct SidebarLimits: NSViewRepresentable {
-    let maxWidth: CGFloat
+    let width: CGFloat
 
-    func makeNSView(context: Context) -> NSView { Probe(maxWidth: maxWidth) }
+    func makeNSView(context: Context) -> NSView { Probe(width: width) }
     func updateNSView(_ nsView: NSView, context: Context) {}
 
     private final class Probe: NSView {
-        let maxWidth: CGFloat
+        let width: CGFloat
         private var observations: [NSKeyValueObservation] = []
 
-        init(maxWidth: CGFloat) {
-            self.maxWidth = maxWidth
+        init(width: CGFloat) {
+            self.width = width
             super.init(frame: .zero)
         }
 
@@ -657,14 +657,17 @@ private struct SidebarLimits: NSViewRepresentable {
             guard let controller = (view as? NSSplitView)?.delegate as? NSSplitViewController,
                   let sidebar = controller.splitViewItems.first(where: { $0.behavior == .sidebar })
             else { return }
-            // SwiftUI resets both after this runs, so keep setting them back.
-            let maxWidth = maxWidth
+            // SwiftUI resets these after this runs, so keep setting them back.
+            let width = width
             observations = [
                 sidebar.observe(\.canCollapse, options: [.initial]) { item, _ in
                     if item.canCollapse { item.canCollapse = false }
                 },
+                sidebar.observe(\.minimumThickness, options: [.initial]) { item, _ in
+                    if item.minimumThickness != width { item.minimumThickness = width }
+                },
                 sidebar.observe(\.maximumThickness, options: [.initial]) { item, _ in
-                    if item.maximumThickness != maxWidth { item.maximumThickness = maxWidth }
+                    if item.maximumThickness != width { item.maximumThickness = width }
                 },
             ]
         }
