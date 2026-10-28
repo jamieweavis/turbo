@@ -205,7 +205,8 @@ struct SettingsView: View {
             let pane = selection ?? .general
             Group {
                 switch pane {
-                case .general: GeneralPane(model: model, onShowOnboarding: onShowOnboarding)
+                case .general:
+                    GeneralPane(model: model, onShowOnboarding: onShowOnboarding) { selection = $0 }
                 case .launcher: LauncherPane(settings: model.launcher)
                 case .quicklinks: QuicklinksPane(settings: model.launcher)
                 case .commands: CommandsPane(settings: model.launcher)
@@ -382,6 +383,7 @@ struct PaneHeaderSection: View {
 private struct GeneralPane: View {
     let model: AppModel
     let onShowOnboarding: () -> Void
+    let onSelect: (SettingsPane) -> Void
 
     // The login item registration itself is the source of truth, so nothing is persisted here.
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -391,15 +393,17 @@ private struct GeneralPane: View {
         Form {
             PaneHeaderSection(pane: .general)
 
-            Section("Startup") {
+            Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                 if let launchAtLoginError {
                     Text(launchAtLoginError).foregroundStyle(.red)
                 }
+            } header: {
+                SectionHeading("Startup")
             }
 
-            Section("Permissions") {
+            Section {
                 LabeledContent("Accessibility") {
                     if model.accessibility.isGranted {
                         Label("Granted", systemImage: "checkmark.circle.fill")
@@ -415,10 +419,31 @@ private struct GeneralPane: View {
                         Text(model.isInputRunning ? "Active" : "Inactive")
                     }
                 }
+            } header: {
+                SectionHeading("Permissions")
             }
 
-            Section("About") {
+            // In the header rather than the rows, so the cards sit on the window background
+            // instead of inside a grouped section's box. Grouped as in the sidebar.
+            ForEach(SettingsSection.allCases.filter { $0.title != nil }) { section in
+                Section {} header: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionHeading(section.title ?? "")
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())], spacing: 12) {
+                            ForEach(section.panes) { pane in
+                                FeatureCard(pane: pane, model: model) { onSelect(pane) }
+                            }
+                        }
+                    }
+                    // The form spaces header-only sections tightly, which crowds the next heading.
+                    .padding(.bottom, 16)
+                }
+            }
+
+            Section {
                 LabeledContent("Version", value: coreInfo().version)
+            } header: {
+                SectionHeading("About")
             }
         }
         .formStyle(.grouped)
@@ -438,6 +463,79 @@ private struct GeneralPane: View {
             launchAtLoginError = error.localizedDescription
             launchAtLogin = service.status == .enabled
         }
+    }
+}
+
+/// A General pane section's heading. Set explicitly, as the form styles plain-text headers
+/// smaller and dimmer than ones holding other views, like the feature card groups.
+private struct SectionHeading: View {
+    let title: String
+
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(.primary)
+    }
+}
+
+/// A feature's glass card on the General pane, laid out like the Shortcuts gallery: clicking it opens
+/// the feature's pane, and its switch in the corner turns the feature on and off.
+private struct FeatureCard: View {
+    let pane: SettingsPane
+    let model: AppModel
+    let onSelect: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        let isOn = SettingsView.isEnabled(pane, model: model)
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 0) {
+                PaneIcon(pane: pane, size: 28)
+                Spacer(minLength: 12)
+                Text(pane.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(pane.subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
+                    .padding(.top, 2)
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .contentShape(.rect(cornerRadius: 10))
+            .glassEffect(
+                .regular.tint(.primary.opacity(isHovered ? 0.06 : 0)).interactive(),
+                in: .rect(cornerRadius: 10)
+            )
+        }
+        .buttonStyle(FeatureCardButtonStyle())
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .help("Open \(pane.title) settings")
+        .overlay(alignment: .topTrailing) {
+            if let isOn {
+                Toggle("Enable \(pane.title)", isOn: isOn)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                    .help(isOn.wrappedValue ? "Turn \(pane.title) off" : "Turn \(pane.title) on")
+                    .padding(12)
+            }
+        }
+    }
+}
+
+/// Shrinks a feature card slightly while it's pressed.
+private struct FeatureCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
