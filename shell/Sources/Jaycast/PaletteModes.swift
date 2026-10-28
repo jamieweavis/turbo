@@ -186,7 +186,7 @@ private struct ClipboardRow: View {
         .frame(height: 36)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 8).fill(.primary.opacity(PaletteLayout.selectionOpacity))
+                RoundedRectangle(cornerRadius: 8).fill(PaletteLayout.selectionFill)
             }
         }
     }
@@ -431,7 +431,7 @@ private struct FileRow: View {
         .frame(height: PaletteLayout.rowHeight)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(PaletteLayout.selectionOpacity))
+                RoundedRectangle(cornerRadius: 10).fill(PaletteLayout.selectionFill)
             }
         }
     }
@@ -548,7 +548,7 @@ private struct ColorCell: View {
         .padding(8)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 16).fill(.primary.opacity(PaletteLayout.selectionOpacity))
+                RoundedRectangle(cornerRadius: 16).fill(PaletteLayout.selectionFill)
             }
         }
     }

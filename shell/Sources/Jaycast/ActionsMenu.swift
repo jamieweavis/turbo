@@ -338,13 +338,16 @@ struct ActionsMenuView: View {
         }
         .frame(width: ActionsMenuLayout.width)
         // Lighter than the palette behind it, so it reads as a layer on top.
-        .background(Color(white: 0.17).opacity(0.82), in: .rect(cornerRadius: ActionsMenuLayout.cornerRadius))
+        .background(
+            Color.appearance(light: .white.opacity(0.85), dark: Color(white: 0.17).opacity(0.82)),
+            in: .rect(cornerRadius: ActionsMenuLayout.cornerRadius)
+        )
         .glassEffect(.regular.tint(.white.opacity(0.06)), in: .rect(cornerRadius: ActionsMenuLayout.cornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: ActionsMenuLayout.cornerRadius)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+                .strokeBorder(Color.appearance(light: .black.opacity(0.1), dark: .white.opacity(0.16)), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.35), radius: 18, y: 6)
+        .shadow(color: .appearance(light: .black.opacity(0.18), dark: .black.opacity(0.35)), radius: 18, y: 6)
     }
 
     private var list: some View {
@@ -408,7 +411,7 @@ private struct ActionRow: View {
         .frame(height: ActionsMenuLayout.rowHeight)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.14))
+                RoundedRectangle(cornerRadius: 8).fill(Color.appearance(light: .black.opacity(0.08), dark: .white.opacity(0.14)))
             }
         }
     }

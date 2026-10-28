@@ -140,8 +140,6 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        // Always the dark, tinted look, whatever the system appearance.
-        panel.appearance = NSAppearance(named: .darkAqua)
         panel.hasShadow = true
         panel.isMovable = false
         panel.hidesOnDeactivate = false
@@ -287,7 +285,7 @@ enum PaletteLayout {
     static let listPadding: CGFloat = 8
     static let maxVisibleRows = 8
     /// Fill behind the selected row in the result, clipboard and file lists.
-    static let selectionOpacity = 0.4
+    static let selectionFill = Color.appearance(light: .black.opacity(0.09), dark: .white.opacity(0.34))
     static let cornerRadius: CGFloat = 26
     /// Clipboard history shows a list and a preview side by side, at a fixed size.
     static let clipboardSize = CGSize(width: 820, height: 470)
@@ -993,10 +991,15 @@ private struct PaletteView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .glassEffect(.regular.tint(.black.opacity(0.35)), in: .rect(cornerRadius: PaletteLayout.cornerRadius))
+        // Dark glass in dark mode; a frosted white in light mode, so text stays legible over a
+        // busy desktop.
+        .glassEffect(
+            .regular.tint(Color.appearance(light: .white.opacity(0.6), dark: .black.opacity(0.35))),
+            in: .rect(cornerRadius: PaletteLayout.cornerRadius)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: PaletteLayout.cornerRadius)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                .strokeBorder(Color.appearance(light: .white.opacity(0.7), dark: .white.opacity(0.12)), lineWidth: 1)
         }
         .overlay(alignment: .bottomTrailing) {
             if let menu = model.actionsMenu {
@@ -1013,6 +1016,15 @@ private struct PaletteView: View {
             }
         }
         .animation(.snappy(duration: 0.15), value: model.actionsMenu != nil)
+    }
+}
+
+extension Color {
+    /// A colour that follows the light or dark appearance it's drawn in.
+    static func appearance(light: Color, dark: Color) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(dark) : NSColor(light)
+        })
     }
 }
 
@@ -1165,7 +1177,7 @@ private struct ResultRow: View {
         .frame(height: PaletteLayout.rowHeight(for: result))
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(PaletteLayout.selectionOpacity))
+                RoundedRectangle(cornerRadius: 10).fill(PaletteLayout.selectionFill)
             }
         }
     }
