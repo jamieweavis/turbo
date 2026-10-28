@@ -286,6 +286,8 @@ enum PaletteLayout {
     static let footerHeight: CGFloat = 30
     static let listPadding: CGFloat = 8
     static let maxVisibleRows = 8
+    /// Fill behind the selected row in the result, clipboard and file lists.
+    static let selectionOpacity = 0.4
     static let cornerRadius: CGFloat = 26
     /// Clipboard history shows a list and a preview side by side, at a fixed size.
     static let clipboardSize = CGSize(width: 820, height: 470)
@@ -1181,7 +1183,7 @@ private struct ResultRow: View {
         .frame(height: PaletteLayout.rowHeight(for: result))
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(0.1))
+                RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(PaletteLayout.selectionOpacity))
             }
         }
     }
