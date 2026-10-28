@@ -506,11 +506,10 @@ private struct GeneralPane: View {
                         Button("Grant Access…", action: onShowOnboarding)
                     }
                 }
-                LabeledContent("Input") {
-                    if let error = model.inputError {
+                // Input follows Accessibility, so it's only worth a row when starting it failed.
+                if let error = model.inputError {
+                    LabeledContent("Input") {
                         Text(error).foregroundStyle(.red)
-                    } else {
-                        Text(model.isInputRunning ? "Active" : "Inactive")
                     }
                 }
             } header: {
