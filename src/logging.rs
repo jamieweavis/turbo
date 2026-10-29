@@ -94,7 +94,7 @@ fn module(target: &str) -> &str {
     target.split("::").nth(1).unwrap_or("core")
 }
 
-/// `core/src/input/tap.rs` → `input`.
+/// `src/input/tap.rs` → `input`.
 fn source_module(file: &str) -> &str {
     let after_src = file.split_once("src/").map_or(file, |(_, rest)| rest);
     let first = after_src.split('/').next().unwrap_or(after_src);
@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(module("jaycast_core::input::tap"), "input");
         assert_eq!(module("jaycast_core::config"), "config");
         assert_eq!(module("jaycast_core"), "core");
-        assert_eq!(source_module("core/src/input/tap.rs"), "input");
-        assert_eq!(source_module("core/src/config.rs"), "config");
+        assert_eq!(source_module("src/input/tap.rs"), "input");
+        assert_eq!(source_module("src/config.rs"), "config");
     }
 }

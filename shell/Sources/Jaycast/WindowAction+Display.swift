@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Display names, icons and settings groups for the core's window actions. The titles match
-// the core's palette results (`core/src/windows/mod.rs`).
+// the core's palette results (`src/windows/mod.rs`).
 
 extension WindowAction: Identifiable {
     public var id: Self { self }

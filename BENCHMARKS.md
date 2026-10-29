@@ -84,7 +84,7 @@ Jaycast uses more idle CPU than MonitorControl or Mac Mouse Fix on their own, bu
 idle work that Raycast does. `sample Jaycast 10` shows every thread parked in the kernel. The
 regular wake-ups come from:
 
-- **Clipboard polling** every 400 ms (`core/src/clipboard/mod.rs`, `POLL_INTERVAL`). macOS has no
+- **Clipboard polling** every 400 ms (`src/clipboard/mod.rs`, `POLL_INTERVAL`). macOS has no
   pasteboard change notification, so Raycast polls too, in its Pasteboard XPC service.
 - **Accessibility permission polling** once a second (`AccessibilityPermission.swift`). This also
   catches the permission being revoked while the event taps are running.

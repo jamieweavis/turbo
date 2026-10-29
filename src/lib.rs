@@ -489,7 +489,7 @@ mod tests {
     #[test]
     fn core_info_reports_crate_version() {
         let info = core_info();
-        assert_eq!(info.name, "jaycast-core");
+        assert_eq!(info.name, "jaycast");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
     }
 }

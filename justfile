@@ -16,7 +16,7 @@ default:
 
 # Build the Rust core static library
 core:
-    cargo build -p jaycast-core {{rust_flag}}
+    cargo build -p jaycast {{rust_flag}}
 
 # Regenerate the Swift bindings for the Rust core
 bindings: core

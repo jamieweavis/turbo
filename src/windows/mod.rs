@@ -481,7 +481,7 @@ mod tests {
     }
 
     /// Read-only: prints the displays and the frontmost app's focused window. Nothing is
-    /// moved. `cargo test -p jaycast-core windows::tests::probe -- --ignored --nocapture`
+    /// moved. `cargo test -p jaycast windows::tests::probe -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn probe() {

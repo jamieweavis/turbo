@@ -3,7 +3,7 @@
 One macOS app that combines a keyboard launcher, mouse fixes (smooth scrolling, button remapping)
 and external monitor brightness control.
 
-- `core/`: Rust. All logic and system integration, built as `libjaycast_core.a`.
+- `src/`: the Rust core. All logic and system integration, built as `libjaycast_core.a`.
 - `shell/`: Swift/SwiftUI. Menu bar, palette, settings and onboarding. It calls the core
   through [UniFFI](https://mozilla.github.io/uniffi-rs/) bindings generated at build time.
 - `tools/uniffi-bindgen/`: the bindings generator, pinned to the same UniFFI version as the core.

@@ -9,7 +9,7 @@ This is a well-built codebase. The split between the two halves is clear: the Ru
 
 ## Strengths
 
-- **Event taps are done properly.** Each tap runs on its own thread with its own run loop and `USER_INTERACTIVE` QoS. The callbacks are wrapped in `catch_unwind` and pass the event through on a panic. Config reaches the hot path through a generation counter, so the callback doesn't lock on every event. The taps re-enable themselves after `TapDisabledByTimeout`/`UserInput` and reset stale state. Teardown goes stop → invalidate → free. (`core/src/input/tap.rs`)
+- **Event taps are done properly.** Each tap runs on its own thread with its own run loop and `USER_INTERACTIVE` QoS. The callbacks are wrapped in `catch_unwind` and pass the event through on a panic. Config reaches the hot path through a generation counter, so the callback doesn't lock on every event. The taps re-enable themselves after `TapDisabledByTimeout`/`UserInput` and reset stale state. Teardown goes stop → invalidate → free. (`src/input/tap.rs`)
 - **The FFI threading is consistent.** Every Rust observer callback is bounced through `DispatchQueue.main.async` before `MainActor.assumeIsolated`, so `assumeIsolated` is always sound. Slow work, such as Spotlight file search, runs in `Task.detached` with debouncing and a generation guard.
 - **Security is handled carefully.**
   - Shell placeholders go through POSIX single-quoting, and a test round-trips them through a real `/bin/sh`.

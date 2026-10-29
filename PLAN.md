@@ -5,8 +5,8 @@ the spirit of Mac Mouse Fix) and external monitor brightness (in the spirit of M
 
 ## Principles
 
-- **Rust core, thin Swift shell.** Anything that decides or does something lives in `core/`. The
-  shell draws UI and forwards intent over UniFFI.
+- **Rust core, thin Swift shell.** Anything that decides or does something lives in the Rust
+  core (`src/`). The shell draws UI and forwards intent over UniFFI.
 - **Clean room.** Upstream projects (Tinycast AGPL-3.0, Mac Mouse Fix MMF License, MonitorControl
   MIT) are references for *what* is possible only. No code is copied or ported. The license is
   chosen at publish time.

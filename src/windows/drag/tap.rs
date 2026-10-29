@@ -497,7 +497,7 @@ mod tests {
     }
 
     /// Creates a real tap, so it needs Accessibility for the test runner's host app.
-    /// Run with `cargo test -p jaycast-core -- --ignored drag_tap_starts_and_stops`.
+    /// Run with `cargo test -p jaycast -- --ignored drag_tap_starts_and_stops`.
     #[test]
     #[ignore]
     fn drag_tap_starts_and_stops() {
