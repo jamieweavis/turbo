@@ -1,0 +1,167 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0](https://github.com/jamieweavis/jaycast/releases/tag/v0.1.0) - 2026-10-29
+
+### Other
+
+- make the Settings icon bundle check opt-in
+- release with release-plz and attach a .dmg
+- Move the Rust core to the repo root as the `jaycast` package
+- lint, test and build the app on macOS
+- clicking a switched-off pane nudges its switch
+- log when the window opens, comes forward and closes
+- log settings changes, and the non-defaults at launch
+- log errors, launch, quit and Accessibility changes
+- log to unified logging, and log panics
+- toolbar title fades through a soft edge as it slides
+- read brightness-key fields from the CGEvent, not NSEvent
+- Add REVIEW.md, with the first three findings marked fixed
+- apply changes immediately, write the file once they settle
+- separate read connection, so palette lookups never wait on a write
+- parking_lot locks, so one panic can't poison every later call
+- light mode that follows the system appearance
+- drop the mode label next to the icon; ellipsis on every placeholder
+- Input row under Permissions only shows when starting input failed
+- sidebar version reads Jaycast and the version, as in the status menu
+- version at the bottom of the sidebar instead of General
+- Keep Awake and Colour Picker under Launcher, Hyper Key and Mouse under Utilities
+- default and minimum width 944
+- default and minimum width 840
+- default and minimum width up to 836
+- default and minimum height down to 560, just enough for the sidebar
+- default and minimum height fit every sidebar item without scrolling
+- sidebar fixed at its width, no longer resizable
+- sidebar another 5pt wider
+- sidebar 5pt wider
+- pane title slides into the toolbar once its header scrolls away
+- back and forward buttons in a restored toolbar
+- just run: wait for LaunchServices to drop the old instance before reopening
+- Hyper key: diamond icon, and ⬥ in place of its modifiers in shortcuts
+- General pane: feature cards grouped as in the sidebar, with on/off switches
+- Launcher pane: keep the table and fields from going dark when the window is inactive
+- lock the sidebar open and cap its width at 300pt
+- keep the sidebar from being collapsed
+- group sidebar panes under Launcher, Utilities and Input subheadings
+- stronger selected-row highlight, shared across lists
+- Esc closes a mode opened by its hotkey instead of going back to search
+- Stop the mouse and brightness taps and clipboard polling when off
+- show "Off" beside panes whose feature is turned off
+- Shell Commands and Window Transform panes, snippets paste-on-open toggle
+- Menu bar: swap the rocket for a multitool icon
+- show up to 200 matches, and everything on an empty query
+- index menu-bar apps like Docker, skip only background-only bundles
+- Window Move/Resize: drag a window with modifiers held, after easy-move-resize
+- Smooth scroll: simulate a trackpad, after Mac Mouse Fix
+- store settings as TOML at ~/.config/jaycast.toml
+- keep a turned-off feature's sidebar icon in its colour
+- colour the sidebar icons like the pane headers, raise the header
+- stop a pane's switch drifting right when it's flipped
+- darken the grey of a turned-off feature's sidebar icon
+- grey out the sidebar icon of a turned-off feature
+- let the pane switch float without a toolbar background
+- drop the window title, shrink the pane switch, inset traffic lights everywhere
+- give each pane a header and a switch to turn its feature off
+- give each Keep Awake toggle its own description
+- set external displays to full brightness when control is turned off
+- add the built-in display's brightness slider to the Brightness pane
+- tint the Window Management icon like the other sidebar icons
+- rename Windows to Window Management with the Left Half icon
+- stop the caption forcing the settings window taller than the screen
+- don't grow the window to fit a long pane
+- keep the pane inside the window
+- show apps and commands in a table with show/type filters
+- list every app and command with a show-in-search checkbox, aliases and a hotkey
+- Actions menu: darker, slightly see-through panel
+- Actions menu: anchor bottom-right, lighter panel and clearer selection
+- ⌘K actions menu for the selection in every palette mode
+- floating action bar, larger emoji tiles, and fade rows only while there's more to scroll
+- mark step 6 done
+- search System Settings panes and privacy sections and open them directly
+- compare size, memory and idle CPU against Raycast, MonitorControl and Mac Mouse Fix
+- Smooth scrolling: cruise-then-drag curve modelled on Mac Mouse Fix's Regular/Medium feel
+- clip the panel to its rounded shape so the corners stay clear
+- share settings' regular-app focus handling
+- drop the window shadow that outlined the square frame around the rounded glass
+- become a regular app while open so the window can take focus
+- bring the window to front when it's already open behind other windows
+- open settings with ⌘,
+- Menu bar: add a brightness slider for the built-in display
+- Menu bar: add an exhaust flame under the rocket
+- Menu bar: round the rocket's base into one arc between the fins
+- Menu bar: drop the rocket's window and curve its fins
+- Menu bar: simplify the rocket icon and draw it larger
+- Menu bar: use a rocket icon
+- add a Launch at login toggle to General
+- Status menu: separate the Mouse and Keyboard sections
+- Keep Awake: rename from Caffeinate, remember it across relaunches, add palette commands
+- narrow the sidebar to 165
+- actually widen the sidebar with a minimum frame
+- set the sidebar width to 215
+- set the sidebar width to 210
+- set the sidebar width to 205
+- widen the sidebar so Colour Picker fits
+- tone down the glass, fix the title bar layout, keep a fixed title
+- give the window a Liquid Glass background
+- rename Keyboard to Hyper Key and Monitor to Brightness
+- confirm caffeinate hotkeys and picked colours
+- Menu bar: keep the icon fixed rather than showing a cup while caffeinated
+- Menu bar: drop Open Launcher and Clipboard History from the dropdown
+- Menu bar: drop Pick Colour and Caffeinate toggle from the dropdown
+- Emoji picker, and grids for emoji and List Colours
+- Colour picker: Pick Colour and List Colours in the launcher
+- bind system actions like Lock Screen, not just apps
+- Colour picker: pick from screen by hotkey, with a copyable history
+- keep the Mac awake, with toggle/on/off hotkeys
+- send every request twice so null-replying monitors answer
+- Menu bar: show the Hyper key's key under its toggle
+- Hyper key: on/off switch that keeps the chosen key; menu bar Keyboard section
+- Menu bar: Mouse section with a reverse direction toggle
+- drop the master switch; buttons get their own toggle
+- Window icons drawn per layout; Almost Maximize size setting
+- unlimited items and keep-forever retention options
+- Hyper key: Caps Lock or a modifier acts as ⌃⌥⇧⌘ while held
+- Window management: sixths (two rows of three columns)
+- Step 5: tested by hand and approved
+- Step 6: pause snippet expansion while the palette is open; mark step built
+- palette search, placeholders, insertion and keyword expansion
+- Window management: snap, maximise, centre, restore, move between displays
+- Restore default window hotkeys from the Windows pane
+- window and snippet results in the palette, Windows and Snippets settings
+- Step 6 scaffold: window management and snippets API
+- Step 5: mark clipboard history and file search built
+- clipboard history and file search palette modes, settings panes
+- Clipboard history: monitor, SQLite store, paste
+- File search: Spotlight MDQuery, scoped to chosen folders, ranked
+- Step 5 scaffold: palette modes, clipboard history and file search API
+- Step 4: mark calculator, quicklinks and commands built
+- expressions, unit and currency conversion
+- calculator row, completions, command output, Quicklinks and Commands panes
+- quicklinks and shell commands
+- Step 4 scaffold: calculator, quicklinks and commands API
+- Step 3: integrate launcher search with system actions
+- app index with FSEvents watching, fuzzy matching, usage ranking
+- Pause hotkeys while recording; flag hotkeys another app owns
+- launcher palette, Launcher settings pane, hotkey wiring
+- Carbon global hotkeys, app toggle, system actions
+- Step 3 scaffold: launcher API, launcher config, stubbed modules
+- Native-style brightness indicator with a draggable slider
+- Dim to black below the monitor's DDC minimum
+- Step 2: integrate DDC, brightness keys and monitor UI
+- Step 2: DDC display manager with coalesced writes and hotplug
+- display brightness popover, brightness HUD, Monitor pane
+- Brightness keys: event tap on system-defined events
+- Step 2 scaffold: display API, monitor config, stubbed DDC and key tap
+- Remove the momentum setting; momentum is always on
+- Step 1: integrate event tap with smooth scrolling
+- Poll Accessibility for the app's lifetime
+- Core wiring, Settings window with Mouse pane, status menu toggles
+- Smooth scrolling: pure scroll physics + display-rate emitter
+- Step 1 scaffold: Core object, persisted config, input module interfaces
+- Step 0: Rust core + Swift shell skeleton
