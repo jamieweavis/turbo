@@ -582,16 +582,18 @@ mod tests {
         }
     }
 
+    /// Bundles move between macOS versions (the app falls back to System Settings' icon),
+    /// so this only holds on the macOS the list was written against.
+    /// Run with `cargo test -p jaycast -- --ignored icon_bundles_exist_on_this_macos`.
     #[test]
+    #[ignore = "depends on the macOS version"]
     fn icon_bundles_exist_on_this_macos() {
-        for pane in panes() {
-            assert!(
-                Path::new(EXTENSIONS_DIR).join(pane.bundle).exists(),
-                "{} has no {}",
-                pane.id,
-                pane.bundle
-            );
-        }
+        let missing: Vec<_> = panes()
+            .iter()
+            .filter(|pane| !Path::new(EXTENSIONS_DIR).join(pane.bundle).exists())
+            .map(|pane| format!("{} ({})", pane.id, pane.bundle))
+            .collect();
+        assert!(missing.is_empty(), "no bundle for: {}", missing.join(", "));
     }
 
     #[test]
