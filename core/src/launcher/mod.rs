@@ -837,6 +837,7 @@ impl Launcher {
 /// Scores every app and system action against `query` (folded), merges in `extra`
 /// (calculator, quicklinks, commands, snippets; already scored) and returns the best
 /// `limit`. An empty query lists everything instead (see `most_used`).
+#[allow(clippy::too_many_arguments)]
 fn rank(
     query: &[char],
     index: &Index,

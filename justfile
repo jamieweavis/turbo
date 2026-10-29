@@ -62,6 +62,14 @@ test:
 fmt:
     cargo fmt --all
 
+# Check formatting and run clippy
+lint:
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets -- -D warnings
+
+# Run everything CI runs
+check: lint test app
+
 # Forget the Accessibility grant, to test onboarding again
 reset-permissions:
     tccutil reset Accessibility {{bundle_id}}
