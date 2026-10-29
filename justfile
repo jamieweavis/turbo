@@ -36,8 +36,26 @@ app: build
     rm -rf {{app}}
     mkdir -p {{app}}/Contents/MacOS {{app}}/Contents/Resources
     cp Resources/Info.plist {{app}}/Contents/
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $({{just_executable()}} version)" \
+        -c "Set :CFBundleVersion $({{just_executable()}} version)" {{app}}/Contents/Info.plist
     cp "$(swift build --package-path shell -c {{config}} --show-bin-path)/Jaycast" {{app}}/Contents/MacOS/
     codesign --force --options runtime --sign "{{sign_identity}}" {{app}}
+
+# Package build/Jaycast.app as build/Jaycast-<version>-macos-arm64.dmg (CONFIG=release to ship)
+dmg: app
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dmg="build/Jaycast-$({{just_executable()}} version)-macos-arm64.dmg"
+    rm -rf build/dmg
+    mkdir -p build/dmg
+    cp -R {{app}} build/dmg/
+    ln -s /Applications build/dmg/Applications
+    hdiutil create -volname Jaycast -srcfolder build/dmg -format UDZO -ov "$dmg"
+    (cd build && shasum -a 256 "$(basename "$dmg")" > "$(basename "$dmg").sha256")
+
+# Print the app's version (the workspace version, which release-plz bumps)
+version:
+    @cargo pkgid -p jaycast | sed 's/.*[#@]//'
 
 # Build, then (re)launch the app
 run: app

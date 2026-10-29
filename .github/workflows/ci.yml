@@ -50,3 +50,100 @@ jobs:
         env:
           JAYCAST_SIGN_IDENTITY: "-"
         run: just app
+
+  release-pr:
+    if: ${{ github.event_name == 'push' && github.repository_owner == 'jamieweavis' }}
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - &checkout-release-plz
+        name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
+      - &install-rust
+        name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Open release PR
+        uses: release-plz/action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
+  release:
+    if: ${{ github.event_name == 'push' && github.repository_owner == 'jamieweavis' }}
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    outputs:
+      created: ${{ steps.release-plz.outputs.releases_created }}
+      tag: ${{ fromJSON(steps.release-plz.outputs.releases || '[{}]')[0].tag }}
+    steps:
+      - *checkout-release-plz
+
+      - *install-rust
+
+      - name: Create release
+        id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
+  package:
+    needs: release
+    if: ${{ needs.release.outputs.created == 'true' }}
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      # Ad-hoc signed, not notarised.
+      - name: Build dmg
+        env:
+          CONFIG: release
+          JAYCAST_SIGN_IDENTITY: "-"
+        run: just dmg
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.release.outputs.tag }}" build/*.dmg build/*.dmg.sha256
+
+  publish:
+    needs: [release, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ needs.release.outputs.tag }}" --repo "${{ github.repository }}" --draft=false --latest

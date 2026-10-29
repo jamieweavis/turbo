@@ -17,9 +17,18 @@ macOS 26+, Rust (stable), Xcode installed (its toolchain and SDK; the IDE is nev
 ```sh
 just run        # build the core + shell, bundle build/Jaycast.app, launch it
 just test       # Rust tests
+just check      # everything CI runs: fmt, clippy, tests, app build
 just            # list all recipes
 ```
 
 `CONFIG=release just app` builds optimised. The app is signed with your "Apple Development"
 identity by default, so macOS keeps the Accessibility grant across rebuilds. Override with
 `JAYCAST_SIGN_IDENTITY="-"` to sign ad hoc.
+
+## Releasing
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, …).
+On every push to `main`, [release-plz](https://release-plz.dev) opens or updates a release PR that
+bumps the version and writes `CHANGELOG.md`. Merging it tags `vX.Y.Z`, and CI attaches the .dmg
+(`just dmg`) to the GitHub Release and publishes it. CI needs a `RELEASE_PLZ_TOKEN` secret: a token
+with contents and pull-requests write access, so its PRs trigger CI.
