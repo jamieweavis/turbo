@@ -215,6 +215,9 @@ struct SettingsView: View {
 
     @State private var history = PaneHistory()
     @State private var titles = PaneTitleTracker()
+    /// The height below the toolbar at which the sidebar shows every row without scrolling, once
+    /// measured.
+    @State private var sidebarFitHeight: CGFloat = 0
 
     var body: some View {
         // A nil selection (a ⌘-click on the selected row) keeps the current pane.
@@ -244,7 +247,7 @@ struct SettingsView: View {
             }
             .navigationSplitViewColumnWidth(min: 230, ideal: 230, max: 230)
             .toolbar(removing: .sidebarToggle)
-            .background(SidebarLimits(width: 230))
+            .background(SidebarLimits(width: 230) { sidebarFitHeight = $0 })
         } detail: {
             let pane = history.current
             Group {
@@ -295,7 +298,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .frame(minWidth: 944, minHeight: 560)
+        .frame(minWidth: 944, minHeight: max(560, sidebarFitHeight))
         // Turning a feature off from its own pane, or ticking it back on in the Launcher pane's
         // table, can change whether the Mac is kept awake.
         .onChange(of: model.launcher.config.keepAwake.enabled) { model.keepAwake.refresh() }
@@ -754,19 +757,27 @@ private struct FeatureCardButtonStyle: ButtonStyle {
 
 /// Fixes the sidebar at `width` so the divider can't be dragged to collapse or resize it, which
 /// `NavigationSplitView` doesn't enforce: it finds the AppKit split view item behind the sidebar and
-/// pins its limits directly.
+/// pins its limits directly. It also measures the height below the toolbar at which the sidebar fits
+/// without scrolling, and reports it to `onFitHeight` whenever the list's rows change.
 private struct SidebarLimits: NSViewRepresentable {
     let width: CGFloat
+    let onFitHeight: (CGFloat) -> Void
 
-    func makeNSView(context: Context) -> NSView { Probe(width: width) }
+    func makeNSView(context: Context) -> NSView { Probe(width: width, onFitHeight: onFitHeight) }
     func updateNSView(_ nsView: NSView, context: Context) {}
 
     private final class Probe: NSView {
         let width: CGFloat
+        let onFitHeight: (CGFloat) -> Void
         private var observations: [NSKeyValueObservation] = []
+        private weak var scrollView: NSScrollView?
+        private weak var sidebarView: NSView?
+        private var reportedHeight: CGFloat = 0
+        private var lookups = 0
 
-        init(width: CGFloat) {
+        init(width: CGFloat, onFitHeight: @escaping (CGFloat) -> Void) {
             self.width = width
+            self.onFitHeight = onFitHeight
             super.init(frame: .zero)
         }
 
@@ -775,7 +786,12 @@ private struct SidebarLimits: NSViewRepresentable {
         // Not `viewDidMoveToWindow`: the probe isn't inside the split view yet at that point.
         override func layout() {
             super.layout()
-            guard observations.isEmpty else { return }
+            if observations.isEmpty { pinWidth() }
+            findScrollView()
+            measureFitHeight()
+        }
+
+        private func pinWidth() {
             var view = superview
             while let current = view, !(current is NSSplitView) { view = current.superview }
             guard let controller = (view as? NSSplitView)?.delegate as? NSSplitViewController,
@@ -794,6 +810,58 @@ private struct SidebarLimits: NSViewRepresentable {
                     if item.maximumThickness != width { item.maximumThickness = width }
                 },
             ]
+            sidebarView = sidebar.viewController.view
+        }
+
+        /// The sidebar list's scroll view, which SwiftUI builds after the probe first lays out.
+        private func findScrollView() {
+            guard scrollView == nil, let sidebarView else { return }
+            scrollView = Self.firstTableScrollView(in: sidebarView)
+            guard scrollView != nil else {
+                // Not built yet: look again shortly, in case the probe doesn't lay out again.
+                guard lookups < 20 else { return }
+                lookups += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    self?.findScrollView()
+                    self?.measureFitHeight()
+                }
+                return
+            }
+            if let table = scrollView?.documentView {
+                // Rows added or removed resize the table; re-measure then.
+                table.postsFrameChangedNotifications = true
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(documentFrameChanged),
+                    name: NSView.frameDidChangeNotification, object: table
+                )
+            }
+        }
+
+        @objc private func documentFrameChanged() { measureFitHeight() }
+
+        /// The list's scroll view runs the full height of the window, under the toolbar above and
+        /// the version footer below, which it insets its rows from. The toolbar's inset is left
+        /// out: SwiftUI adds the toolbar on top of the root view's minimum height itself.
+        private func measureFitHeight() {
+            guard let scrollView, let table = scrollView.documentView as? NSTableView,
+                  table.numberOfRows > 0
+            else { return }
+            let rows = table.rect(ofRow: table.numberOfRows - 1).maxY
+            let insets = scrollView.contentInsets
+            let height = (rows + insets.bottom).rounded(.up)
+            guard height != reportedHeight else { return }
+            reportedHeight = height
+            let onFitHeight = onFitHeight
+            // Out of layout: changing SwiftUI state mid-layout re-enters it.
+            DispatchQueue.main.async { onFitHeight(height) }
+        }
+
+        private static func firstTableScrollView(in view: NSView) -> NSScrollView? {
+            if let scroll = view as? NSScrollView, scroll.documentView is NSTableView { return scroll }
+            for subview in view.subviews {
+                if let found = firstTableScrollView(in: subview) { return found }
+            }
+            return nil
         }
     }
 }
