@@ -194,18 +194,10 @@ private struct ClipboardRow: View {
         }
     }
 
-    @ViewBuilder
     private var icon: some View {
-        if item.kind == .image, let path = item.imagePath, let image = ClipboardImages.image(atPath: path) {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .clipShape(.rect(cornerRadius: 4))
-        } else {
-            Image(systemName: item.kind.symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
+        Image(systemName: item.kind.symbol)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.secondary)
     }
 }
 
