@@ -22,6 +22,7 @@
 - [Features](#features)
   - [Launcher](#-launcher)
   - [Utilities](#-utilities)
+  - [Coming soon](#-coming-soon)
   - [Config file](#-config-file)
 - [Install](#install)
 - [Development](#development)
@@ -58,6 +59,15 @@ Work in the background, no palette needed.
 | **Hyper Key** | Turn Caps Lock or a modifier into <kbd>⌃</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>⌘</kbd> for shortcuts that never clash. |
 | **Mouse** | Smooth scrolling, scroll modifiers and button remapping for ordinary mice. |
 | **Brightness** | Control external monitors over DDC/CI with the brightness keys, dimming below their minimum to black. |
+
+### 🚧 Coming soon
+
+| | |
+| --- | --- |
+| **Screen Drawing** | Draw and annotate over the screen. |
+| **Camera Preview** | Preview your webcam from the launcher, with <kbd>⌘</kbd><kbd>K</kbd> to switch camera. |
+| **Icon Changer** | Swap macOS app icons, and reapply them automatically when apps update. *(Name TBC.)* |
+| **Media Keys** | Send the media keys to the app you choose, such as Spotify, so they never launch Apple Music. |
 
 ### 📄 Config file
 
