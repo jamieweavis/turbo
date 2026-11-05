@@ -194,10 +194,15 @@ private struct ClipboardRow: View {
         }
     }
 
+    @ViewBuilder
     private var icon: some View {
-        Image(systemName: item.kind.symbol)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
+        if let color = item.hexColor {
+            ColorSwatch(fill: color, size: 16)
+        } else {
+            Image(systemName: item.kind.symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -245,12 +250,22 @@ private struct ClipboardPreview: View {
                 .padding(14)
             }
         case .text, .link:
-            ScrollView {
-                Text(item.text)
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(14)
+            if let color = item.hexColor {
+                VStack(spacing: 12) {
+                    ColorSwatch(fill: color, size: 140)
+                    Text(item.previewLine)
+                        .font(.system(size: 13, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                .padding(16)
+            } else {
+                ScrollView {
+                    Text(item.text)
+                        .font(.system(size: 12, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(14)
+                }
             }
         }
     }
@@ -284,6 +299,29 @@ extension ClipboardItem {
             let line = text.split(whereSeparator: \.isNewline).first { !$0.allSatisfy(\.isWhitespace) }
             return line.map { $0.trimmingCharacters(in: .whitespaces) } ?? text
         }
+    }
+}
+
+extension ClipboardItem {
+    /// The colour, when the whole item is one hex code: `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`.
+    var hexColor: Color? {
+        guard kind == .text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("#") else { return nil }
+        var digits = String(trimmed.dropFirst())
+        // `isHexDigit` also accepts fullwidth digits, which `UInt32(_:radix:)` won't parse.
+        guard [3, 4, 6, 8].contains(digits.count),
+              digits.allSatisfy({ $0.isASCII && $0.isHexDigit }) else { return nil }
+        if digits.count <= 4 { digits = digits.map { "\($0)\($0)" }.joined() }
+        if digits.count == 6 { digits += "ff" }
+        guard let value = UInt32(digits, radix: 16) else { return nil }
+        return Color(
+            .sRGB,
+            red: Double((value >> 24) & 0xff) / 255,
+            green: Double((value >> 16) & 0xff) / 255,
+            blue: Double((value >> 8) & 0xff) / 255,
+            opacity: Double(value & 0xff) / 255
+        )
     }
 }
 

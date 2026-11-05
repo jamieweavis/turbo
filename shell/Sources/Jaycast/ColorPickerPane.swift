@@ -112,12 +112,21 @@ extension PickedColor {
 
 /// A rounded square of a colour, outlined so white and black still show on any background.
 struct ColorSwatch: View {
-    let color: PickedColor
+    let fill: Color
     var size: CGFloat = 20
+
+    init(fill: Color, size: CGFloat = 20) {
+        self.fill = fill
+        self.size = size
+    }
+
+    init(color: PickedColor, size: CGFloat = 20) {
+        self.init(fill: color.color, size: size)
+    }
 
     var body: some View {
         RoundedRectangle(cornerRadius: size / 4)
-            .fill(color.color)
+            .fill(fill)
             .overlay(RoundedRectangle(cornerRadius: size / 4).strokeBorder(.separator))
             .frame(width: size, height: size)
     }
