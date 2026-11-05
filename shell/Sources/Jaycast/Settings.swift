@@ -97,14 +97,14 @@ enum SettingsSection: CaseIterable, Identifiable {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, windowDrag, keyboard, mouse, monitor
+    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, emoji, windowDrag, keyboard, mouse, monitor
 
     var id: Self { self }
 
     var section: SettingsSection {
         switch self {
         case .general: .main
-        case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows, .keepAwake, .colorPicker: .launcher
+        case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows, .keepAwake, .colorPicker, .emoji: .launcher
         case .windowDrag, .keyboard, .mouse, .monitor: .utilities
         }
     }
@@ -125,6 +125,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .monitor: "Brightness"
         case .keepAwake: "Keep Awake"
         case .colorPicker: "Colour Picker"
+        case .emoji: "Emoji"
         }
     }
 
@@ -145,6 +146,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .monitor: "Adjust your displays' brightness, external monitors included."
         case .keepAwake: "Stop your Mac sleeping while you need it."
         case .colorPicker: "Pick a colour from anywhere on screen."
+        case .emoji: "Search emoji by name or shortcode and paste them anywhere."
         }
     }
 
@@ -165,6 +167,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .monitor: .yellow
         case .keepAwake: .brown
         case .colorPicker: .red
+        case .emoji: .yellow
         }
     }
 
@@ -179,6 +182,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .windows: .windows
         case .keepAwake: .keepAwake
         case .colorPicker: .colorPicker
+        case .emoji: .emoji
         case .general, .launcher, .windowDrag, .keyboard, .mouse, .monitor: nil
         }
     }
@@ -199,6 +203,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .monitor: "sun.max"
         case .keepAwake: "eye"
         case .colorPicker: "eyedropper"
+        case .emoji: "face.smiling"
         }
     }
 }
@@ -259,6 +264,7 @@ struct SettingsView: View {
                 case .monitor: MonitorPane(settings: model.displays)
                 case .keepAwake: KeepAwakePane(state: model.keepAwake, settings: model.launcher)
                 case .colorPicker: ColorPickerPane(picker: model.colorPicker, settings: model.launcher)
+                case .emoji: EmojiPane(state: model.emoji, settings: model.launcher)
                 }
             }
             // Monitor keeps the built-in display's slider usable, and disables the rest itself.

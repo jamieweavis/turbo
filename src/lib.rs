@@ -326,6 +326,16 @@ impl Core {
         self.emoji.insert(&emoji, paste)
     }
 
+    /// The recently used emoji, newest first.
+    pub fn recent_emoji(&self) -> Vec<EmojiInfo> {
+        self.emoji.recent()
+    }
+
+    /// Forgets every recently used emoji.
+    pub fn clear_recent_emoji(&self) -> Result<(), CoreError> {
+        self.emoji.clear_recent()
+    }
+
     /// Registers the saved hotkeys. Call once at launch, on the main thread, after
     /// `set_launcher_observer`.
     pub fn start_hotkeys(&self) {

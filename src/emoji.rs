@@ -112,6 +112,22 @@ impl EmojiPicker {
         self.save(&recent)
     }
 
+    /// Recently used, newest first.
+    pub fn recent(&self) -> Vec<EmojiInfo> {
+        let recent = self.recent.lock();
+        recent
+            .iter()
+            .filter_map(|e| emojis::get(e))
+            .map(info)
+            .collect()
+    }
+
+    pub fn clear_recent(&self) -> Result<(), CoreError> {
+        let mut recent = self.recent.lock();
+        recent.clear();
+        self.save(&recent)
+    }
+
     fn save(&self, recent: &[String]) -> Result<(), CoreError> {
         if let Some(dir) = self.path.parent() {
             fs::create_dir_all(dir)?;
@@ -266,6 +282,18 @@ mod tests {
         };
         let recent = picker(&[later]);
         assert!(position(&recent, later) < position(&recent, earlier));
+    }
+
+    #[test]
+    fn clearing_recent_empties_the_row_and_file() {
+        let dir = std::env::temp_dir().join(format!("jaycast-emoji-{}", std::process::id()));
+        let picker = EmojiPicker::new(&dir);
+        record(&mut picker.recent.lock(), "🚀");
+        assert_eq!(picker.recent()[0].emoji, "🚀");
+        picker.clear_recent().unwrap();
+        assert!(picker.recent().is_empty());
+        assert!(EmojiPicker::new(&dir).recent().is_empty());
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

@@ -50,6 +50,7 @@ pub struct LauncherConfig {
     #[serde(alias = "caffeinate")]
     pub keep_awake: KeepAwakeConfig,
     pub color_picker: ColorPickerConfig,
+    pub emoji: EmojiConfig,
     /// Per-item settings for apps and built-in commands; items without one are enabled with
     /// no aliases.
     pub items: Vec<ItemSettings>,
@@ -75,6 +76,7 @@ impl Default for LauncherConfig {
             snippets: SnippetsConfig::default(),
             keep_awake: KeepAwakeConfig::default(),
             color_picker: ColorPickerConfig::default(),
+            emoji: EmojiConfig::default(),
             items: Vec::new(),
         }
     }
@@ -341,6 +343,25 @@ impl Default for ColorPickerConfig {
             enabled: true,
             hotkey: None,
             format: ColorFormat::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct EmojiConfig {
+    /// Off leaves out the emoji picker's hotkey and search item. Its hotkey is the
+    /// `mode:emoji` item's.
+    pub enabled: bool,
+    /// Choosing an emoji pastes it into the frontmost app; otherwise it's only copied.
+    pub paste_on_open: bool,
+}
+
+impl Default for EmojiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            paste_on_open: true,
         }
     }
 }

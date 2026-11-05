@@ -94,8 +94,9 @@ impl Target {
             Target::Mode(PaletteMode::Colors) | Target::PickColor => config.color_picker.enabled,
             Target::Window(_) => config.windows.enabled,
             Target::KeepAwake(_) => config.keep_awake.enabled,
+            Target::Mode(PaletteMode::Emoji) => config.emoji.enabled,
             Target::Palette
-            | Target::Mode(PaletteMode::Search | PaletteMode::Emoji)
+            | Target::Mode(PaletteMode::Search)
             | Target::App(_)
             | Target::System(_)
             | Target::Settings(_) => true,
@@ -691,6 +692,13 @@ mod tests {
             ]
         );
         assert_eq!(Target::for_item(PICK_COLOR_ID), Some(Target::PickColor));
+        config.emoji.enabled = false;
+        assert!(
+            !plan(&config)
+                .hotkeys
+                .iter()
+                .any(|p| p.target == Target::Mode(PaletteMode::Emoji))
+        );
         assert_eq!(
             Target::for_item("keep-awake:on"),
             Some(Target::KeepAwake(KeepAwakeCommand::On))

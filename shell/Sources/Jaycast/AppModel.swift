@@ -15,6 +15,7 @@ final class AppModel {
     let windowDrag: WindowDragSettings
     let keepAwake: KeepAwakeState
     let colorPicker: ColorPickerState
+    let emoji: EmojiState
     @ObservationIgnored let palette: PaletteWindowController
     @ObservationIgnored private let brightnessIndicator: BrightnessIndicator
     @ObservationIgnored private let commandOutput = CommandOutputWindows()
@@ -34,9 +35,11 @@ final class AppModel {
         windowDrag = WindowDragSettings(core: core)
         keepAwake = KeepAwakeState(core: core)
         colorPicker = ColorPickerState(core: core)
+        emoji = EmojiState(core: core)
         palette = PaletteWindowController(core: core, settings: launcher)
         palette.model.onPickColor = { [colorPicker] in colorPicker.pick() }
         palette.model.onColorsChanged = { [colorPicker] in colorPicker.refresh() }
+        palette.model.onEmojiUsed = { [emoji] in emoji.refresh() }
         palette.model.onKeepAwakeChanged = { [keepAwake, pill] active in
             keepAwake.refresh()
             pill.show(.keepAwake(active))

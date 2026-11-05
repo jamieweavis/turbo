@@ -413,6 +413,8 @@ final class PaletteModel {
     @ObservationIgnored var onKeepAwakeChanged: ((Bool) -> Void)?
     /// A colour was deleted from the history here.
     @ObservationIgnored var onColorsChanged: (() -> Void)?
+    /// Called after an emoji is pasted or copied, so its recently used list can refresh.
+    @ObservationIgnored var onEmojiUsed: (() -> Void)?
     @ObservationIgnored let core: Core
     @ObservationIgnored private let settings: LauncherSettings
     /// Where the mouse was when it last picked a row: rows scrolling under a still pointer
@@ -436,6 +438,7 @@ final class PaletteModel {
     var snippetsPasteOnOpen: Bool { settings.config.snippets.pasteOnOpen }
     var fileScopes: [String] { settings.config.files.scopes }
     var colorFormat: ColorFormat { settings.config.colorPicker.format }
+    var emojiPasteOnOpen: Bool { settings.config.emoji.pasteOnOpen }
 
     /// The line between the search field and the results, if any.
     var message: PaletteMessage? {
@@ -616,7 +619,7 @@ final class PaletteModel {
         case .colors:
             copySelectedColor()
         case .emoji:
-            insertSelectedEmoji(paste: true)
+            insertSelectedEmoji(paste: emojiPasteOnOpen)
         }
     }
 
@@ -654,7 +657,7 @@ final class PaletteModel {
         case (.colors, .delete):
             deleteSelectedColor()
         case (.emoji, .alternateOpen):
-            insertSelectedEmoji(paste: false)
+            insertSelectedEmoji(paste: !emojiPasteOnOpen)
         default:
             return false
         }
@@ -866,6 +869,7 @@ final class PaletteModel {
         if paste { onClose?() }
         do {
             try core.insertEmoji(emoji: selected.emoji, paste: paste)
+            onEmojiUsed?()
             if !paste { showCopied(selected.emoji) }
         } catch {
             Logger.palette.error("couldn't \(paste ? "paste" : "copy") an emoji: \(error, privacy: .public)")

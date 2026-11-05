@@ -268,15 +268,17 @@ extension PaletteModel {
 
     private func emojiActions() -> [PaletteAction] {
         guard let selected = emoji.selected else { return [] }
-        var actions = [
-            PaletteAction(title: Self.pasteTitle, symbol: "doc.on.clipboard", keys: ActionKeys.primary) {
-                self.insertSelectedEmoji(paste: true)
-            },
-            PaletteAction(title: "Copy", symbol: "doc.on.doc", keys: ActionKeys.alternate) {
-                self.insertSelectedEmoji(paste: false)
-            },
-            PaletteAction(title: "Copy Name", symbol: "textformat") { self.copy(selected.name) },
-        ]
+        let pastes = emojiPasteOnOpen
+        let paste = PaletteAction(title: Self.pasteTitle, symbol: "doc.on.clipboard",
+                                  keys: pastes ? ActionKeys.primary : ActionKeys.alternate) {
+            self.insertSelectedEmoji(paste: true)
+        }
+        let copy = PaletteAction(title: "Copy", symbol: "doc.on.doc",
+                                 keys: pastes ? ActionKeys.alternate : ActionKeys.primary) {
+            self.insertSelectedEmoji(paste: false)
+        }
+        var actions = pastes ? [paste, copy] : [copy, paste]
+        actions.append(PaletteAction(title: "Copy Name", symbol: "textformat") { self.copy(selected.name) })
         if let shortcode = selected.shortcode {
             actions.append(PaletteAction(title: "Copy Shortcode", symbol: "chevron.left.forwardslash.chevron.right") {
                 self.copy(":\(shortcode):")

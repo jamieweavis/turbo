@@ -609,7 +609,7 @@ struct EmojiModeView: View {
             onHover: { model.hover($0) },
             onTap: { index in
                 browser.selection = index
-                model.insertSelectedEmoji(paste: true)
+                model.insertSelectedEmoji(paste: model.emojiPasteOnOpen)
             }
         ) { emoji, isSelected in
             EmojiCell(emoji: emoji, isSelected: isSelected)
@@ -629,15 +629,14 @@ struct EmojiModeView: View {
 
     private var actions: [FloatingAction] {
         guard browser.selected != nil else { return [] }
-        return [
-            FloatingAction(label: PaletteModel.pasteTitle, keys: ["↩"]) {
-                model.insertSelectedEmoji(paste: true)
-            },
-            FloatingAction(label: "Copy", keys: ["⌘", "↩"]) {
-                model.insertSelectedEmoji(paste: false)
-            },
-            .showActions(model),
-        ]
+        let pastes = model.emojiPasteOnOpen
+        let paste = FloatingAction(label: PaletteModel.pasteTitle, keys: pastes ? ["↩"] : ["⌘", "↩"]) {
+            model.insertSelectedEmoji(paste: true)
+        }
+        let copy = FloatingAction(label: "Copy", keys: pastes ? ["⌘", "↩"] : ["↩"]) {
+            model.insertSelectedEmoji(paste: false)
+        }
+        return (pastes ? [paste, copy] : [copy, paste]) + [.showActions(model)]
     }
 }
 

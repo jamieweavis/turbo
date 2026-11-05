@@ -292,7 +292,7 @@ const SECONDARY_MATCH_DIVISOR: i32 = 4;
 /// The search results of each feature that's turned off: result ids, or id prefixes ending
 /// in `:` for every result of a kind.
 fn disabled_features(config: &LauncherConfig) -> Vec<&'static str> {
-    let features: [(bool, &[&'static str]); 8] = [
+    let features: [(bool, &[&'static str]); 9] = [
         (config.quicklinks_enabled, &["quicklink:"]),
         (config.commands_enabled, &["command:"]),
         (config.snippets.enabled, &["snippet:"]),
@@ -301,6 +301,7 @@ fn disabled_features(config: &LauncherConfig) -> Vec<&'static str> {
         (config.windows.enabled, &["window:"]),
         (config.keep_awake.enabled, &["keep-awake:"]),
         (config.color_picker.enabled, &[PICK_COLOR_ID, "mode:colors"]),
+        (config.emoji.enabled, &["mode:emoji"]),
     ];
     features
         .into_iter()
@@ -1237,11 +1238,13 @@ mod tests {
         let mut config = LauncherConfig::default();
         config.windows.enabled = false;
         config.color_picker.enabled = false;
+        config.emoji.enabled = false;
         config.quicklinks_enabled = false;
         let prefs = Prefs::new(&config);
         assert!(!prefs.is_enabled("window:left-half"));
         assert!(!prefs.is_enabled(PICK_COLOR_ID));
         assert!(!prefs.is_enabled("mode:colors"));
+        assert!(!prefs.is_enabled("mode:emoji"));
         assert!(!prefs.is_enabled("quicklink:google"));
         assert!(prefs.is_enabled("mode:clipboard"));
         assert!(prefs.is_enabled("command:deploy"));

@@ -97,6 +97,7 @@ final class LauncherSettings {
         case .windows: config.windows.enabled
         case .keepAwake: config.keepAwake.enabled
         case .colorPicker: config.colorPicker.enabled
+        case .emoji: config.emoji.enabled
         }
     }
 
@@ -118,6 +119,7 @@ final class LauncherSettings {
         case .windows: config.windows.enabled = enabled
         case .keepAwake: config.keepAwake.enabled = enabled
         case .colorPicker: config.colorPicker.enabled = enabled
+        case .emoji: config.emoji.enabled = enabled
         }
         let ids = itemIDs(of: feature)
         if enabled, !ids.contains(where: { Self.isShown($0, in: config) }) {
@@ -259,6 +261,14 @@ final class LauncherSettings {
         return config.appHotkeys
             .filter { !ids.contains("app:\($0.bundleId)") }
             .map { LauncherItem(id: "app:\($0.bundleId)", title: $0.name, category: "Application", path: nil, symbol: nil, windowAction: nil) }
+    }
+
+    static let emojiItemID = "mode:emoji"
+
+    /// The emoji picker's hotkey, kept with its launcher item's settings.
+    var emojiHotkey: Hotkey? {
+        get { itemSettings(Self.emojiItemID)?.hotkey }
+        set { updateItemSettings(Self.emojiItemID) { $0.hotkey = newValue } }
     }
 
     private func itemSettings(_ id: String) -> ItemSettings? {
@@ -407,7 +417,7 @@ final class LauncherSettings {
 
 /// A launcher feature that can be turned off as a whole, from its settings pane's switch.
 enum LauncherFeature {
-    case quicklinks, commands, snippets, clipboard, files, windows, keepAwake, colorPicker
+    case quicklinks, commands, snippets, clipboard, files, windows, keepAwake, colorPicker, emoji
 
     /// The feature a search result belongs to, matching the core's `disabled_features`.
     init?(itemID id: String) {
@@ -415,6 +425,7 @@ enum LauncherFeature {
         case "mode:clipboard": self = .clipboard
         case "mode:files": self = .files
         case "mode:colors", "color:pick": self = .colorPicker
+        case LauncherSettings.emojiItemID: self = .emoji
         case _ where id.hasPrefix("window:"): self = .windows
         case _ where id.hasPrefix("keep-awake:"): self = .keepAwake
         case _ where id.hasPrefix("quicklink:"): self = .quicklinks
