@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The menu bar popover: display brightness on top, then the app's toggles and actions.
@@ -59,6 +60,7 @@ struct StatusMenu: View {
         }
         .padding(14)
         .frame(width: 300)
+        .background(WindowResizeRedraw())
         .task {
             // Follow changes macOS makes to the built-in display while the menu is open.
             while !Task.isCancelled {
@@ -125,6 +127,34 @@ struct StatusMenu: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+        }
+    }
+}
+
+/// Redraws the menu bar window's frame when its content changes height.
+///
+/// A `.window` MenuBarExtra resizes when its content does (a display row appearing, an error
+/// line), but macOS leaves the old shadow and rounded border behind, so the corners render
+/// doubled. Invalidating the shadow after each resize makes the window redraw its frame.
+private struct WindowResizeRedraw: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { ResizeWatcher() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class ResizeWatcher: NSView {
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            let center = NotificationCenter.default
+            if let window { center.removeObserver(self, name: NSWindow.didResizeNotification, object: window) }
+            if let newWindow {
+                center.addObserver(
+                    self, selector: #selector(windowDidResize), name: NSWindow.didResizeNotification, object: newWindow
+                )
+            }
+        }
+
+        @objc private func windowDidResize() {
+            window?.invalidateShadow()
+            window?.contentView?.needsDisplay = true
         }
     }
 }

@@ -37,6 +37,7 @@ final class DisplaySettings {
         self.core = core
         config = core.monitorConfig()
         displays = core.displays()
+        builtinBrightness = core.builtinBrightness()
     }
 
     /// Displays whose brightness can be controlled.
@@ -73,6 +74,9 @@ final class DisplaySettings {
     // MARK: Observer callbacks
 
     func displaysChanged(_ displays: [DisplayInfo]) {
+        // Closing or opening the lid reconfigures displays; pick that up now rather than on the
+        // menu's next poll, so the menu doesn't change height while it's open.
+        refreshBuiltin()
         // Keep the slider's value for a display mid-drag rather than the core's older one.
         self.displays = displays.map { display in
             guard writing.contains(display.id), let current = self.displays.first(where: { $0.id == display.id }) else {
