@@ -584,7 +584,7 @@ impl SystemEntry {
         Self {
             id: format!("media:{id}"),
             title: title.to_owned(),
-            subtitle: "Media",
+            subtitle: "Jaycast",
             title_match: Prepared::new(title),
             keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: symbol.to_owned(),
