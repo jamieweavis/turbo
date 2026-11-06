@@ -184,7 +184,6 @@ struct ColorPickerPane: View {
                             ColorSwatch(color: color, size: 22)
                             Text(formatColor(color: color, format: format))
                                 .monospaced()
-                                .textSelection(.enabled)
                             Spacer()
                             if picker.copied == formatColor(color: color, format: format) {
                                 Text("Copied")
@@ -197,17 +196,31 @@ struct ColorPickerPane: View {
                                         picker.copy(color, as: other)
                                     }
                                 }
-                                Divider()
-                                Button("Delete", role: .destructive) { picker.delete(color) }
                             } label: {
-                                Image(systemName: "ellipsis.circle")
+                                Image(systemName: "doc.on.doc")
                             } primaryAction: {
                                 picker.copy(color, as: format)
                             }
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
                             .fixedSize()
-                            .help("Copy \(formatColor(color: color, format: format))")
+                            .help("Copy \(formatColor(color: color, format: format)) (hold for other formats)")
+                            Button {
+                                picker.delete(color)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Delete")
+                        }
+                        .contextMenu {
+                            ForEach(ColorFormat.allCases, id: \.self) { other in
+                                Button("Copy \(formatColor(color: color, format: other))") {
+                                    picker.copy(color, as: other)
+                                }
+                            }
+                            Divider()
+                            Button("Delete", role: .destructive) { picker.delete(color) }
                         }
                     }
                 }
