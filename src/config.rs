@@ -22,6 +22,7 @@ pub struct Config {
     pub launcher: LauncherConfig,
     pub hyper_key: HyperKeyConfig,
     pub window_drag: WindowDragConfig,
+    pub media_keys: MediaKeysConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
@@ -531,6 +532,50 @@ impl Default for MonitorConfig {
             brightness_keys: true,
         }
     }
+}
+
+/// The keyboard's play/pause, next and previous keys, sent to a music app of your choice
+/// instead of whatever macOS picks (often launching Music).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct MediaKeysConfig {
+    /// Off leaves the keys to macOS.
+    pub enabled: bool,
+    pub target: MediaTarget,
+    /// Bundle id of the chosen player: the target with `MediaTarget::Fixed`, and the
+    /// fallback with `MediaTarget::LastActive`.
+    pub player: String,
+    /// What a key does when the player it would go to isn't running.
+    pub when_not_running: WhenNotRunning,
+}
+
+impl Default for MediaKeysConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            target: MediaTarget::LastActive,
+            player: "com.spotify.client".into(),
+            when_not_running: WhenNotRunning::Launch,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum MediaTarget {
+    /// The supported player that played most recently, falling back to the chosen one.
+    LastActive,
+    /// Always the chosen player.
+    Fixed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
+pub enum WhenNotRunning {
+    /// Open the chosen player, then send it the key.
+    Launch,
+    /// Swallow the key.
+    Ignore,
+    /// Let macOS handle the key as if Jaycast weren't running.
+    PassThrough,
 }
 
 /// Moving and resizing a window by dragging anywhere in it with modifiers held.
@@ -1259,6 +1304,29 @@ mod tests {
             serde_json::from_str::<HyperKeyConfig>(&json).unwrap(),
             config
         );
+    }
+
+    #[test]
+    fn media_keys_round_trip_and_default_off() {
+        assert!(!MediaKeysConfig::default().enabled);
+        let dir = temp_dir("media-keys");
+        let store = store(&dir);
+        let config = Config {
+            media_keys: MediaKeysConfig {
+                enabled: true,
+                target: MediaTarget::Fixed,
+                player: "com.apple.Music".into(),
+                when_not_running: WhenNotRunning::PassThrough,
+            },
+            ..Config::default()
+        };
+        store.save(&config).unwrap();
+        assert_eq!(store.load().unwrap(), config);
+        fs::remove_dir_all(dir).unwrap();
+
+        // A config from before media keys existed loads with them off.
+        let old: Config = toml::from_str("[monitor]\nenabled = true\n").unwrap();
+        assert_eq!(old.media_keys, MediaKeysConfig::default());
     }
 
     #[test]

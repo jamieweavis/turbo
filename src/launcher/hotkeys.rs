@@ -20,6 +20,7 @@ use super::{LauncherObserver, PICK_COLOR_ID, PaletteMode, settings_panes, system
 use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
 use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
+use crate::media_keys::{MediaCommand, MediaKeys};
 use crate::windows::WindowManager;
 
 /// Registers the palette and per-app hotkeys. Hotkeys don't need Accessibility.
@@ -36,6 +37,7 @@ struct Inner {
     targets: Mutex<HashMap<u32, Target>>,
     windows: Arc<WindowManager>,
     keep_awake: Arc<KeepAwake>,
+    media: Arc<MediaKeys>,
 }
 
 /// Carbon's refs: only touched on the main thread (`apply` and `Drop` check), but kept in
@@ -63,6 +65,7 @@ enum Target {
     System(String),
     Window(WindowAction),
     KeepAwake(KeepAwakeCommand),
+    Media(MediaCommand),
     PickColor,
     /// A System Settings pane, by id.
     Settings(String),
@@ -79,6 +82,7 @@ impl Target {
             "settings" => Some(Target::Settings(rest.to_owned())),
             "window" => crate::windows::action_for_id(rest).map(Target::Window),
             "keep-awake" => super::keep_awake_command_for_id(rest).map(Target::KeepAwake),
+            "media" => super::media_command_for_id(rest).map(Target::Media),
             _ if id == PICK_COLOR_ID => Some(Target::PickColor),
             _ => None,
         }
@@ -100,19 +104,25 @@ impl Target {
             | Target::Mode(PaletteMode::Search)
             | Target::App(_)
             | Target::System(_)
+            | Target::Media(_)
             | Target::Settings(_) => true,
         }
     }
 }
 
 impl HotkeyManager {
-    pub fn new(windows: Arc<WindowManager>, keep_awake: Arc<KeepAwake>) -> Self {
+    pub fn new(
+        windows: Arc<WindowManager>,
+        keep_awake: Arc<KeepAwake>,
+        media: Arc<MediaKeys>,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 observer: Mutex::new(None),
                 targets: Mutex::new(HashMap::new()),
                 windows,
                 keep_awake,
+                media,
             }),
             carbon: Mutex::new(Carbon {
                 handler: ptr::null_mut(),
@@ -251,6 +261,11 @@ impl Inner {
                 let observer = self.observer.lock().clone();
                 if let Some(observer) = observer {
                     observer.keep_awake_changed(self.keep_awake.is_active());
+                }
+            }
+            Some(Target::Media(command)) => {
+                if let Err(error) = self.media.perform(command) {
+                    log::error!("media hotkey {command:?} failed: {error}");
                 }
             }
             Some(Target::PickColor) => {
@@ -919,6 +934,7 @@ mod tests {
                 &std::env::temp_dir().join(format!("jaycast-test-hotkeys-{}", std::process::id())),
                 Default::default(),
             )),
+            Arc::new(MediaKeys::new(Default::default())),
         );
         manager.apply(&LauncherConfig::default());
         assert!(manager.failed().is_empty());

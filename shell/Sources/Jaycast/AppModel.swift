@@ -13,6 +13,7 @@ final class AppModel {
     let launcher: LauncherSettings
     let hyperKey: HyperKeySettings
     let windowDrag: WindowDragSettings
+    let mediaKeys: MediaKeysSettings
     let keepAwake: KeepAwakeState
     let colorPicker: ColorPickerState
     let emoji: EmojiState
@@ -33,6 +34,7 @@ final class AppModel {
         launcher = LauncherSettings(core: core)
         hyperKey = HyperKeySettings(core: core)
         windowDrag = WindowDragSettings(core: core)
+        mediaKeys = MediaKeysSettings(core: core)
         keepAwake = KeepAwakeState(core: core)
         colorPicker = ColorPickerState(core: core)
         emoji = EmojiState(core: core)

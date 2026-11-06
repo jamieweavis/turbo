@@ -19,33 +19,21 @@ use objc2_core_foundation::{
     CFMachPort, CFRetained, CFRunLoop, kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
 };
 use objc2_core_graphics::{
-    CGDirectDisplayID, CGDisplayIsBuiltin, CGError, CGEvent, CGEventField, CGEventFlags,
-    CGEventMask, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy,
-    CGEventType, CGGetDisplaysWithPoint,
+    CGDirectDisplayID, CGDisplayIsBuiltin, CGError, CGEvent, CGEventFlags, CGEventMask,
+    CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy, CGEventType,
+    CGGetDisplaysWithPoint,
 };
 
 use super::DisplayManager;
+use crate::aux_keys::{self, KEYTYPE_BRIGHTNESS_DOWN, KEYTYPE_BRIGHTNESS_UP, SYSTEM_DEFINED};
+#[cfg(test)]
+use crate::aux_keys::{KEY_STATE_DOWN, SUBTYPE_AUX_CONTROL_BUTTONS, aux_fields};
 use crate::error::CoreError;
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
     fn AXIsProcessTrusted() -> u8;
 }
-
-/// `NX_SYSDEFINED` (IOLLEvent.h); CoreGraphics has no named `CGEventType` for it.
-const SYSTEM_DEFINED: CGEventType = CGEventType(14);
-/// Undocumented `CGEventField`s holding a system-defined event's `subtype` and `data1`, the
-/// values `NSEvent` reports for them (the round-trip test pins this).
-const FIELD_SUBTYPE: CGEventField = CGEventField(99);
-const FIELD_DATA1: CGEventField = CGEventField(149);
-/// `NX_SUBTYPE_AUX_CONTROL_BUTTONS` (IOLLEvent.h): media, volume and brightness keys.
-const SUBTYPE_AUX_CONTROL_BUTTONS: i16 = 8;
-/// `NX_KEYTYPE_BRIGHTNESS_UP` / `_DOWN` (ev_keymap.h).
-const KEYTYPE_BRIGHTNESS_UP: isize = 2;
-const KEYTYPE_BRIGHTNESS_DOWN: isize = 3;
-/// Key state in bits 8–15 of `data1`: `NX_KEYDOWN` / `NX_KEYUP` (IOLLEvent.h).
-const KEY_STATE_DOWN: isize = 0xA;
-const KEY_STATE_UP: isize = 0xB;
 
 /// One press moves 1/16 of the range, like the built-in display; ⌥⇧ gives quarter steps.
 const STEP: f64 = 1.0 / 16.0;
@@ -274,10 +262,7 @@ impl TapState {
         if event_type != SYSTEM_DEFINED {
             return Disposition::PassThrough;
         }
-        let Some((subtype, data1)) = aux_fields(event) else {
-            return Disposition::PassThrough;
-        };
-        let Some(key) = decode(subtype, data1) else {
+        let Some(key) = aux_keys::key(event).and_then(brightness_key) else {
             return Disposition::PassThrough;
         };
 
@@ -297,16 +282,6 @@ impl TapState {
         self.presses
             .down(key.direction, key.repeat, enabled, try_adjust)
     }
-}
-
-/// `subtype` and `data1` of a system-defined event, read straight from the event's
-/// compound-data fields. CoreGraphics names neither field; `NSEvent` would decode them,
-/// but converting a caps-lock event off the main thread trips HIToolbox's main-queue
-/// assertion and kills the process.
-fn aux_fields(event: &CGEvent) -> Option<(i16, isize)> {
-    let subtype = CGEvent::integer_value_field(Some(event), FIELD_SUBTYPE);
-    let data1 = CGEvent::integer_value_field(Some(event), FIELD_DATA1);
-    Some((i16::try_from(subtype).ok()?, data1 as isize))
 }
 
 /// The display containing the mouse cursor. An event created without a source carries the
@@ -356,28 +331,23 @@ struct BrightnessKey {
     repeat: bool,
 }
 
-/// Decodes an aux-control-button event; `None` for anything that isn't a brightness key.
-/// `data1` packs the key type in bits 16–31, the key state in bits 8–15 and the repeat
-/// flag in bit 0.
-fn decode(subtype: i16, data1: isize) -> Option<BrightnessKey> {
-    if subtype != SUBTYPE_AUX_CONTROL_BUTTONS {
-        return None;
-    }
-    let direction = match (data1 & 0xFFFF_0000) >> 16 {
+/// The brightness key an aux key is, if it is one.
+fn brightness_key(key: aux_keys::AuxKey) -> Option<BrightnessKey> {
+    let direction = match key.key_type {
         KEYTYPE_BRIGHTNESS_UP => Direction::Up,
         KEYTYPE_BRIGHTNESS_DOWN => Direction::Down,
         _ => return None,
     };
-    let pressed = match (data1 & 0xFF00) >> 8 {
-        KEY_STATE_DOWN => true,
-        KEY_STATE_UP => false,
-        _ => return None,
-    };
     Some(BrightnessKey {
         direction,
-        pressed,
-        repeat: data1 & 0x1 != 0,
+        pressed: key.pressed,
+        repeat: key.repeat,
     })
+}
+
+#[cfg(test)]
+fn decode(subtype: i16, data1: isize) -> Option<BrightnessKey> {
+    aux_keys::decode(subtype, data1).and_then(brightness_key)
 }
 
 fn step(flags: CGEventFlags) -> f64 {
@@ -445,11 +415,8 @@ impl PressTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::aux_keys::data1;
     use crate::config::MonitorConfig;
-
-    fn data1(key_type: isize, state: isize, repeat: bool) -> isize {
-        (key_type << 16) | (state << 8) | isize::from(repeat)
-    }
 
     #[test]
     fn decodes_brightness_keys() {

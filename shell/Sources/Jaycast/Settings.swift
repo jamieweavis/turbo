@@ -97,7 +97,7 @@ enum SettingsSection: CaseIterable, Identifiable {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, emoji, windowDrag, keyboard, mouse, monitor
+    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, emoji, windowDrag, keyboard, mouse, monitor, mediaKeys
 
     var id: Self { self }
 
@@ -105,7 +105,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         switch self {
         case .general: .main
         case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows, .keepAwake, .colorPicker, .emoji: .launcher
-        case .windowDrag, .keyboard, .mouse, .monitor: .utilities
+        case .windowDrag, .keyboard, .mouse, .monitor, .mediaKeys: .utilities
         }
     }
 
@@ -123,6 +123,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
         case .monitor: "Brightness"
+        case .mediaKeys: "Media Keys"
         case .keepAwake: "Keep Awake"
         case .colorPicker: "Colour Picker"
         case .emoji: "Emoji"
@@ -144,6 +145,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "Turn one key into ⌃⌥⇧⌘ for shortcuts that never clash."
         case .mouse: "Smooth scrolling, scroll modifiers and button remapping."
         case .monitor: "Adjust your displays' brightness, external monitors included."
+        case .mediaKeys: "Send play/pause, next and previous to your music app, never Music by surprise."
         case .keepAwake: "Stop your Mac sleeping while you need it."
         case .colorPicker: "Pick a colour from anywhere on screen."
         case .emoji: "Search emoji by name or shortcode and paste them anywhere."
@@ -165,6 +167,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: .purple
         case .mouse: .pink
         case .monitor: .yellow
+        case .mediaKeys: .green
         case .keepAwake: .brown
         case .colorPicker: .red
         case .emoji: .yellow
@@ -183,7 +186,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keepAwake: .keepAwake
         case .colorPicker: .colorPicker
         case .emoji: .emoji
-        case .general, .launcher, .windowDrag, .keyboard, .mouse, .monitor: nil
+        case .general, .launcher, .windowDrag, .keyboard, .mouse, .monitor, .mediaKeys: nil
         }
     }
 
@@ -201,6 +204,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keyboard: "diamond.fill"
         case .mouse: "computermouse"
         case .monitor: "sun.max"
+        case .mediaKeys: "playpause.fill"
         case .keepAwake: "eye"
         case .colorPicker: "eyedropper"
         case .emoji: "face.smiling"
@@ -265,6 +269,7 @@ struct SettingsView: View {
                 case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: model.isInputRunning)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
+                case .mediaKeys: MediaKeysPane(settings: model.mediaKeys, isInputRunning: model.isInputRunning)
                 case .keepAwake: KeepAwakePane(state: model.keepAwake, settings: model.launcher)
                 case .colorPicker: ColorPickerPane(picker: model.colorPicker, settings: model.launcher)
                 case .emoji: EmojiPane(state: model.emoji, settings: model.launcher)
@@ -356,6 +361,9 @@ extension SettingsView {
         case .monitor:
             let displays = model.displays
             return Binding(get: { displays.config.enabled }, set: { displays.config.enabled = $0 })
+        case .mediaKeys:
+            let mediaKeys = model.mediaKeys
+            return Binding(get: { mediaKeys.config.enabled }, set: { mediaKeys.config.enabled = $0 })
         default:
             return nil
         }

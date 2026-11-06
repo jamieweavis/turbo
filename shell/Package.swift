@@ -16,6 +16,7 @@ let package = Package(
                 .linkedLibrary("jaycast_core"),
                 .linkedFramework("CoreDisplay"),  // ddc-macos
                 .linkedFramework("AVFoundation"),  // camera
+                .linkedFramework("CoreServices"),  // media keys' Apple Event permission check
             ]
         ),
         .executableTarget(

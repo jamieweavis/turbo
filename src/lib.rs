@@ -3,6 +3,7 @@
 
 uniffi::setup_scaffolding!();
 
+mod aux_keys;
 mod camera;
 mod clipboard;
 mod color_picker;
@@ -16,6 +17,7 @@ mod input;
 mod keep_awake;
 mod launcher;
 mod logging;
+mod media_keys;
 mod pasteboard;
 mod snippets;
 mod windows;
@@ -46,6 +48,8 @@ pub use launcher::{
     SystemActionInfo, system_actions,
 };
 use launcher::{HotkeyManager, Launcher};
+use media_keys::MediaKeys;
+pub use media_keys::{AutomationAccess, MediaCommand, MediaPlayer};
 use snippets::SnippetExpander;
 use windows::{WindowDrag, WindowManager};
 
@@ -90,6 +94,7 @@ pub struct Core {
     colors: ColorHistory,
     emoji: EmojiPicker,
     cameras: Cameras,
+    media_keys: Arc<MediaKeys>,
 }
 
 #[uniffi::export]
@@ -119,13 +124,19 @@ impl Core {
             &data_dir,
             config.launcher.keep_awake.clone(),
         ));
+        let media_keys = Arc::new(MediaKeys::new(config.media_keys.clone()));
         let launcher = Launcher::new(
             &data_dir,
             config.launcher.clone(),
             Arc::clone(&windows),
             Arc::clone(&keep_awake),
+            Arc::clone(&media_keys),
         );
-        let hotkeys = HotkeyManager::new(Arc::clone(&windows), Arc::clone(&keep_awake));
+        let hotkeys = HotkeyManager::new(
+            Arc::clone(&windows),
+            Arc::clone(&keep_awake),
+            Arc::clone(&media_keys),
+        );
         let clipboard = ClipboardHistory::new(&data_dir, config.launcher.clipboard.clone());
         let files = FileSearch::new(config.launcher.files.clone());
         let snippets = SnippetExpander::new(config.launcher.snippets.clone());
@@ -152,6 +163,7 @@ impl Core {
             colors,
             emoji,
             cameras,
+            media_keys,
         }))
     }
 
@@ -247,6 +259,43 @@ impl Core {
         let saved = self.saver.save(&config);
         self.window_drag.set_config(window_drag)?;
         saved
+    }
+
+    pub fn media_keys_config(&self) -> MediaKeysConfig {
+        self.config.lock().media_keys.clone()
+    }
+
+    /// Applies the new media key settings immediately (starting or stopping the key tap if
+    /// input is running), and saves them.
+    pub fn set_media_keys_config(&self, media_keys: MediaKeysConfig) -> Result<(), CoreError> {
+        let mut config = self.config.lock();
+        let before = config.clone();
+        config.media_keys = media_keys.clone();
+        config::log_changes(&before, &config);
+        let saved = self.saver.save(&config);
+        self.media_keys.set_config(media_keys)?;
+        saved
+    }
+
+    /// The supported music apps that are installed, for choosing where media keys go.
+    pub fn media_players(&self) -> Vec<MediaPlayer> {
+        self.media_keys.players()
+    }
+
+    /// Sends play/pause, next or previous wherever the media keys would.
+    pub fn perform_media_command(&self, command: MediaCommand) -> Result<(), CoreError> {
+        self.media_keys.perform(command)
+    }
+
+    /// Whether Jaycast may control a player (macOS's Automation permission). Quick.
+    pub fn media_player_access(&self, bundle_id: String) -> AutomationAccess {
+        self.media_keys.access(&bundle_id)
+    }
+
+    /// Shows macOS's Automation prompt for a running player if it hasn't been answered.
+    /// Blocks until it is: call it off the main thread.
+    pub fn request_media_player_access(&self, bundle_id: String) -> AutomationAccess {
+        self.media_keys.request_access(&bundle_id)
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {
@@ -491,8 +540,8 @@ impl Core {
         self.launcher.items()
     }
 
-    /// Starts the event taps (mouse, brightness keys, snippet expansion, the Hyper key and
-    /// window dragging). Each tap only runs while its feature is on.
+    /// Starts the event taps (mouse, brightness keys, snippet expansion, the Hyper key,
+    /// window dragging and media keys). Each tap only runs while its feature is on.
     /// Fails with `PermissionDenied` without Accessibility. Calling it while already running
     /// is a no-op.
     pub fn start_input(&self) -> Result<(), CoreError> {
@@ -501,6 +550,7 @@ impl Core {
         started("snippet", self.snippets.start())?;
         started("Hyper key", self.hyper_key.start())?;
         started("window drag", self.window_drag.start())?;
+        started("media key", self.media_keys.start())?;
         log::info!("input taps started");
         Ok(())
     }
@@ -513,6 +563,7 @@ impl Core {
         self.snippets.stop();
         self.hyper_key.stop();
         self.window_drag.stop();
+        self.media_keys.stop();
     }
 
     /// True once input has started (with Accessibility), whether or not any feature currently

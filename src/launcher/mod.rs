@@ -38,6 +38,7 @@ use objc2_foundation::{NSString, NSURL};
 use crate::config::{LauncherConfig, WindowAction};
 use crate::error::CoreError;
 use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
+use crate::media_keys::{MediaCommand, MediaKeys};
 use crate::windows::{self, WindowManager};
 use apps::App;
 use calc::Calculator;
@@ -215,6 +216,44 @@ const KEEP_AWAKE_KEYWORDS: &[&str] = &[
     "prevent sleep",
     "no sleep",
 ];
+
+/// The media key commands: (command, id, title, keywords, SF Symbol). Results use
+/// `media:<id>`; they go wherever the media keys would.
+type MediaEntry = (
+    MediaCommand,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+    &'static str,
+);
+
+const MEDIA_COMMANDS: &[MediaEntry] = &[
+    (
+        MediaCommand::PlayPause,
+        "play-pause",
+        "Play/Pause",
+        &["play", "pause", "resume", "music", "song"],
+        "playpause.fill",
+    ),
+    (
+        MediaCommand::Next,
+        "next",
+        "Next Track",
+        &["skip", "forward", "music", "song"],
+        "forward.end.fill",
+    ),
+    (
+        MediaCommand::Previous,
+        "previous",
+        "Previous Track",
+        &["back", "rewind", "music", "song"],
+        "backward.end.fill",
+    ),
+];
+
+fn media_command_for_id(id: &str) -> Option<MediaCommand> {
+    MEDIA_COMMANDS.iter().find(|c| c.1 == id).map(|c| c.0)
+}
 
 fn keep_awake_command_for_id(id: &str) -> Option<KeepAwakeCommand> {
     KEEP_AWAKE_COMMANDS.iter().find(|c| c.1 == id).map(|c| c.0)
@@ -404,6 +443,7 @@ pub(crate) struct Launcher {
     calculator: Calculator,
     windows: Arc<WindowManager>,
     keep_awake: Arc<KeepAwake>,
+    media: Arc<MediaKeys>,
 }
 
 #[derive(Default)]
@@ -540,6 +580,20 @@ impl SystemEntry {
         }
     }
 
+    fn media(&(_, id, title, keywords, symbol): &MediaEntry) -> Self {
+        Self {
+            id: format!("media:{id}"),
+            title: title.to_owned(),
+            subtitle: "Media",
+            title_match: Prepared::new(title),
+            keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
+            symbol: symbol.to_owned(),
+            path: None,
+            needs_confirmation: false,
+            kind: ResultKind::SystemAction,
+        }
+    }
+
     fn result(&self) -> SearchResult {
         SearchResult {
             id: self.id.clone(),
@@ -562,6 +616,7 @@ impl Launcher {
         config: LauncherConfig,
         windows: Arc<WindowManager>,
         keep_awake: Arc<KeepAwake>,
+        media: Arc<MediaKeys>,
     ) -> Arc<Self> {
         let store = UsageStore::new(data_dir);
         let launcher = Arc::new(Self {
@@ -571,6 +626,7 @@ impl Launcher {
                 .map(SystemEntry::mode)
                 .chain([SystemEntry::pick_color()])
                 .chain(KEEP_AWAKE_COMMANDS.iter().map(SystemEntry::keep_awake))
+                .chain(MEDIA_COMMANDS.iter().map(SystemEntry::media))
                 .chain(system::actions().iter().map(SystemEntry::new))
                 .chain(
                     settings_panes::panes()
@@ -588,6 +644,7 @@ impl Launcher {
             calculator: Calculator::new(data_dir),
             windows,
             keep_awake,
+            media,
         });
 
         let weak = Arc::downgrade(&launcher);
@@ -686,6 +743,8 @@ impl Launcher {
             outcome = OpenOutcome::KeepAwake {
                 active: self.keep_awake.is_active(),
             };
+        } else if let Some(command) = id.strip_prefix("media:").and_then(media_command_for_id) {
+            self.media.perform(command)?;
         } else if let Some(text) = id.strip_prefix("calc:") {
             crate::pasteboard::copy(text)?;
             // Calculations aren't worth remembering for ranking.
