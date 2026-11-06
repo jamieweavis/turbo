@@ -102,6 +102,7 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | --- | --- |
 | **Brightness** | Control external monitors over DDC/CI with the brightness keys, dimming below their minimum to black. |
 | **Keep Awake** | Stop your Mac (and optionally the display) sleeping while you need it. |
+| **Camera Preview** | Check your webcam before a call, from the palette. Switch cameras (iPhone included) and mirroring from <kbd>⌘</kbd><kbd>K</kbd>. |
 | **System Actions** | Lock Screen, Sleep, Empty Trash and more, plus every System Settings pane, from the palette. |
 
 ### 📄 Config file
@@ -135,7 +136,6 @@ action = "Back"
 | | |
 | --- | --- |
 | **Screen Drawing** | Draw and annotate over the screen. |
-| **Camera Preview** | Preview your webcam from the launcher, with <kbd>⌘</kbd><kbd>K</kbd> to switch camera. |
 | **Icon Changer** | Swap macOS app icons, and reapply them automatically when apps update. *(Name TBC.)* |
 | **Media Keys** | Send the media keys to the app you choose, such as Spotify, so they never launch Apple Music. |
 
@@ -157,6 +157,8 @@ action = "Back"
 - **The only network request** is for currency rates: the European Central Bank's daily reference rates
   from [frankfurter.dev](https://frankfurter.dev), fetched in the background and cached. No identifiers
   are sent.
+- **The camera only runs while Camera Preview is showing**, and stops the moment you leave it. Nothing is
+  recorded or saved.
 - **Every feature can be switched off**, and a switched-off feature doesn't run.
 - **Settings are a plain text file** at `~/.config/jaycast.toml`: readable, diffable, and easy to back up
   or keep in your dotfiles.

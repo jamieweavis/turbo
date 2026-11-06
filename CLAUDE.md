@@ -39,11 +39,14 @@ to `shell/Sources/Jaycast/Generated/` (both gitignored, regenerated on every bui
 shell linking the `.a` → the bundle is assembled from `Resources/Info.plist` and codesigned. Any change
 to an exported Rust type or method requires rebuilding through `just build`/`just run` for Swift to see it.
 Frameworks the Rust crates need but Swift doesn't pull in must be added to `linkerSettings` in
-`shell/Package.swift` (a static lib can't carry link flags).
+`shell/Package.swift` (a static lib can't carry link flags). The app is signed with the hardened runtime
+and `Resources/Jaycast.entitlements`: a protected device (the camera, today) needs both an entitlement there
+and a usage string in `Info.plist`, or macOS silently refuses it (missing the string kills the app on the
+prompt).
 
 **FFI surface:** `src/lib.rs` defines the single `Core` `uniffi::Object` the shell creates at launch.
 It owns one subsystem per feature module (`input`, `display`, `launcher`, `clipboard`, `files`,
-`windows`, `snippets`, `hyper`, `keep_awake`, `color_picker`, `emoji`) and exposes paired
+`windows`, `snippets`, `hyper`, `keep_awake`, `color_picker`, `emoji`, `camera`) and exposes paired
 `<area>_config()` / `set_<area>_config()` methods plus feature actions. Callbacks to Swift go through
 observer traits (`DisplayObserver`, `LauncherObserver`) registered via `set_*_observer`.
 
@@ -56,7 +59,7 @@ Rust callbacks on arbitrary threads and must hop to `DispatchQueue.main.async` b
 Every struct is `#[serde(default)]` so older/partial configs keep loading — keep it that way when adding
 fields, and use `#[serde(alias = ...)]` when renaming. `ConfigSaver` debounces writes (500 ms) and
 writes atomically (temp + rename). A legacy `config.json` in the data dir is migrated on first load.
-Other state (clipboard SQLite DB, usage ranking, colour/emoji history) lives in
+Other state (clipboard SQLite DB, usage ranking, colour/emoji history, chosen camera) lives in
 `~/Library/Application Support/Jaycast`, passed to `Core::new` as `data_dir`.
 
 **Event taps** (`input/tap.rs`, `hyper/tap.rs`, `snippets/tap.rs`, `windows/drag/tap.rs`,
