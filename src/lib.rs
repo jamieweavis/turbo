@@ -287,7 +287,8 @@ impl Core {
         self.media_keys.perform(command)
     }
 
-    /// Whether Jaycast may control a player (macOS's Automation permission). Quick.
+    /// Whether Jaycast may control a player (macOS's Automation permission), without asking.
+    /// Can block indefinitely: call it off the main thread.
     pub fn media_player_access(&self, bundle_id: String) -> AutomationAccess {
         self.media_keys.access(&bundle_id)
     }

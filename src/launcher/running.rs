@@ -1,4 +1,5 @@
-//! Running apps, for the palette's actions menu: whether an app is running, hide and quit.
+//! Running apps, for the palette's actions menu (whether an app is running, hide and quit) and
+//! for addressing a running app by process id.
 
 use objc2::rc::Retained;
 use objc2_app_kit::NSRunningApplication;
@@ -8,6 +9,13 @@ use crate::error::CoreError;
 
 pub(crate) fn is_running(bundle_id: &str) -> bool {
     !instances(bundle_id).is_empty()
+}
+
+/// The process id of a running instance, for addressing it directly.
+pub(crate) fn pid(bundle_id: &str) -> Option<i32> {
+    instances(bundle_id)
+        .first()
+        .map(|app| app.processIdentifier())
 }
 
 pub(crate) fn hide(bundle_id: &str) -> Result<(), CoreError> {

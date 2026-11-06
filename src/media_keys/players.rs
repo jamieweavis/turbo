@@ -119,7 +119,7 @@ unsafe extern "C" {
     ) -> i32;
 }
 
-const TYPE_APPLICATION_BUNDLE_ID: u32 = u32::from_be_bytes(*b"bund");
+const TYPE_KERNEL_PROCESS_ID: u32 = u32::from_be_bytes(*b"kpid");
 const NO_ERR: i32 = 0;
 const PROC_NOT_FOUND: i32 = -600;
 const ERR_AE_EVENT_NOT_PERMITTED: i32 = -1743;
@@ -127,19 +127,25 @@ const ERR_AE_EVENT_WOULD_REQUIRE_USER_CONSENT: i32 = -1744;
 
 /// Checks (and with `ask`, asks for) permission to send `player` its playback commands.
 /// With `ask` it blocks while the prompt is up, so never call it on the main thread.
+///
+/// The target is the running player's process id. Addressed by bundle id instead,
+/// `AEDeterminePermissionToAutomateTarget` never returns (seen on macOS 26 with Spotify running,
+/// even without `ask`), and macOS can only answer for a running app anyway.
 pub(crate) fn automation_access(player: &Player, ask: bool) -> AutomationAccess {
+    let Some(pid) = crate::launcher::running::pid(player.bundle_id) else {
+        return AutomationAccess::NotRunning;
+    };
     let mut target = AEDesc {
         descriptor_type: 0,
         data_handle: std::ptr::null_mut(),
     };
-    let id = player.bundle_id.as_bytes();
-    // SAFETY: `id` is valid for its length; `target` is written by AECreateDesc and
+    // SAFETY: `pid` is valid for its size; `target` is written by AECreateDesc and
     // disposed of below.
     let status = unsafe {
         let created = AECreateDesc(
-            TYPE_APPLICATION_BUNDLE_ID,
-            id.as_ptr().cast(),
-            id.len() as isize,
+            TYPE_KERNEL_PROCESS_ID,
+            (&raw const pid).cast(),
+            size_of::<i32>() as isize,
             &mut target,
         );
         if created != 0 {

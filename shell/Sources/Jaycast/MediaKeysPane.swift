@@ -34,8 +34,37 @@ final class MediaKeysSettings {
         refreshAccess()
     }
 
+    /// Asking macOS whether we may automate a player can block indefinitely (it waits on TCC and
+    /// the player), so it runs on its own serial queue, one check at a time, never on the main
+    /// thread or the shared concurrency pool. Requests made while one is in flight collapse into a
+    /// single re-check of the latest player once it returns.
+    @ObservationIgnored private let accessQueue = DispatchQueue(label: "com.jamieweavis.jaycast.media-access")
+    @ObservationIgnored private var accessCheckRunning = false
+    @ObservationIgnored private var accessCheckPending = false
+
     func refreshAccess() {
-        access = core.mediaPlayerAccess(bundleId: config.player)
+        guard !accessCheckRunning else {
+            accessCheckPending = true
+            return
+        }
+        accessCheckRunning = true
+        let core = core
+        let bundleID = config.player
+        accessQueue.async { [weak self] in
+            let access = core.mediaPlayerAccess(bundleId: bundleID)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.accessCheckRunning = false
+                    if self.accessCheckPending {
+                        self.accessCheckPending = false
+                        self.refreshAccess()
+                    } else if bundleID == self.config.player {
+                        self.access = access
+                    }
+                }
+            }
+        }
     }
 
     /// Shows macOS's Automation prompt, which blocks until answered, so off the main thread.

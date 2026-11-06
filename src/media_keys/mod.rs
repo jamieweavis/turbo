@@ -135,7 +135,8 @@ impl MediaKeys {
             .collect()
     }
 
-    /// Whether Jaycast may control the player, without asking.
+    /// Whether Jaycast may control the player, without asking. Can block indefinitely (it waits
+    /// on TCC and the player even without a prompt): call it off the main thread.
     pub fn access(&self, bundle_id: &str) -> AutomationAccess {
         players::player(bundle_id).map_or(AutomationAccess::NotDetermined, |player| {
             players::automation_access(player, false)
