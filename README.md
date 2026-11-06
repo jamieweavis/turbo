@@ -136,7 +136,6 @@ action = "Back"
 
 | | |
 | --- | --- |
-| **Screen Drawing** | Draw and annotate over the screen. |
 | **Icon Changer** | Swap macOS app icons, and reapply them automatically when apps update. *(Name TBC.)* |
 
 ## Privacy
