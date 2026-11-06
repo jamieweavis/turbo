@@ -558,8 +558,13 @@ struct PaneIcon: View {
                 // The same drawn screen as the Left Half action, rather than a symbol.
                 WindowActionIcon(action: .leftHalf, width: size * 0.6)
             } else {
-                // The diamond fills more of its box than other symbols, which shows at sidebar size.
-                let scale = pane == .keyboard && size <= 20 ? 0.35 : 0.5
+                // The diamond fills more of its box than other symbols, which shows at sidebar size;
+                // play/pause is twice as wide as it is tall, at every size.
+                let scale = switch pane {
+                case .keyboard where size <= 20: 0.35
+                case .mediaKeys: 0.36
+                default: 0.5
+                }
                 Image(systemName: pane.systemImage)
                     .font(.system(size: size * scale, weight: .medium))
             }
