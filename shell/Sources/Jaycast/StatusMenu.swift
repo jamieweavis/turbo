@@ -80,7 +80,6 @@ struct StatusMenu: View {
 
             MenuToggle(title: "Smooth scrolling", systemImage: "arrow.up.and.down", isOn: $mouse.config.smoothScroll.enabled)
             MenuToggle(title: "Reverse direction", systemImage: "arrow.up.arrow.down", isOn: $mouse.config.scrollModifiers.reverseDirection)
-            MenuToggle(title: "Buttons", systemImage: "computermouse", isOn: $mouse.config.buttonsEnabled)
         }
     }
 
