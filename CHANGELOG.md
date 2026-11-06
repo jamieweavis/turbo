@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/jamieweavis/jaycast/compare/v0.1.1...v0.1.2) - 2026-11-06
+
+### Added
+
+- add media keys
+- add camera preview to the launcher
+- add camera listing, selection and permission to the core
+- show colour swatches for hex codes in the clipboard
+- show a photo icon for image rows in the clipboard list
+- add an Emoji pane to settings
+
+### Fixed
+
+- count the sidebar's bottom padding in the Settings window's minimum height
+- shrink the media keys pane icon to fit its square
+- size the Settings window's minimum height to fit the whole sidebar
+
+### Other
+
+- document media keys
+- document camera preview and the app entitlements
+- add CLAUDE.md and remove the plan, review and benchmark docs
+- reframe the README as an all-in-one macOS toolkit
+- add coming soon section to README features
+- expand with features, install and badges; rename CI workflow to build
+- Menu bar: stop the popover resizing while open and leaving doubled corners
+
 ## [0.1.1](https://github.com/jamieweavis/jaycast/compare/v0.1.0...v0.1.1) - 2026-10-30
 
 ### Other
