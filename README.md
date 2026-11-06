@@ -101,6 +101,7 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | | |
 | --- | --- |
 | **Brightness** | Control external monitors over DDC/CI with the brightness keys, dimming below their minimum to black. |
+| **Media Keys** | Send play/pause, next and previous to Spotify, Music or VLC (whichever you used last, or always the one you pick), so they never launch Apple Music. Also in the palette as Play/Pause, Next Track and Previous Track. |
 | **Keep Awake** | Stop your Mac (and optionally the display) sleeping while you need it. |
 | **Camera Preview** | Check your webcam before a call, from the palette. Switch cameras (iPhone included) and mirroring from <kbd>⌘</kbd><kbd>K</kbd>. |
 | **System Actions** | Lock Screen, Sleep, Empty Trash and more, plus every System Settings pane, from the palette. |
@@ -137,7 +138,6 @@ action = "Back"
 | --- | --- |
 | **Screen Drawing** | Draw and annotate over the screen. |
 | **Icon Changer** | Swap macOS app icons, and reapply them automatically when apps update. *(Name TBC.)* |
-| **Media Keys** | Send the media keys to the app you choose, such as Spotify, so they never launch Apple Music. |
 
 ## Privacy
 
@@ -159,6 +159,9 @@ action = "Back"
   are sent.
 - **The camera only runs while Camera Preview is showing**, and stops the moment you leave it. Nothing is
   recorded or saved.
+- **Media keys only reach the music app they're for.** Jaycast sends it play/pause, next or previous
+  and nothing else, after macOS asks you to allow it. Which app played last comes from the apps' own
+  broadcasts, not from watching what you play.
 - **Every feature can be switched off**, and a switched-off feature doesn't run.
 - **Settings are a plain text file** at `~/.config/jaycast.toml`: readable, diffable, and easy to back up
   or keep in your dotfiles.
@@ -180,6 +183,7 @@ Built for the keyboard. Every hotkey can be changed in Settings.
 | <kbd>esc</kbd> | Go back, or close |
 | <kbd>⌃</kbd><kbd>⌥</kbd><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> | Snap the focused window to a half |
 | <kbd>⌃</kbd><kbd>⌘</kbd> + drag | Move or resize the window under the cursor |
+| <kbd>⏯</kbd> <kbd>⏭</kbd> <kbd>⏮</kbd> | Play/pause, next and previous in your music app (with Media Keys on) |
 
 Give any app, system action or setting its own hotkey, and pair it with the Hyper Key so it never clashes
 with another app's shortcuts.
@@ -196,7 +200,8 @@ Jaycast is free and open source under the [MIT licence](LICENSE), and it stays t
 ## Install
 
 Download the `.dmg` from the [latest release](https://github.com/jamieweavis/jaycast/releases/latest), drag
-Jaycast to Applications and grant Accessibility access when asked. Requires macOS 26 or later.
+Jaycast to Applications and grant Accessibility access when asked. Media Keys also asks, once per music
+app, to control it. Requires macOS 26 or later.
 
 ## Development
 

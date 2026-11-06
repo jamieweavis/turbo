@@ -42,11 +42,12 @@ Frameworks the Rust crates need but Swift doesn't pull in must be added to `link
 `shell/Package.swift` (a static lib can't carry link flags). The app is signed with the hardened runtime
 and `Resources/Jaycast.entitlements`: a protected device (the camera, today) needs both an entitlement there
 and a usage string in `Info.plist`, or macOS silently refuses it (missing the string kills the app on the
-prompt).
+prompt). Apple Events (Media Keys) are the same: `com.apple.security.automation.apple-events` plus
+`NSAppleEventsUsageDescription`.
 
 **FFI surface:** `src/lib.rs` defines the single `Core` `uniffi::Object` the shell creates at launch.
 It owns one subsystem per feature module (`input`, `display`, `launcher`, `clipboard`, `files`,
-`windows`, `snippets`, `hyper`, `keep_awake`, `color_picker`, `emoji`, `camera`) and exposes paired
+`windows`, `snippets`, `hyper`, `keep_awake`, `color_picker`, `emoji`, `camera`, `media_keys`) and exposes paired
 `<area>_config()` / `set_<area>_config()` methods plus feature actions. Callbacks to Swift go through
 observer traits (`DisplayObserver`, `LauncherObserver`) registered via `set_*_observer`.
 
@@ -63,7 +64,7 @@ Other state (clipboard SQLite DB, usage ranking, colour/emoji history, chosen ca
 `~/Library/Application Support/Jaycast`, passed to `Core::new` as `data_dir`.
 
 **Event taps** (`input/tap.rs`, `hyper/tap.rs`, `snippets/tap.rs`, `windows/drag/tap.rs`,
-`display/keys.rs`): each runs on its own thread/run loop, wraps the callback in `catch_unwind` and passes
+`display/keys.rs`, `media_keys/tap.rs`; the last two share `aux_keys.rs` for media/brightness keys): each runs on its own thread/run loop, wraps the callback in `catch_unwind` and passes
 the event through on panic, reads config via a generation counter rather than locking per event,
 re-enables itself after macOS disables it, and ignores its own synthetic events. Follow this pattern
 for new taps. Taps need Accessibility; global hotkeys don't (`start_hotkeys` runs before the grant).
