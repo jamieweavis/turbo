@@ -96,6 +96,7 @@ enum ActionsMenuLayout {
         switch mode {
         case .search, .emoji: PaletteLayout.actionBarHeight
         case .clipboard, .files, .colors: PaletteLayout.footerHeight + 8
+        case .camera: PaletteLayout.actionBarHeight + PaletteLayout.cameraInset
         }
     }
 }
@@ -111,6 +112,7 @@ extension PaletteModel {
         case .files: fileActions()
         case .colors: colorActions()
         case .emoji: emojiActions()
+        case .camera: cameraActions()
         }
     }
 
@@ -282,6 +284,21 @@ extension PaletteModel {
         if let shortcode = selected.shortcode {
             actions.append(PaletteAction(title: "Copy Shortcode", symbol: "chevron.left.forwardslash.chevron.right") {
                 self.copy(":\(shortcode):")
+            })
+        }
+        return actions
+    }
+
+    /// Mirroring, then every camera with the one showing ticked.
+    private func cameraActions() -> [PaletteAction] {
+        var actions: [PaletteAction] = []
+        actions.append(PaletteAction(title: cameraMirrored ? "Turn Off Mirroring" : "Mirror Preview",
+                                     symbol: "arrow.left.and.right") {
+            self.toggleCameraMirror()
+        })
+        for device in camera.cameras {
+            actions.append(PaletteAction(title: device.name, symbol: device.selected ? "checkmark" : device.kind.symbol) {
+                self.selectCamera(device.id)
             })
         }
         return actions

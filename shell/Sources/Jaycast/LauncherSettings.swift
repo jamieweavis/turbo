@@ -98,6 +98,7 @@ final class LauncherSettings {
         case .keepAwake: config.keepAwake.enabled
         case .colorPicker: config.colorPicker.enabled
         case .emoji: config.emoji.enabled
+        case .camera: config.camera.enabled
         }
     }
 
@@ -120,6 +121,7 @@ final class LauncherSettings {
         case .keepAwake: config.keepAwake.enabled = enabled
         case .colorPicker: config.colorPicker.enabled = enabled
         case .emoji: config.emoji.enabled = enabled
+        case .camera: config.camera.enabled = enabled
         }
         let ids = itemIDs(of: feature)
         if enabled, !ids.contains(where: { Self.isShown($0, in: config) }) {
@@ -271,6 +273,10 @@ final class LauncherSettings {
         set { updateItemSettings(Self.emojiItemID) { $0.hotkey = newValue } }
     }
 
+    /// Camera Preview has no pane of its own: it's turned off and given a hotkey from its
+    /// launcher item.
+    static let cameraItemID = "mode:camera"
+
     private func itemSettings(_ id: String) -> ItemSettings? {
         config.items.first { $0.id == id }
     }
@@ -417,7 +423,7 @@ final class LauncherSettings {
 
 /// A launcher feature that can be turned off as a whole, from its settings pane's switch.
 enum LauncherFeature {
-    case quicklinks, commands, snippets, clipboard, files, windows, keepAwake, colorPicker, emoji
+    case quicklinks, commands, snippets, clipboard, files, windows, keepAwake, colorPicker, emoji, camera
 
     /// The feature a search result belongs to, matching the core's `disabled_features`.
     init?(itemID id: String) {
@@ -426,6 +432,7 @@ enum LauncherFeature {
         case "mode:files": self = .files
         case "mode:colors", "color:pick": self = .colorPicker
         case LauncherSettings.emojiItemID: self = .emoji
+        case LauncherSettings.cameraItemID: self = .camera
         case _ where id.hasPrefix("window:"): self = .windows
         case _ where id.hasPrefix("keep-awake:"): self = .keepAwake
         case _ where id.hasPrefix("quicklink:"): self = .quicklinks

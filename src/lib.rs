@@ -354,11 +354,6 @@ impl Core {
         self.cameras.select(&id)
     }
 
-    /// Switches Camera Preview to the next camera, wrapping around, and returns it.
-    pub fn select_next_camera(&self) -> Result<Option<CameraDevice>, CoreError> {
-        self.cameras.select_next()
-    }
-
     /// Whether Jaycast may use the camera.
     pub fn camera_access(&self) -> CameraAccess {
         camera::access()

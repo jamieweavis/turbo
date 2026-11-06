@@ -111,6 +111,8 @@ pub enum PaletteMode {
     Colors,
     /// The emoji picker.
     Emoji,
+    /// Camera Preview: the selected camera's live feed.
+    Camera,
 }
 
 /// Palette modes listed in search, so they can be found without their hotkeys:
@@ -166,6 +168,19 @@ const MODES: &[ModeEntry] = &[
             "insert emoji",
         ],
         "face.smiling",
+    ),
+    (
+        PaletteMode::Camera,
+        "camera",
+        "Preview Camera",
+        &[
+            "camera preview",
+            "webcam",
+            "mirror",
+            "facetime",
+            "how do i look",
+        ],
+        "web.camera",
     ),
 ];
 
@@ -292,7 +307,7 @@ const SECONDARY_MATCH_DIVISOR: i32 = 4;
 /// The search results of each feature that's turned off: result ids, or id prefixes ending
 /// in `:` for every result of a kind.
 fn disabled_features(config: &LauncherConfig) -> Vec<&'static str> {
-    let features: [(bool, &[&'static str]); 9] = [
+    let features: [(bool, &[&'static str]); 10] = [
         (config.quicklinks_enabled, &["quicklink:"]),
         (config.commands_enabled, &["command:"]),
         (config.snippets.enabled, &["snippet:"]),
@@ -302,6 +317,7 @@ fn disabled_features(config: &LauncherConfig) -> Vec<&'static str> {
         (config.keep_awake.enabled, &["keep-awake:"]),
         (config.color_picker.enabled, &[PICK_COLOR_ID, "mode:colors"]),
         (config.emoji.enabled, &["mode:emoji"]),
+        (config.camera.enabled, &["mode:camera"]),
     ];
     features
         .into_iter()
@@ -1152,6 +1168,9 @@ mod tests {
         for query in ["emoji", "emoji picker", "smiley"] {
             assert_eq!(find(query)[0].id, "mode:emoji", "{query}");
         }
+        for query in ["camera", "preview camera", "webcam", "mirror"] {
+            assert_eq!(find(query)[0].id, "mode:camera", "{query}");
+        }
         assert_eq!(mode_for_id("colors"), Some(PaletteMode::Colors));
     }
 
@@ -1239,8 +1258,10 @@ mod tests {
         config.windows.enabled = false;
         config.color_picker.enabled = false;
         config.emoji.enabled = false;
+        config.camera.enabled = false;
         config.quicklinks_enabled = false;
         let prefs = Prefs::new(&config);
+        assert!(!prefs.is_enabled("mode:camera"));
         assert!(!prefs.is_enabled("window:left-half"));
         assert!(!prefs.is_enabled(PICK_COLOR_ID));
         assert!(!prefs.is_enabled("mode:colors"));

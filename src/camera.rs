@@ -125,20 +125,6 @@ impl Cameras {
         self.save(chosen.as_deref())
     }
 
-    /// Switches to the camera after the current one, wrapping around, and returns it.
-    pub fn select_next(&self) -> Result<Option<CameraDevice>, CoreError> {
-        let devices = self.list();
-        let Some(next) = next(&devices) else {
-            return Ok(None);
-        };
-        let device = devices[next].clone();
-        self.select(&device.id)?;
-        Ok(Some(CameraDevice {
-            selected: true,
-            ..device
-        }))
-    }
-
     /// Writes atomically, like the config.
     fn save(&self, device: Option<&str>) -> Result<(), CoreError> {
         if let Some(dir) = self.path.parent() {
@@ -169,15 +155,6 @@ fn resolve(
     find(chosen)
         .or_else(|| find(preferred))
         .or((!devices.is_empty()).then_some(0))
-}
-
-/// The index after the selected camera, wrapping; the first when none is selected.
-fn next(devices: &[CameraDevice]) -> Option<usize> {
-    if devices.is_empty() {
-        return None;
-    }
-    let current = devices.iter().position(|d| d.selected);
-    Some(current.map_or(0, |index| (index + 1) % devices.len()))
 }
 
 /// Video cameras macOS currently has, in the order it lists them. Desk View is left out:
@@ -349,18 +326,6 @@ mod tests {
         assert_eq!(resolve(&devices, Some("unplugged"), None), Some(0));
         assert_eq!(resolve(&devices, None, Some("gone")), Some(0));
         assert_eq!(resolve(&[], Some("studio"), Some("iphone")), None);
-    }
-
-    #[test]
-    fn next_wraps_around() {
-        let mut devices = cameras();
-        assert_eq!(next(&devices), Some(0));
-        devices[2].selected = true;
-        assert_eq!(next(&devices), Some(3));
-        devices[2].selected = false;
-        devices[3].selected = true;
-        assert_eq!(next(&devices), Some(0));
-        assert_eq!(next(&[]), None);
     }
 
     #[test]

@@ -95,6 +95,7 @@ impl Target {
             Target::Window(_) => config.windows.enabled,
             Target::KeepAwake(_) => config.keep_awake.enabled,
             Target::Mode(PaletteMode::Emoji) => config.emoji.enabled,
+            Target::Mode(PaletteMode::Camera) => config.camera.enabled,
             Target::Palette
             | Target::Mode(PaletteMode::Search)
             | Target::App(_)
@@ -672,6 +673,7 @@ mod tests {
         };
         config.items = vec![
             item("mode:emoji", 0x0E),
+            item("mode:camera", 0x08),
             item("settings:sound", 0x01),
             item("unknown:thing", 0x02),
             ItemSettings {
@@ -688,8 +690,16 @@ mod tests {
             targets,
             vec![
                 Target::Mode(PaletteMode::Emoji),
+                Target::Mode(PaletteMode::Camera),
                 Target::Settings("sound".into())
             ]
+        );
+        config.camera.enabled = false;
+        assert!(
+            !plan(&config)
+                .hotkeys
+                .iter()
+                .any(|p| p.target == Target::Mode(PaletteMode::Camera))
         );
         assert_eq!(Target::for_item(PICK_COLOR_ID), Some(Target::PickColor));
         config.emoji.enabled = false;

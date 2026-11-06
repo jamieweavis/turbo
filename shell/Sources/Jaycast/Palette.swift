@@ -6,8 +6,8 @@ import SwiftUI
 import os
 
 /// The launcher palette: a floating Liquid Glass panel with a search field and results.
-/// It has five modes (search, clipboard history, file search, picked colours, emoji) sharing
-/// the one field. Colours and emoji show a grid rather than a list.
+/// It has six modes (search, clipboard history, file search, picked colours, emoji, camera
+/// preview) sharing the one field. Colours and emoji show a grid rather than a list.
 ///
 /// The panel is non-activating, so the frontmost app keeps looking active, but it still
 /// becomes key so typing goes to the search field. The controller solely owns the frame:
@@ -184,6 +184,16 @@ private final class PalettePanel: NSPanel {
         onCancel?()
     }
 
+    /// Keys only land here when nothing in the panel has focus (the camera's read-only
+    /// field): Esc still backs out, and typing is dropped without a beep.
+    override func keyDown(with event: NSEvent) {
+        guard firstResponder === self else {
+            super.keyDown(with: event)
+            return
+        }
+        if Int(event.keyCode) == kVK_Escape { onCancel?() }
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
             switch event.charactersIgnoringModifiers {
@@ -310,7 +320,7 @@ enum PaletteLayout {
         switch mode {
         case .clipboard: clipboardSize.width
         case .emoji: emojiSize.width
-        case .search, .files, .colors: 680
+        case .search, .files, .colors, .camera: 680
         }
     }
 
@@ -358,6 +368,8 @@ enum PaletteLayout {
                 height += 1 + listPadding * 2 + grid.rounded() + 1 + footerHeight
             }
             return CGSize(width: width(for: .colors), height: height)
+        case .camera:
+            return CGSize(width: width(for: .camera), height: searchHeight + message + cameraFeedHeight + cameraInset)
         }
     }
 
@@ -400,6 +412,7 @@ final class PaletteModel {
     let files: FileBrowser
     let colors: ColorBrowser
     let emoji: EmojiBrowser
+    let camera: CameraPreview
 
     @ObservationIgnored var onClose: (() -> Void)?
     /// Shows the palette again, e.g. to report a paste that failed after it closed.
@@ -432,6 +445,7 @@ final class PaletteModel {
         files = FileBrowser(core: core)
         colors = ColorBrowser(core: core)
         emoji = EmojiBrowser(core: core)
+        camera = CameraPreview(core: core)
     }
 
     var clipboardConfig: ClipboardConfig { settings.config.clipboard }
@@ -439,6 +453,7 @@ final class PaletteModel {
     var fileScopes: [String] { settings.config.files.scopes }
     var colorFormat: ColorFormat { settings.config.colorPicker.format }
     var emojiPasteOnOpen: Bool { settings.config.emoji.pasteOnOpen }
+    var cameraMirrored: Bool { settings.config.camera.mirror }
 
     /// The line between the search field and the results, if any.
     var message: PaletteMessage? {
@@ -475,6 +490,8 @@ final class PaletteModel {
             if emoji.isEmpty {
                 return .noResults(query)
             }
+        case .camera:
+            break
         }
         return nil
     }
@@ -516,9 +533,11 @@ final class PaletteModel {
         lastHoverLocation = NSEvent.mouseLocation
     }
 
-    /// Switches mode in place, starting from an empty query.
+    /// Switches mode in place, starting from an empty query. The camera runs only while its
+    /// mode is showing.
     func enter(_ mode: PaletteMode, fromSearch: Bool = false) {
         self.mode = mode
+        if mode == .camera { camera.start() } else { camera.stop() }
         enteredFromSearch = fromSearch
         actionsMenu = nil
         confirming = nil
@@ -533,6 +552,7 @@ final class PaletteModel {
     }
 
     func didHide() {
+        camera.stop()
         closeTask?.cancel()
         closeTask = nil
         actionsMenu = nil
@@ -554,6 +574,7 @@ final class PaletteModel {
         case .files: files.search(query)
         case .colors: colors.refresh(query: query)
         case .emoji: emoji.refresh(query: query)
+        case .camera: break
         }
     }
 
@@ -577,6 +598,7 @@ final class PaletteModel {
         case .files: files.move(by: offset)
         case .colors: colors.move(offset < 0 ? .up : .down)
         case .emoji: emoji.move(offset < 0 ? .up : .down)
+        case .camera: break
         }
     }
 
@@ -586,7 +608,7 @@ final class PaletteModel {
         switch mode {
         case .colors: colors.move(direction)
         case .emoji: emoji.move(direction)
-        case .search, .clipboard, .files: break
+        case .search, .clipboard, .files, .camera: break
         }
     }
 
@@ -604,6 +626,7 @@ final class PaletteModel {
         case .files: files.selection = index
         case .colors: colors.selection = index
         case .emoji: emoji.selection = index
+        case .camera: break
         }
     }
 
@@ -620,6 +643,8 @@ final class PaletteModel {
             copySelectedColor()
         case .emoji:
             insertSelectedEmoji(paste: emojiPasteOnOpen)
+        case .camera:
+            break
         }
     }
 
@@ -878,6 +903,25 @@ final class PaletteModel {
         }
     }
 
+    // MARK: Camera actions
+
+    func openCameraPrivacySettings() {
+        do {
+            _ = try core.openResult(id: "settings:privacy-camera", query: "")
+            onClose?()
+        } catch {
+            report(error)
+        }
+    }
+
+    func selectCamera(_ id: String) {
+        do { try camera.select(id) } catch { report(error) }
+    }
+
+    func toggleCameraMirror() {
+        settings.config.camera.mirror.toggle()
+    }
+
     private func complete(with completion: String) {
         query = completion
         cursorToEndRequest += 1
@@ -955,11 +999,13 @@ private struct PaletteView: View {
                     .foregroundStyle(.secondary)
                 SearchField(
                     text: $model.query,
-                    placeholder: model.mode.placeholder,
+                    placeholder: model.placeholder,
                     focusRequest: model.focusRequest,
                     cursorToEndRequest: model.cursorToEndRequest,
                     refocusRequest: model.refocusRequest,
-                    takesSidewaysArrows: model.mode.isGrid
+                    takesSidewaysArrows: model.mode.isGrid,
+                    // Nothing to search while the camera shows.
+                    isEditable: model.mode != .camera
                 ) { command in
                     switch command {
                     case .up: model.move(by: -1)
@@ -1003,6 +1049,8 @@ private struct PaletteView: View {
                 if !model.emoji.isEmpty {
                     EmojiModeView(model: model)
                 }
+            case .camera:
+                CameraModeView(model: model)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -1051,6 +1099,7 @@ extension PaletteMode {
         case .files: "doc.text.magnifyingglass"
         case .colors: "swatchpalette"
         case .emoji: "face.smiling"
+        case .camera: "web.camera"
         }
     }
 
@@ -1066,7 +1115,16 @@ extension PaletteMode {
         case .files: "Search files…"
         case .colors: "Search picked colours…"
         case .emoji: "Search emoji…"
+        case .camera: "Camera Preview"
         }
+    }
+}
+
+extension PaletteModel {
+    /// The mode's placeholder; Camera Preview names the camera it's showing.
+    var placeholder: String {
+        if mode == .camera, let name = camera.camera?.name { return name }
+        return mode.placeholder
     }
 }
 
@@ -1270,21 +1328,11 @@ struct FloatingAction {
 struct FloatingActionBar: View {
     let onShowSettings: (() -> Void)?
     let actions: [FloatingAction]
+    var showsSettings = true
 
     var body: some View {
         HStack {
-            Button {
-                onShowSettings?()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 36)
-                    .contentShape(.circle)
-            }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .help("Settings (⌘,)")
+            if showsSettings { settingsButton }
             Spacer()
             if !actions.isEmpty {
                 HStack(spacing: 4) {
@@ -1292,7 +1340,7 @@ struct FloatingActionBar: View {
                         Button(action: action.perform) {
                             HStack(spacing: 8) {
                                 Text(action.label)
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: 13, weight: .regular))
                                     .foregroundStyle(index == 0 ? .primary : .secondary)
                                 Keycaps(keys: action.keys)
                             }
@@ -1309,6 +1357,21 @@ struct FloatingActionBar: View {
         }
         .padding(.horizontal, 10)
         .frame(height: PaletteLayout.actionBarHeight)
+    }
+
+    private var settingsButton: some View {
+        Button {
+            onShowSettings?()
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 36, height: 36)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .help("Settings (⌘,)")
     }
 }
 
@@ -1387,6 +1450,9 @@ struct SearchField: NSViewRepresentable {
     var refocusRequest = 0
     /// ← and → move through a grid instead of the cursor.
     var takesSidewaysArrows = false
+    /// Off, the field only shows its placeholder; Esc and the ⌘ shortcuts still reach the
+    /// panel.
+    var isEditable = true
     let onCommand: (Command) -> Void
 
     enum Command { case up, down, left, right, submit, alternateSubmit, complete, cancel }
@@ -1411,6 +1477,13 @@ struct SearchField: NSViewRepresentable {
         }
         if field.placeholderString != placeholder {
             field.placeholderString = placeholder
+        }
+        if field.isEditable != isEditable {
+            field.isEditable = isEditable
+            field.isSelectable = isEditable
+            if !isEditable, field.currentEditor() != nil {
+                field.window?.makeFirstResponder(nil)
+            }
         }
         if context.coordinator.focusRequest != focusRequest {
             context.coordinator.focusRequest = focusRequest
