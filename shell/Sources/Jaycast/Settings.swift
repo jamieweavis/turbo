@@ -786,6 +786,7 @@ private struct SidebarLimits: NSViewRepresentable {
         private weak var scrollView: NSScrollView?
         private weak var sidebarView: NSView?
         private var reportedHeight: CGFloat = 0
+        private static let bottomPadding: CGFloat = 10
         private var lookups = 0
 
         init(width: CGFloat, onFitHeight: @escaping (CGFloat) -> Void) {
@@ -859,7 +860,9 @@ private struct SidebarLimits: NSViewRepresentable {
             guard let scrollView, let table = scrollView.documentView as? NSTableView,
                   table.numberOfRows > 0
             else { return }
-            let rows = table.rect(ofRow: table.numberOfRows - 1).maxY
+            // A source list keeps space below its last row (10pt on macOS 26). It can't be read from
+            // the table, whose height stretches to fill the visible area.
+            let rows = table.rect(ofRow: table.numberOfRows - 1).maxY + Self.bottomPadding
             let insets = scrollView.contentInsets
             let height = (rows + insets.bottom).rounded(.up)
             guard height != reportedHeight else { return }
