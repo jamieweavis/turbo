@@ -15,6 +15,7 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("jaycast_core"),
                 .linkedFramework("CoreDisplay"),  // ddc-macos
+                .linkedFramework("AVFoundation"),  // camera
             ]
         ),
         .executableTarget(

@@ -39,7 +39,8 @@ app: build
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $({{just_executable()}} version)" \
         -c "Set :CFBundleVersion $({{just_executable()}} version)" {{app}}/Contents/Info.plist
     cp "$(swift build --package-path shell -c {{config}} --show-bin-path)/Jaycast" {{app}}/Contents/MacOS/
-    codesign --force --options runtime --sign "{{sign_identity}}" {{app}}
+    codesign --force --options runtime --entitlements Resources/Jaycast.entitlements \
+        --sign "{{sign_identity}}" {{app}}
 
 # Package build/Jaycast.app as build/Jaycast-<version>-macos-arm64.dmg (CONFIG=release to ship)
 dmg: app

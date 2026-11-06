@@ -51,6 +51,7 @@ pub struct LauncherConfig {
     pub keep_awake: KeepAwakeConfig,
     pub color_picker: ColorPickerConfig,
     pub emoji: EmojiConfig,
+    pub camera: CameraConfig,
     /// Per-item settings for apps and built-in commands; items without one are enabled with
     /// no aliases.
     pub items: Vec<ItemSettings>,
@@ -77,6 +78,7 @@ impl Default for LauncherConfig {
             keep_awake: KeepAwakeConfig::default(),
             color_picker: ColorPickerConfig::default(),
             emoji: EmojiConfig::default(),
+            camera: CameraConfig::default(),
             items: Vec::new(),
         }
     }
@@ -362,6 +364,25 @@ impl Default for EmojiConfig {
         Self {
             enabled: true,
             paste_on_open: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct CameraConfig {
+    /// Off leaves out Camera Preview's hotkey and search item. Its hotkey is the
+    /// `mode:camera` item's. The camera itself only runs while the preview is showing.
+    pub enabled: bool,
+    /// Flips the preview horizontally, like a mirror (and like FaceTime's own preview).
+    pub mirror: bool,
+}
+
+impl Default for CameraConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            mirror: true,
         }
     }
 }

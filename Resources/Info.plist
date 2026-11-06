@@ -23,5 +23,8 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- Shown in the camera prompt. Without it macOS ends the app when it asks. -->
+    <key>NSCameraUsageDescription</key>
+    <string>Jaycast shows your camera in Camera Preview, only while the preview is open.</string>
 </dict>
 </plist>

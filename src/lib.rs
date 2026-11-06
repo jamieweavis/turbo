@@ -3,6 +3,7 @@
 
 uniffi::setup_scaffolding!();
 
+mod camera;
 mod clipboard;
 mod color_picker;
 mod config;
@@ -23,6 +24,8 @@ use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use camera::Cameras;
+pub use camera::{CameraAccess, CameraDevice, CameraKind};
 use clipboard::ClipboardHistory;
 pub use clipboard::{ClipboardItem, ClipboardKind};
 use color_picker::ColorHistory;
@@ -86,6 +89,7 @@ pub struct Core {
     keep_awake: Arc<KeepAwake>,
     colors: ColorHistory,
     emoji: EmojiPicker,
+    cameras: Cameras,
 }
 
 #[uniffi::export]
@@ -129,6 +133,7 @@ impl Core {
         let window_drag = WindowDrag::new(config.window_drag.clone(), Arc::clone(&windows));
         let colors = ColorHistory::new(&data_dir);
         let emoji = EmojiPicker::new(&data_dir);
+        let cameras = Cameras::new(&data_dir);
         Ok(Arc::new(Self {
             saver,
             config: Mutex::new(config),
@@ -146,6 +151,7 @@ impl Core {
             keep_awake,
             colors,
             emoji,
+            cameras,
         }))
     }
 
@@ -329,6 +335,39 @@ impl Core {
     /// The recently used emoji, newest first.
     pub fn recent_emoji(&self) -> Vec<EmojiInfo> {
         self.emoji.recent()
+    }
+
+    /// Connected cameras, built-in first, with the one Camera Preview shows marked
+    /// `selected`. Quick enough to call whenever the preview opens or the menu is shown.
+    pub fn cameras(&self) -> Vec<CameraDevice> {
+        self.cameras.list()
+    }
+
+    /// The camera Camera Preview shows, or `None` when there's no camera.
+    pub fn current_camera(&self) -> Option<CameraDevice> {
+        self.cameras.current()
+    }
+
+    /// Makes `id` the camera Camera Preview shows, and remembers it (also while it's
+    /// unplugged, so it's chosen again when it's back).
+    pub fn select_camera(&self, id: String) -> Result<(), CoreError> {
+        self.cameras.select(&id)
+    }
+
+    /// Switches Camera Preview to the next camera, wrapping around, and returns it.
+    pub fn select_next_camera(&self) -> Result<Option<CameraDevice>, CoreError> {
+        self.cameras.select_next()
+    }
+
+    /// Whether Jaycast may use the camera.
+    pub fn camera_access(&self) -> CameraAccess {
+        camera::access()
+    }
+
+    /// Shows the system's camera prompt if it hasn't been answered, and returns whether
+    /// access is granted.
+    pub async fn request_camera_access(&self) -> bool {
+        camera::request_access().await
     }
 
     /// Forgets every recently used emoji.
