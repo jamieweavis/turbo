@@ -122,6 +122,17 @@ impl EmojiPicker {
             .collect()
     }
 
+    /// Drops one emoji from recently used; a no-op if it isn't there.
+    pub fn remove_recent(&self, emoji: &str) -> Result<(), CoreError> {
+        let mut recent = self.recent.lock();
+        let before = recent.len();
+        recent.retain(|e| e != emoji);
+        if recent.len() == before {
+            return Ok(());
+        }
+        self.save(&recent)
+    }
+
     pub fn clear_recent(&self) -> Result<(), CoreError> {
         let mut recent = self.recent.lock();
         recent.clear();
@@ -282,6 +293,24 @@ mod tests {
         };
         let recent = picker(&[later]);
         assert!(position(&recent, later) < position(&recent, earlier));
+    }
+
+    #[test]
+    fn removing_recent_drops_only_that_emoji() {
+        let dir = std::env::temp_dir().join(format!("jaycast-emoji-rm-{}", std::process::id()));
+        let picker = EmojiPicker::new(&dir);
+        record(&mut picker.recent.lock(), "🚀");
+        record(&mut picker.recent.lock(), "😀");
+        picker.remove_recent("🚀").unwrap();
+        let left: Vec<_> = picker.recent().into_iter().map(|e| e.emoji).collect();
+        assert_eq!(left, ["😀"]);
+        let reloaded: Vec<_> = EmojiPicker::new(&dir)
+            .recent()
+            .into_iter()
+            .map(|e| e.emoji)
+            .collect();
+        assert_eq!(reloaded, ["😀"]);
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

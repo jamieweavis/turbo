@@ -415,6 +415,11 @@ impl Core {
         camera::request_access().await
     }
 
+    /// Forgets one recently used emoji.
+    pub fn remove_recent_emoji(&self, emoji: String) -> Result<(), CoreError> {
+        self.emoji.remove_recent(&emoji)
+    }
+
     /// Forgets every recently used emoji.
     pub fn clear_recent_emoji(&self) -> Result<(), CoreError> {
         self.emoji.clear_recent()

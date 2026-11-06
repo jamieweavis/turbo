@@ -19,6 +19,17 @@ final class EmojiState {
         recent = core.recentEmoji()
     }
 
+    func removeRecent(_ emoji: String) {
+        do {
+            try core.removeRecentEmoji(emoji: emoji)
+            error = nil
+        } catch {
+            Logger.settings.error("couldn't remove recent emoji: \(error, privacy: .public)")
+            self.error = error.userMessage
+        }
+        refresh()
+    }
+
     func clearRecent() {
         do {
             try core.clearRecentEmoji()
@@ -85,6 +96,12 @@ struct EmojiPane: View {
                                 .font(.system(size: 26))
                                 .frame(maxWidth: .infinity)
                                 .help([emoji.name, emoji.shortcode.map { ":\($0):" }].compactMap(\.self).joined(separator: "  "))
+                                .contentShape(Rectangle())
+                                .contextMenu {
+                                    Button("Remove from Recently Used", role: .destructive) {
+                                        state.removeRecent(emoji.emoji)
+                                    }
+                                }
                         }
                     }
                     .padding(.vertical, 4)
