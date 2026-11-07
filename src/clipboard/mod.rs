@@ -342,6 +342,236 @@ fn now() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::launcher::{PaletteMode, Status};
+    use capture::Content;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use store::Source;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "jaycast-clipboard-history-{name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    /// History off, so the monitor never touches the real pasteboard.
+    fn config(max_items: u32, retention_days: u32) -> ClipboardConfig {
+        ClipboardConfig {
+            enabled: false,
+            max_items,
+            retention_days,
+            ..ClipboardConfig::default()
+        }
+    }
+
+    #[derive(Default)]
+    struct Counter(AtomicUsize);
+
+    impl Counter {
+        fn count(&self) -> usize {
+            self.0.load(Ordering::SeqCst)
+        }
+    }
+
+    impl LauncherObserver for Counter {
+        fn toggle_palette(&self) {}
+        fn apps_changed(&self) {}
+        fn command_finished(&self, _: String, _: String, _: bool) {}
+        fn show_mode(&self, _: PaletteMode) {}
+        fn clipboard_changed(&self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+        fn keep_awake_changed(&self, _: bool) {}
+        fn pick_color(&self) {}
+        fn show_status(&self, _: Status) {}
+    }
+
+    fn observed(history: &ClipboardHistory) -> Arc<Counter> {
+        let counter = Arc::new(Counter::default());
+        history.set_observer(Some(counter.clone()));
+        counter
+    }
+
+    fn record(history: &ClipboardHistory, text: &str, at: f64) -> i64 {
+        let store = history.store.as_ref().unwrap();
+        store
+            .insert(&Content::Text(text.into()), &Source::default(), at)
+            .unwrap();
+        store.items(text, 1).unwrap()[0].id
+    }
+
+    fn texts(history: &ClipboardHistory) -> Vec<String> {
+        history.items("", 100).into_iter().map(|i| i.text).collect()
+    }
+
+    #[test]
+    fn changes_notify_the_observer_only_when_something_changed() {
+        let dir = temp_dir("notify");
+        let history = ClipboardHistory::new(&dir, config(0, 0));
+        let counter = observed(&history);
+        let a = record(&history, "a", now());
+        record(&history, "b", now());
+
+        history.set_pinned(a, true).unwrap();
+        assert_eq!(counter.count(), 1);
+        history.set_pinned(a, true).unwrap();
+        assert_eq!(counter.count(), 1, "pinning a pinned item changes nothing");
+
+        history.clear().unwrap();
+        assert_eq!(counter.count(), 2);
+        assert_eq!(texts(&history), vec!["a"]);
+        history.clear().unwrap();
+        assert_eq!(counter.count(), 2, "nothing unpinned was left to clear");
+
+        history.delete(a).unwrap();
+        assert_eq!(counter.count(), 3);
+        history.delete(a).unwrap();
+        assert_eq!(
+            counter.count(),
+            3,
+            "deleting a missing item is a quiet no-op"
+        );
+        assert!(texts(&history).is_empty());
+
+        history.set_observer(None);
+        record(&history, "c", now());
+        history.clear().unwrap();
+        assert_eq!(counter.count(), 3);
+        drop(history);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn shrinking_limits_prunes_at_once_and_notifies() {
+        let dir = temp_dir("limits");
+        let history = ClipboardHistory::new(&dir, config(0, 0));
+        let counter = observed(&history);
+        for text in ["a", "b", "c"] {
+            record(&history, text, now());
+        }
+
+        history.set_config(config(10, 0));
+        assert_eq!(counter.count(), 0, "nothing to prune");
+        history.set_config(config(2, 0));
+        assert_eq!(counter.count(), 1);
+        assert_eq!(texts(&history), vec!["c", "b"]);
+        drop(history);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn opening_applies_retention_to_old_items() {
+        let dir = temp_dir("open-prune");
+        {
+            let history = ClipboardHistory::new(&dir, config(0, 0));
+            record(&history, "ancient", 1.0);
+            record(&history, "fresh", now());
+        }
+        let history = ClipboardHistory::new(&dir, config(0, 1));
+        assert_eq!(texts(&history), vec!["fresh"]);
+        drop(history);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn query_and_limit_are_passed_through() {
+        let dir = temp_dir("query");
+        let history = ClipboardHistory::new(&dir, config(0, 0));
+        record(&history, "apple pie", 1.0);
+        record(&history, "banana", 2.0);
+        record(&history, "apple tart", 3.0);
+        let found: Vec<_> = history
+            .items("apple", 10)
+            .into_iter()
+            .map(|i| i.text)
+            .collect();
+        assert_eq!(found, vec!["apple tart", "apple pie"]);
+        assert_eq!(history.items("", 1).len(), 1);
+        assert!(history.items("", 0).is_empty());
+        drop(history);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn pasting_a_missing_item_errs() {
+        let dir = temp_dir("paste-missing");
+        let history = ClipboardHistory::new(&dir, config(0, 0));
+        // Fails on the lookup, before anything is written to the pasteboard.
+        assert!(matches!(
+            history.paste(12345, false),
+            Err(CoreError::Other { .. })
+        ));
+        drop(history);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_unavailable_store_degrades_instead_of_crashing() {
+        let dir = temp_dir("unavailable");
+        fs::create_dir_all(&dir).unwrap();
+        // A file where the store's directory should be.
+        fs::write(dir.join("clipboard"), "").unwrap();
+        let history = ClipboardHistory::new(&dir, config(0, 0));
+        assert!(history.store.is_none());
+        assert!(history.items("", 10).is_empty());
+        assert!(history.delete(1).is_err());
+        assert!(history.set_pinned(1, true).is_err());
+        assert!(history.clear().is_err());
+        assert!(history.paste(1, false).is_err());
+        history.set_config(config(1, 1));
+        drop(history);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn turning_history_on_starts_a_new_generation() {
+        let signal = MonitorSignal::default();
+        let short = Duration::from_millis(1);
+        assert_eq!(signal.wait(short, short), Some((false, 0)));
+        signal.set_enabled(true);
+        assert_eq!(signal.wait(short, short), Some((true, 1)));
+        signal.set_enabled(true);
+        assert_eq!(signal.wait(short, short), Some((true, 1)), "already on");
+        signal.set_enabled(false);
+        signal.set_enabled(true);
+        assert_eq!(signal.wait(short, short), Some((true, 2)));
+    }
+
+    #[test]
+    fn a_waiting_monitor_wakes_when_turned_on_or_shut_down() {
+        let signal = Arc::new(MonitorSignal::default());
+        let long = Duration::from_secs(30);
+        // A short poll, so a waiter that only starts after being turned on still returns.
+        let poll = Duration::from_millis(1);
+        for shut_down in [false, true] {
+            let waiter = {
+                let signal = Arc::clone(&signal);
+                thread::spawn(move || {
+                    let started = Instant::now();
+                    (signal.wait(poll, long), started.elapsed())
+                })
+            };
+            thread::sleep(Duration::from_millis(50));
+            if shut_down {
+                signal.shut_down();
+            } else {
+                signal.set_enabled(true);
+            }
+            let (result, waited) = waiter.join().unwrap();
+            assert!(waited < Duration::from_secs(10), "the wait wasn't woken");
+            if shut_down {
+                assert_eq!(result, None);
+            } else {
+                assert_eq!(result, Some((true, 1)));
+                signal.set_enabled(false);
+            }
+        }
+        assert_eq!(signal.wait(long, long), None, "stays shut down");
+    }
 
     /// Reads (never writes) the real pasteboard: `cargo test -- --ignored clipboard_reads`.
     #[test]

@@ -74,11 +74,51 @@ pub fn default_window_config() -> WindowConfig {
     WindowConfig::default()
 }
 
+/// The loaded config and the saver that persists it.
+struct Settings {
+    saver: ConfigSaver,
+    config: Mutex<Config>,
+}
+
+impl Settings {
+    fn new(saver: ConfigSaver, config: Config) -> Self {
+        Self {
+            saver,
+            config: Mutex::new(config),
+        }
+    }
+
+    fn read<T>(&self, read: impl FnOnce(&Config) -> T) -> T {
+        read(&self.config.lock())
+    }
+
+    /// Changes the config, queues a save and applies the result to the running subsystems.
+    /// `apply` runs under the lock, so concurrent changes are applied in the order they're
+    /// saved. The change is saved even if applying it fails; an apply error is returned in
+    /// preference to a save error.
+    fn update(
+        &self,
+        change: impl FnOnce(&mut Config),
+        apply: impl FnOnce(&Config) -> Result<(), CoreError>,
+    ) -> Result<(), CoreError> {
+        let mut config = self.config.lock();
+        let before = config.clone();
+        change(&mut config);
+        config::log_changes(&before, &config);
+        let saved = self.saver.save(&config);
+        apply(&config)?;
+        saved
+    }
+
+    fn flush(&self) -> Result<(), CoreError> {
+        self.saver.flush()
+    }
+}
+
 /// The app's single core instance. The shell creates one at launch and keeps it.
 #[derive(uniffi::Object)]
 pub struct Core {
-    saver: ConfigSaver,
-    config: Mutex<Config>,
+    settings: Settings,
     input: InputEngine,
     displays: Arc<DisplayManager>,
     brightness_keys: BrightnessKeyTap,
@@ -146,8 +186,7 @@ impl Core {
         let emoji = EmojiPicker::new(&data_dir);
         let cameras = Cameras::new(&data_dir);
         Ok(Arc::new(Self {
-            saver,
-            config: Mutex::new(config),
+            settings: Settings::new(saver, config),
             input,
             displays,
             brightness_keys,
@@ -168,33 +207,33 @@ impl Core {
     }
 
     pub fn mouse_config(&self) -> MouseConfig {
-        self.config.lock().mouse.clone()
+        self.settings.read(|config| config.mouse.clone())
     }
 
     /// Applies the new mouse settings immediately if input is running, and saves them.
     pub fn set_mouse_config(&self, mouse: MouseConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock();
-        let before = config.clone();
-        config.mouse = mouse.clone();
-        config::log_changes(&before, &config);
-        self.input.set_config(mouse);
-        self.saver.save(&config)
+        self.settings.update(
+            |config| config.mouse = mouse,
+            |config| {
+                self.input.set_config(config.mouse.clone());
+                Ok(())
+            },
+        )
     }
 
     pub fn monitor_config(&self) -> MonitorConfig {
-        self.config.lock().monitor.clone()
+        self.settings.read(|config| config.monitor.clone())
     }
 
     /// Applies the new monitor settings immediately, and saves them.
     pub fn set_monitor_config(&self, monitor: MonitorConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock();
-        let before = config.clone();
-        config.monitor = monitor.clone();
-        config::log_changes(&before, &config);
-        let saved = self.saver.save(&config);
-        self.displays.set_config(monitor);
-        self.brightness_keys.refresh()?;
-        saved
+        self.settings.update(
+            |config| config.monitor = monitor,
+            |config| {
+                self.displays.set_config(config.monitor.clone());
+                self.brightness_keys.refresh()
+            },
+        )
     }
 
     /// External displays with their cached brightness. Never blocks on DDC.
@@ -231,50 +270,41 @@ impl Core {
     }
 
     pub fn hyper_key_config(&self) -> HyperKeyConfig {
-        self.config.lock().hyper_key.clone()
+        self.settings.read(|config| config.hyper_key.clone())
     }
 
     /// Applies the new Hyper key settings immediately if input is running, and saves them.
     /// The settings are saved even if remapping the key fails.
     pub fn set_hyper_key_config(&self, hyper_key: HyperKeyConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock();
-        let before = config.clone();
-        config.hyper_key = hyper_key.clone();
-        config::log_changes(&before, &config);
-        let saved = self.saver.save(&config);
-        self.hyper_key.set_config(hyper_key)?;
-        saved
+        self.settings.update(
+            |config| config.hyper_key = hyper_key,
+            |config| self.hyper_key.set_config(config.hyper_key.clone()),
+        )
     }
 
     pub fn window_drag_config(&self) -> WindowDragConfig {
-        self.config.lock().window_drag.clone()
+        self.settings.read(|config| config.window_drag.clone())
     }
 
     /// Applies the new window drag settings immediately if input is running, and saves them.
     pub fn set_window_drag_config(&self, window_drag: WindowDragConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock();
-        let before = config.clone();
-        config.window_drag = window_drag.clone();
-        config::log_changes(&before, &config);
-        let saved = self.saver.save(&config);
-        self.window_drag.set_config(window_drag)?;
-        saved
+        self.settings.update(
+            |config| config.window_drag = window_drag,
+            |config| self.window_drag.set_config(config.window_drag.clone()),
+        )
     }
 
     pub fn media_keys_config(&self) -> MediaKeysConfig {
-        self.config.lock().media_keys.clone()
+        self.settings.read(|config| config.media_keys.clone())
     }
 
     /// Applies the new media key settings immediately (starting or stopping the key tap if
     /// input is running), and saves them.
     pub fn set_media_keys_config(&self, media_keys: MediaKeysConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock();
-        let before = config.clone();
-        config.media_keys = media_keys.clone();
-        config::log_changes(&before, &config);
-        let saved = self.saver.save(&config);
-        self.media_keys.set_config(media_keys)?;
-        saved
+        self.settings.update(
+            |config| config.media_keys = media_keys,
+            |config| self.media_keys.set_config(config.media_keys.clone()),
+        )
     }
 
     /// The supported music apps that are installed, for choosing where media keys go.
@@ -300,32 +330,32 @@ impl Core {
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {
-        self.config.lock().launcher.clone()
+        self.settings.read(|config| config.launcher.clone())
     }
 
     /// Applies the new launcher settings and re-registers hotkeys, and saves them. Main
     /// thread only.
     pub fn set_launcher_config(&self, launcher: LauncherConfig) -> Result<(), CoreError> {
-        let mut config = self.config.lock();
-        let before = config.clone();
-        config.launcher = launcher.clone();
-        config::log_changes(&before, &config);
-        let saved = self.saver.save(&config);
-        launcher::apply_config(&self.hotkeys, &launcher);
-        self.clipboard.set_config(launcher.clipboard.clone());
-        self.files.set_config(launcher.files.clone());
-        self.windows.set_config(launcher.windows.clone());
-        self.snippets.set_config(launcher.snippets.clone());
-        let keep_awake = self.keep_awake.set_config(launcher.keep_awake.clone());
-        self.launcher.set_config(launcher);
-        keep_awake?;
-        saved
+        self.settings.update(
+            |config| config.launcher = launcher,
+            |config| {
+                let launcher = &config.launcher;
+                launcher::apply_config(&self.hotkeys, launcher);
+                self.clipboard.set_config(launcher.clipboard.clone());
+                self.files.set_config(launcher.files.clone());
+                self.windows.set_config(launcher.windows.clone());
+                self.snippets.set_config(launcher.snippets.clone());
+                let keep_awake = self.keep_awake.set_config(launcher.keep_awake.clone());
+                self.launcher.set_config(launcher.clone());
+                keep_awake
+            },
+        )
     }
 
     /// Writes settings changed in the last moment, which are otherwise saved once changes
     /// settle. The shell calls this before quitting.
     pub fn flush_config(&self) -> Result<(), CoreError> {
-        self.saver.flush()
+        self.settings.flush()
     }
 
     /// Whether Keep Awake is keeping the Mac awake.
@@ -353,7 +383,9 @@ impl Core {
     /// Records a colour the shell picked (sRGB) and copies it in the configured format.
     /// Returns the copied text.
     pub fn record_picked_color(&self, red: u8, green: u8, blue: u8) -> Result<String, CoreError> {
-        let format = self.config.lock().launcher.color_picker.format;
+        let format = self
+            .settings
+            .read(|config| config.launcher.color_picker.format);
         self.colors.record(red, green, blue, format)
     }
 
@@ -587,10 +619,143 @@ fn started(tap: &str, result: Result<(), CoreError>) -> Result<(), CoreError> {
 mod tests {
     use super::*;
 
+    use std::fs;
+    use std::path::Path;
+    use std::time::Duration;
+
     #[test]
     fn core_info_reports_crate_version() {
         let info = core_info();
         assert_eq!(info.name, "jaycast");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn default_window_config_matches_the_config_default() {
+        assert_eq!(default_window_config(), WindowConfig::default());
+    }
+
+    #[test]
+    fn started_passes_results_through() {
+        assert!(started("test", Ok(())).is_ok());
+        assert!(matches!(
+            started("test", Err(CoreError::PermissionDenied)),
+            Err(CoreError::PermissionDenied)
+        ));
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("jaycast-lib-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn store(config_path: &Path, dir: &Path) -> ConfigStore {
+        ConfigStore::new(config_path.to_owned(), &dir.join("data"))
+    }
+
+    /// Settings saving to `<dir>/jaycast.toml`, written only on flush.
+    fn settings(dir: &Path) -> Settings {
+        settings_at(&dir.join("jaycast.toml"), dir)
+    }
+
+    fn settings_at(config_path: &Path, dir: &Path) -> Settings {
+        let saver = ConfigSaver::new(store(config_path, dir), Duration::from_secs(3600));
+        Settings::new(saver, Config::default())
+    }
+
+    fn other_error(message: &str) -> CoreError {
+        CoreError::Other {
+            message: message.into(),
+        }
+    }
+
+    #[test]
+    fn update_changes_reads_and_persists_the_config() {
+        let dir = temp_dir("update");
+        let settings = settings(&dir);
+        assert!(!settings.read(|c| c.media_keys.enabled));
+
+        settings
+            .update(|c| c.media_keys.enabled = true, |_| Ok(()))
+            .unwrap();
+        assert!(settings.read(|c| c.media_keys.enabled));
+        // Saving is debounced: nothing reaches the file until flushed.
+        assert!(!dir.join("jaycast.toml").exists());
+
+        settings.flush().unwrap();
+        let saved = store(&dir.join("jaycast.toml"), &dir).load().unwrap();
+        assert!(saved.media_keys.enabled);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn apply_sees_the_changed_config_under_the_lock() {
+        let dir = temp_dir("apply");
+        let settings = settings(&dir);
+        let mut applied = None;
+        settings
+            .update(
+                |c| c.launcher.clipboard.max_items = 7,
+                |c| {
+                    applied = Some(c.launcher.clipboard.max_items);
+                    // Held, so a concurrent change can't slip in between saving and applying.
+                    assert!(settings.config.try_lock().is_none());
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(applied, Some(7));
+        drop(settings);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_apply_is_reported_but_the_change_is_kept_and_saved() {
+        let dir = temp_dir("apply-error");
+        let settings = settings(&dir);
+        let result = settings.update(
+            |c| c.hyper_key.enabled = !c.hyper_key.enabled,
+            |_| Err(other_error("remap failed")),
+        );
+        assert!(matches!(result, Err(CoreError::Other { message }) if message == "remap failed"));
+
+        let changed = settings.read(|c| c.hyper_key.enabled);
+        assert_ne!(changed, Config::default().hyper_key.enabled);
+        settings.flush().unwrap();
+        let saved = store(&dir.join("jaycast.toml"), &dir).load().unwrap();
+        assert_eq!(saved.hyper_key.enabled, changed);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_save_is_reported_after_applying_and_an_apply_error_wins() {
+        let dir = temp_dir("save-error");
+        fs::create_dir_all(&dir).unwrap();
+        // A file where the config's directory should be makes every write fail.
+        let blocker = dir.join("config");
+        fs::write(&blocker, "").unwrap();
+        let settings = settings_at(&blocker.join("jaycast.toml"), &dir);
+        settings.update(|_| {}, |_| Ok(())).unwrap();
+        assert!(settings.flush().is_err());
+
+        let mut applied = false;
+        let result = settings.update(
+            |c| c.mouse.enabled = false,
+            |_| {
+                applied = true;
+                Ok(())
+            },
+        );
+        assert!(matches!(result, Err(CoreError::Io { .. })));
+        assert!(
+            applied,
+            "the change is applied even though it couldn't be saved"
+        );
+        assert!(!settings.read(|c| c.mouse.enabled));
+
+        let result = settings.update(|_| {}, |_| Err(other_error("apply")));
+        assert!(matches!(result, Err(CoreError::Other { message }) if message == "apply"));
+        fs::remove_dir_all(dir).unwrap();
     }
 }

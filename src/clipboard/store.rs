@@ -579,6 +579,96 @@ mod tests {
     }
 
     #[test]
+    fn a_database_from_a_newer_version_is_refused() {
+        let dir = temp_dir("newer-schema");
+        {
+            let store = Store::open(&dir).unwrap();
+            store
+                .writer
+                .lock()
+                .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+                .unwrap();
+        }
+        let Err(CoreError::Other { message }) = Store::open(&dir) else {
+            panic!("a newer schema was opened");
+        };
+        assert!(message.contains("newer Jaycast"), "{message}");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn orphaned_images_are_removed_on_open() {
+        let dir = temp_dir("orphans");
+        let image = Content::Image {
+            png: vec![9],
+            width: 1,
+            height: 1,
+        };
+        let kept = {
+            let store = Store::open(&dir).unwrap();
+            store.insert(&image, &Source::default(), 1.0).unwrap();
+            PathBuf::from(store.items("", 1).unwrap()[0].image_path.clone().unwrap())
+        };
+        // Left behind by a crash between writing an image and recording it.
+        let orphan = dir.join("images").join("orphan.png");
+        let partial = dir.join("images").join("half.png.tmp");
+        fs::write(&orphan, [1]).unwrap();
+        fs::write(&partial, [1]).unwrap();
+
+        let _store = Store::open(&dir).unwrap();
+        assert!(kept.exists());
+        assert!(!orphan.exists());
+        assert!(!partial.exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn recopying_an_image_reuses_its_file_and_clear_removes_it() {
+        let dir = temp_dir("image-dedupe");
+        let store = Store::open(&dir).unwrap();
+        let image = Content::Image {
+            png: vec![4, 5, 6],
+            width: 3,
+            height: 1,
+        };
+        store.insert(&image, &source("A"), 1.0).unwrap();
+        store.insert(&image, &source("B"), 2.0).unwrap();
+        let items = store.items("", 10).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].source_app.as_deref(), Some("B"));
+        assert_eq!(fs::read_dir(dir.join("images")).unwrap().count(), 1);
+
+        assert_eq!(store.clear().unwrap(), 1);
+        assert_eq!(fs::read_dir(dir.join("images")).unwrap().count(), 0);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn links_keep_their_kind_and_paste_back_as_text() {
+        let dir = temp_dir("links");
+        let store = Store::open(&dir).unwrap();
+        let link = Content::Link("https://example.com".into());
+        store.insert(&link, &source("Safari"), 1.0).unwrap();
+        let item = &store.items("", 1).unwrap()[0];
+        assert_eq!(item.kind, ClipboardKind::Link);
+        assert_eq!(item.source_bundle_id.as_deref(), Some("test.Safari"));
+        assert!(!item.pinned);
+        assert_eq!(
+            store.stored(item.id).unwrap(),
+            Some(Stored::Text("https://example.com".into()))
+        );
+        for kind in [
+            ClipboardKind::Text,
+            ClipboardKind::Link,
+            ClipboardKind::Image,
+            ClipboardKind::Files,
+        ] {
+            assert_eq!(kind_from_code(kind_code(kind)), kind);
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn lookups_run_while_a_write_is_in_progress() {
         let dir = temp_dir("concurrent");
         let store = Store::open(&dir).unwrap();
