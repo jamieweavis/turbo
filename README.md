@@ -14,7 +14,7 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 ![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Rust](https://img.shields.io/badge/rust-1.88%2B-orange)
 
-[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Features](#features) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
+[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Features](#features) · [Utilities](#utilities) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
 
 <img src=".github/screenshots/general.png" alt="Jaycast's settings window" width="760">
 
@@ -36,13 +36,14 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
   - [Keep Awake](#keep-awake)
   - [Colour Picker](#colour-picker)
   - [Emoji Picker](#emoji-picker)
+- [Utilities](#utilities)
   - [Window Transform](#window-transform)
   - [Hyper Key](#hyper-key)
   - [Mouse](#mouse)
   - [Display Brightness](#display-brightness)
   - [Media Keys](#media-keys)
-  - [Config file](#-config-file)
-  - [Coming soon](#-coming-soon)
+- [Config file](#-config-file)
+- [Coming soon](#-coming-soon)
 - [Privacy](#privacy)
 - [Keyboard](#keyboard)
 - [Yours to keep](#yours-to-keep)
@@ -69,55 +70,59 @@ with one app, one settings file and one process.
 
 ## Features
 
-Every tool is reachable from the palette, from its own hotkey, or quietly in the background. Each one can
-be switched off on its own, and each has its own pane in the settings window, shown here in sidebar order.
+Everything in the palette, opened with <kbd>⌥</kbd><kbd>Space</kbd>, and most of it on its own hotkey too.
+Each feature can be switched off on its own.
 
-<a name="launcher"></a>
+<a id="launcher"></a>
 <p align="center"><img src=".github/screenshots/launcher.png" alt="Launcher settings" width="720"></p>
 
-<a name="quicklinks"></a>
+<a id="quicklinks"></a>
 <p align="center"><img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings" width="720"></p>
 
-<a name="shell-commands"></a>
+<a id="shell-commands"></a>
 <p align="center"><img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings" width="720"></p>
 
-<a name="file-search"></a>
+<a id="file-search"></a>
 <p align="center"><img src=".github/screenshots/file-search.png" alt="File Search settings" width="720"></p>
 
-<a name="snippets"></a>
+<a id="snippets"></a>
 <p align="center"><img src=".github/screenshots/snippets.png" alt="Snippets settings" width="720"></p>
 
-<a name="clipboard"></a>
+<a id="clipboard"></a>
 <p align="center"><img src=".github/screenshots/clipboard.png" alt="Clipboard settings" width="720"></p>
 
-<a name="window-management"></a>
+<a id="window-management"></a>
 <p align="center"><img src=".github/screenshots/window-management.png" alt="Window Management settings" width="720"></p>
 
-<a name="keep-awake"></a>
+<a id="keep-awake"></a>
 <p align="center"><img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings" width="720"></p>
 
-<a name="colour-picker"></a>
+<a id="colour-picker"></a>
 <p align="center"><img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings" width="720"></p>
 
-<a name="emoji-picker"></a>
+<a id="emoji-picker"></a>
 <p align="center"><img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings" width="720"></p>
 
-<a name="window-transform"></a>
+## Utilities
+
+Background fixes for the keyboard, mouse, windows and displays, each with its own switch.
+
+<a id="window-transform"></a>
 <p align="center"><img src=".github/screenshots/window-transform.png" alt="Window Transform settings" width="720"></p>
 
-<a name="hyper-key"></a>
+<a id="hyper-key"></a>
 <p align="center"><img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings" width="720"></p>
 
-<a name="mouse"></a>
+<a id="mouse"></a>
 <p align="center"><img src=".github/screenshots/mouse.png" alt="Mouse settings" width="720"></p>
 
-<a name="display-brightness"></a>
+<a id="display-brightness"></a>
 <p align="center"><img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings" width="720"></p>
 
-<a name="media-keys"></a>
+<a id="media-keys"></a>
 <p align="center"><img src=".github/screenshots/media-keys.png" alt="Media Keys settings" width="720"></p>
 
-### 📄 Config file
+## 📄 Config file
 
 Every setting, from hotkeys and snippets to quicklinks and mouse buttons, lives in one plain TOML file at
 `~/.config/jaycast.toml`. Check it into your dotfiles and a new Mac is set up the moment Jaycast launches.
@@ -144,7 +149,7 @@ action = "Back"
 - **Missing keys fall back to their defaults**, and configs from older versions keep loading.
 - **No database, no plist, no cloud sync** standing between you and your settings.
 
-### 🚧 Coming soon
+## 🚧 Coming soon
 
 | | |
 | --- | --- |
