@@ -74,15 +74,12 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Shell Commands** | Run shell commands from the palette. |
 | **File Search** | Spotlight search, scoped to the folders you choose. |
 
-<details>
-<summary>Screenshots</summary>
 <p align="center">
   <img src=".github/screenshots/launcher.png" alt="Launcher settings" width="49%">
   <img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings" width="49%">
   <img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings" width="49%">
   <img src=".github/screenshots/file-search.png" alt="File Search settings" width="49%">
 </p>
-</details>
 
 ### 📋 Clipboard & text
 
@@ -93,15 +90,12 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Emoji** | Search and insert emoji from a grid. |
 | **Colour Picker** | Pick a colour from anywhere on screen, copied and kept in a history. |
 
-<details>
-<summary>Screenshots</summary>
 <p align="center">
   <img src=".github/screenshots/clipboard.png" alt="Clipboard settings" width="49%">
   <img src=".github/screenshots/snippets.png" alt="Snippets settings" width="49%">
   <img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings" width="49%">
   <img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings" width="49%">
 </p>
-</details>
 
 ### 🪟 Windows
 
@@ -110,13 +104,10 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Window Management** | Snap to halves and quarters, maximise, centre, restore and move windows between displays with hotkeys. |
 | **Window Transform** | Move and resize a window by dragging anywhere in it with <kbd>⌃</kbd><kbd>⌘</kbd> held. |
 
-<details>
-<summary>Screenshots</summary>
 <p align="center">
   <img src=".github/screenshots/window-management.png" alt="Window Management settings" width="49%">
   <img src=".github/screenshots/window-transform.png" alt="Window Transform settings" width="49%">
 </p>
-</details>
 
 ### 🖱️ Mouse & keyboard
 
@@ -126,13 +117,10 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Hyper Key** | Turn Caps Lock or a modifier into <kbd>⌃</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>⌘</kbd> for shortcuts that never clash. |
 | **Hotkeys** | Bind any app, system action or System Settings pane to its own global hotkey. |
 
-<details>
-<summary>Screenshots</summary>
 <p align="center">
   <img src=".github/screenshots/mouse.png" alt="Mouse settings" width="49%">
   <img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings" width="49%">
 </p>
-</details>
 
 ### 🖥️ Displays & system
 
@@ -144,14 +132,11 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Camera Preview** | Check your webcam before a call, from the palette. Switch cameras (iPhone included) and mirroring from <kbd>⌘</kbd><kbd>K</kbd>. |
 | **System Actions** | Lock Screen, Sleep, Empty Trash and more, plus every System Settings pane, from the palette. |
 
-<details>
-<summary>Screenshots</summary>
 <p align="center">
   <img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings" width="49%">
   <img src=".github/screenshots/media-keys.png" alt="Media Keys settings" width="49%">
   <img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings" width="49%">
 </p>
-</details>
 
 ### 📄 Config file
 
