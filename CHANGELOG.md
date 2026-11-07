@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/jamieweavis/jaycast/compare/v0.1.3...v0.1.4) - 2026-11-07
+
+### Added
+
+- rename Brightness and Emoji settings panes to Display Brightness and Emoji Picker
+- copy and delete buttons on colour history rows
+- remove individual recently used emoji from the context menu
+- drop the mouse buttons toggle from the menu bar dropdown
+
+### Fixed
+
+- release the Hyper key when the Mac sleeps or wakes
+- list media commands under the Jaycast type in launcher settings
+
+### Other
+
+- drop screen drawing from the roadmap
+
 ## [0.1.3](https://github.com/jamieweavis/jaycast/compare/v0.1.2...v0.1.3) - 2026-11-06
 
 ### Fixed
