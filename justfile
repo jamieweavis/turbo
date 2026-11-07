@@ -65,6 +65,44 @@ run: app
     @while [ -n "$(lsappinfo find bundleid={{bundle_id}})" ]; do sleep 0.1; done
     open {{app}}
 
+# Capture every settings pane (dark, demo config) to .github/screenshots; needs Screen Recording
+screenshots: app
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="{{justfile_directory()}}/.github/screenshots"
+    scratch="$(mktemp -d)"
+    trap 'rm -rf "$scratch"' EXIT
+    # A copy, so anything the app saves while running doesn't touch the checked-in demo config.
+    cp "$out/demo-config.toml" "$scratch/config.toml"
+    mkdir "$scratch/data"
+    # Only one Jaycast can own the hotkeys; relaunch whichever copy was running afterwards.
+    running="$(pgrep -x Jaycast | head -1 || true)"
+    previous=""
+    if [ -n "$running" ]; then
+        previous="$(ps -o comm= -p "$running" | sed 's#/Contents/MacOS/.*##')"
+        pkill -x Jaycast
+        while [ -n "$(lsappinfo find bundleid={{bundle_id}})" ]; do sleep 0.1; done
+    fi
+    rm -f "$out"/*.png
+    echo "Capturing settings panes, don't touch the mouse…"
+    # Through LaunchServices rather than running the binary, so macOS treats it as Jaycast
+    # itself: its Accessibility grant applies and the Screen Recording prompt names it.
+    open -W \
+        --env JAYCAST_SCREENSHOTS="$out" \
+        --env JAYCAST_CONFIG="$scratch/config.toml" \
+        --env JAYCAST_DATA_DIR="$scratch/data" \
+        {{app}}
+    if [ -n "$previous" ]; then open "$previous"; fi
+    count="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"
+    expected="$(grep -o 'case general.*' shell/Sources/Jaycast/Settings.swift | tr ',' '\n' | wc -l | tr -d ' ')"
+    if [ "$count" -ne "$expected" ]; then
+        echo "Saved $count of $expected screenshots. Jaycast needs Screen Recording access (System Settings ›"
+        echo "Privacy & Security); \`just logs-recent 5m\` shows what failed."
+        exit 1
+    fi
+    if command -v oxipng >/dev/null; then oxipng -q -o 4 --strip safe "$out"/*.png; fi
+    echo "Saved $count screenshots to .github/screenshots"
+
 # Stream the app's logs; `just logs info` hides the debug ones
 logs level="debug":
     log stream --style compact --level {{level}} --predicate 'subsystem == "{{bundle_id}}"'

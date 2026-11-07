@@ -25,7 +25,10 @@ final class AppModel {
     private(set) var inputError: String?
 
     init() throws {
-        let dataDirectory = URL.applicationSupportDirectory.appending(path: "Jaycast", directoryHint: .isDirectory)
+        // `just screenshots` runs with a throwaway data directory, leaving the real history alone.
+        let dataDirectory = ProcessInfo.processInfo.environment["JAYCAST_DATA_DIR"]
+            .flatMap { $0.isEmpty ? nil : URL(filePath: $0, directoryHint: .isDirectory) }
+            ?? URL.applicationSupportDirectory.appending(path: "Jaycast", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
         core = try Core(dataDir: dataDirectory.path(percentEncoded: false))
         mouse = MouseSettings(core: core)

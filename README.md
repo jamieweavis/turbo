@@ -16,6 +16,8 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 
 [**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Features](#features) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
 
+<img src=".github/screenshots/general.png" alt="Jaycast's settings window" width="760">
+
 </div>
 
 ---
@@ -72,6 +74,16 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Shell Commands** | Run shell commands from the palette. |
 | **File Search** | Spotlight search, scoped to the folders you choose. |
 
+<details>
+<summary>Screenshots</summary>
+<p align="center">
+  <img src=".github/screenshots/launcher.png" alt="Launcher settings" width="49%">
+  <img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings" width="49%">
+  <img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings" width="49%">
+  <img src=".github/screenshots/file-search.png" alt="File Search settings" width="49%">
+</p>
+</details>
+
 ### 📋 Clipboard & text
 
 | | |
@@ -81,12 +93,30 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Emoji** | Search and insert emoji from a grid. |
 | **Colour Picker** | Pick a colour from anywhere on screen, copied and kept in a history. |
 
+<details>
+<summary>Screenshots</summary>
+<p align="center">
+  <img src=".github/screenshots/clipboard.png" alt="Clipboard settings" width="49%">
+  <img src=".github/screenshots/snippets.png" alt="Snippets settings" width="49%">
+  <img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings" width="49%">
+  <img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings" width="49%">
+</p>
+</details>
+
 ### 🪟 Windows
 
 | | |
 | --- | --- |
 | **Window Management** | Snap to halves and quarters, maximise, centre, restore and move windows between displays with hotkeys. |
 | **Window Transform** | Move and resize a window by dragging anywhere in it with <kbd>⌃</kbd><kbd>⌘</kbd> held. |
+
+<details>
+<summary>Screenshots</summary>
+<p align="center">
+  <img src=".github/screenshots/window-management.png" alt="Window Management settings" width="49%">
+  <img src=".github/screenshots/window-transform.png" alt="Window Transform settings" width="49%">
+</p>
+</details>
 
 ### 🖱️ Mouse & keyboard
 
@@ -95,6 +125,14 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Mouse** | Smooth scrolling, scroll modifiers and button remapping for ordinary mice. |
 | **Hyper Key** | Turn Caps Lock or a modifier into <kbd>⌃</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>⌘</kbd> for shortcuts that never clash. |
 | **Hotkeys** | Bind any app, system action or System Settings pane to its own global hotkey. |
+
+<details>
+<summary>Screenshots</summary>
+<p align="center">
+  <img src=".github/screenshots/mouse.png" alt="Mouse settings" width="49%">
+  <img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings" width="49%">
+</p>
+</details>
 
 ### 🖥️ Displays & system
 
@@ -105,6 +143,15 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 | **Keep Awake** | Stop your Mac (and optionally the display) sleeping while you need it. |
 | **Camera Preview** | Check your webcam before a call, from the palette. Switch cameras (iPhone included) and mirroring from <kbd>⌘</kbd><kbd>K</kbd>. |
 | **System Actions** | Lock Screen, Sleep, Empty Trash and more, plus every System Settings pane, from the palette. |
+
+<details>
+<summary>Screenshots</summary>
+<p align="center">
+  <img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings" width="49%">
+  <img src=".github/screenshots/media-keys.png" alt="Media Keys settings" width="49%">
+  <img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings" width="49%">
+</p>
+</details>
 
 ### 📄 Config file
 
@@ -219,12 +266,17 @@ just run        # build the core + shell, bundle build/Jaycast.app, launch it
 just test       # Rust tests
 just check      # everything CI runs: fmt, clippy, tests, app build
 just logs       # stream the app's logs
+just screenshots  # regenerate the README's settings screenshots
 just            # list all recipes
 ```
 
 `CONFIG=release just app` builds optimised. The app is signed with your "Apple Development" identity by
 default, so macOS keeps the Accessibility grant across rebuilds. Set `JAYCAST_SIGN_IDENTITY="-"` to sign
 ad hoc.
+
+`just screenshots` relaunches the app with the demo config in `.github/screenshots/demo-config.toml`,
+captures every settings pane in dark mode to `.github/screenshots/`, then relaunches your usual copy.
+It needs Screen Recording access the first time, and compresses the images if `oxipng` is installed.
 
 ### Project layout
 

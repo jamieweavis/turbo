@@ -64,7 +64,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Logger.app.info("launched; Accessibility \(model.accessibility.isGranted ? "granted" : "not granted", privacy: .public)")
         model.palette.onShowSettings = { [weak self] in self?.showSettings() }
         model.start()
-        if !model.accessibility.isGranted {
+        if let directory = ScreenshotMode.directory {
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+            showSettings()
+            guard let settings else { return }
+            Task { await ScreenshotMode.capture(settings, to: directory) }
+        } else if !model.accessibility.isGranted {
             showOnboarding()
         }
     }

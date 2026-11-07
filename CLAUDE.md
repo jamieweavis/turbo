@@ -17,6 +17,7 @@ just logs [info]      # stream the app's os_log output (subsystem com.jamieweavi
 just logs-recent 1h   # past logs (debug level isn't kept)
 just reset-permissions  # forget the Accessibility grant to re-test onboarding
 CONFIG=release just app # optimised build; `just dmg` packages it
+just screenshots      # README settings screenshots → .github/screenshots (demo config, dark)
 ```
 
 - Single test: `cargo test <name_substring>` (e.g. `cargo test calc::parser`). Some tests are

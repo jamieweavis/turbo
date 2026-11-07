@@ -1,0 +1,107 @@
+# The config `just screenshots` runs with, so the README's screenshots show every feature on
+# with tidy example content rather than whoever ran it's own settings. Anything left out is the
+# default.
+
+[launcher]
+action_hotkeys = [
+    { action = "lock-screen", hotkey = { key_code = 37, modifiers = ["Control", "Option", "Shift", "Command"] } },
+]
+app_hotkeys = [
+    { bundle_id = "com.apple.Safari", name = "Safari", hotkey = { key_code = 1, modifiers = ["Control", "Option", "Shift", "Command"] } },
+    { bundle_id = "com.apple.Terminal", name = "Terminal", hotkey = { key_code = 17, modifiers = ["Control", "Option", "Shift", "Command"] } },
+    { bundle_id = "com.apple.Notes", name = "Notes", hotkey = { key_code = 45, modifiers = ["Control", "Option", "Shift", "Command"] } },
+]
+
+[[launcher.quicklinks]]
+id = "google"
+name = "Search Google"
+keyword = "g"
+url = "https://www.google.com/search?q={query}"
+
+[[launcher.quicklinks]]
+id = "youtube"
+name = "Search YouTube"
+keyword = "yt"
+url = "https://www.youtube.com/results?search_query={query}"
+
+[[launcher.quicklinks]]
+id = "github"
+name = "Search GitHub"
+keyword = "gh"
+url = "https://github.com/search?q={query}"
+
+[[launcher.quicklinks]]
+id = "crates"
+name = "Search crates.io"
+keyword = "crate"
+url = "https://crates.io/search?q={query}"
+
+[[launcher.quicklinks]]
+id = "maps"
+name = "Search Maps"
+keyword = "map"
+url = "https://maps.apple.com/?q={query}"
+
+[[launcher.commands]]
+id = "ip"
+name = "Copy Local IP Address"
+keyword = "ip"
+command = "ipconfig getifaddr en0"
+output = "Copy"
+needs_confirmation = false
+
+[[launcher.commands]]
+id = "flush-dns"
+name = "Flush DNS Cache"
+keyword = "dns"
+command = "dscacheutil -flushcache"
+output = "Discard"
+needs_confirmation = false
+
+[[launcher.commands]]
+id = "uuid"
+name = "Copy New UUID"
+keyword = "uuid"
+command = "uuidgen | tr '[:upper:]' '[:lower:]'"
+output = "Copy"
+needs_confirmation = false
+
+[[launcher.commands]]
+id = "empty-trash"
+name = "Empty Trash"
+keyword = "trash"
+command = "rm -rf ~/.Trash/*"
+output = "Discard"
+needs_confirmation = true
+
+[[launcher.snippets.snippets]]
+id = "email"
+name = "Email Address"
+keyword = ";email"
+text = "hello@example.com"
+
+[[launcher.snippets.snippets]]
+id = "address"
+name = "Home Address"
+keyword = ";addr"
+text = "1 Infinite Loop, Cupertino, CA 95014"
+
+[[launcher.snippets.snippets]]
+id = "shrug"
+name = "Shrug"
+keyword = ";shrug"
+text = "¯\\_(ツ)_/¯"
+
+[[launcher.snippets.snippets]]
+id = "thanks"
+name = "Thanks"
+keyword = ";ty"
+text = "Thanks so much, I really appreciate it!"
+
+[hyper_key]
+enabled = true
+key = "CapsLock"
+quick_press = "Escape"
+
+[media_keys]
+enabled = true

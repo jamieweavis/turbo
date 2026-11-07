@@ -919,8 +919,12 @@ impl ConfigStore {
         }
     }
 
-    /// `~/.config/jaycast.toml`.
+    /// `~/.config/jaycast.toml`, or `$JAYCAST_CONFIG` when set (`just screenshots` points it
+    /// at a demo config).
     pub fn default_path() -> Result<PathBuf, CoreError> {
+        if let Some(path) = std::env::var_os("JAYCAST_CONFIG").filter(|p| !p.is_empty()) {
+            return Ok(PathBuf::from(path));
+        }
         let home = std::env::home_dir().ok_or_else(|| CoreError::Other {
             message: "couldn't find the home directory".into(),
         })?;
@@ -1573,5 +1577,20 @@ mod tests {
         );
         assert!(found.iter().all(|c| !c.description.contains("secret")));
         assert!(changes(&old, &old).is_empty());
+    }
+
+    /// `just screenshots` runs with this; a field renamed without an alias would quietly drop
+    /// out of it.
+    #[test]
+    fn screenshot_demo_config_loads() {
+        let config: Config =
+            toml::from_str(include_str!("../.github/screenshots/demo-config.toml")).unwrap();
+        assert!(config.hyper_key.enabled);
+        assert!(config.media_keys.enabled);
+        assert_eq!(config.launcher.app_hotkeys.len(), 3);
+        assert_eq!(config.launcher.action_hotkeys.len(), 1);
+        assert_eq!(config.launcher.quicklinks.len(), 5);
+        assert_eq!(config.launcher.commands.len(), 4);
+        assert_eq!(config.launcher.snippets.snippets.len(), 4);
     }
 }

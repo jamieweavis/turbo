@@ -11,6 +11,7 @@ final class SettingsWindowController {
     private let onShowOnboarding: () -> Void
     private var window: NSWindow?
     private let switchedOff = SwitchedOffContent()
+    private let navigation = SettingsNavigation()
     private var clickMonitor: Any?
     private var closeObserver: (any NSObjectProtocol)?
 
@@ -47,8 +48,19 @@ final class SettingsWindowController {
         RegularAppWindows.show(window)
     }
 
+    /// Opens the window on `pane`.
+    func show(_ pane: SettingsPane) {
+        show()
+        navigation.requested = pane
+    }
+
+    /// The open window's number, for `screencapture -l`.
+    var windowNumber: Int? { window?.windowNumber }
+
     private func makeWindow() -> NSWindow {
-        let view = SettingsView(model: model, switchedOff: switchedOff, onShowOnboarding: onShowOnboarding)
+        let view = SettingsView(
+            model: model, switchedOff: switchedOff, navigation: navigation, onShowOnboarding: onShowOnboarding
+        )
         let hosting = NSHostingController(rootView: view)
         // Only the minimum size: following the panes' ideal sizes would resize the window
         // whenever one is long (the Launcher pane's table), pushing content under the title bar.
@@ -64,9 +76,15 @@ final class SettingsWindowController {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 944, height: 560))
-        window.center()
-        window.setFrameAutosaveName("Settings")
+        if ScreenshotMode.directory != nil {
+            // The same size every time, and not saved over the size the user left it at.
+            window.setContentSize(NSSize(width: 944, height: 680))
+            window.center()
+        } else {
+            window.setContentSize(NSSize(width: 944, height: 560))
+            window.center()
+            window.setFrameAutosaveName("Settings")
+        }
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: window, queue: .main
         ) { _ in
@@ -74,6 +92,13 @@ final class SettingsWindowController {
         }
         return window
     }
+}
+
+/// Lets the window controller switch the pane from outside the view.
+@MainActor
+@Observable
+final class SettingsNavigation {
+    var requested: SettingsPane?
 }
 
 /// A sidebar group of panes, in sidebar order.
@@ -215,6 +240,7 @@ enum SettingsPane: CaseIterable, Identifiable {
 struct SettingsView: View {
     let model: AppModel
     let switchedOff: SwitchedOffContent
+    let navigation: SettingsNavigation
     let onShowOnboarding: () -> Void
 
     @State private var history = PaneHistory()
@@ -304,6 +330,12 @@ struct SettingsView: View {
             }
         }
         .frame(minWidth: 944, minHeight: max(560, sidebarFitHeight))
+        .onChange(of: navigation.requested, initial: true) {
+            guard let pane = navigation.requested else { return }
+            history.visit(pane)
+            // Cleared, so asking for the same pane again still counts as a change.
+            navigation.requested = nil
+        }
         // Turning a feature off from its own pane, or ticking it back on in the Launcher pane's
         // table, can change whether the Mac is kept awake.
         .onChange(of: model.launcher.config.keepAwake.enabled) { model.keepAwake.refresh() }
