@@ -16,7 +16,7 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 
 [**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Launcher Features](#launcher-features) · [Utilities](#utilities) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
 
-<img src=".github/screenshots/general.png" alt="Jaycast's settings window" width="760">
+<img src=".github/screenshots/general.png" alt="Jaycast's settings window">
 
 </div>
 
@@ -74,53 +74,53 @@ Everything in the palette, opened with <kbd>⌥</kbd><kbd>Space</kbd>, and most 
 Each feature can be switched off on its own.
 
 <a id="launcher"></a>
-<p align="center"><img src=".github/screenshots/launcher.png" alt="Launcher settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/launcher.png" alt="Launcher settings"></p>
 
 <a id="quicklinks"></a>
-<p align="center"><img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings"></p>
 
 <a id="shell-commands"></a>
-<p align="center"><img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings"></p>
 
 <a id="file-search"></a>
-<p align="center"><img src=".github/screenshots/file-search.png" alt="File Search settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/file-search.png" alt="File Search settings"></p>
 
 <a id="snippets"></a>
-<p align="center"><img src=".github/screenshots/snippets.png" alt="Snippets settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/snippets.png" alt="Snippets settings"></p>
 
 <a id="clipboard"></a>
-<p align="center"><img src=".github/screenshots/clipboard.png" alt="Clipboard settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/clipboard.png" alt="Clipboard settings"></p>
 
 <a id="window-management"></a>
-<p align="center"><img src=".github/screenshots/window-management.png" alt="Window Management settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/window-management.png" alt="Window Management settings"></p>
 
 <a id="keep-awake"></a>
-<p align="center"><img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings"></p>
 
 <a id="colour-picker"></a>
-<p align="center"><img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings"></p>
 
 <a id="emoji-picker"></a>
-<p align="center"><img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings"></p>
 
 ## Utilities
 
 Background fixes for the keyboard, mouse, windows and displays, each with its own switch.
 
 <a id="window-transform"></a>
-<p align="center"><img src=".github/screenshots/window-transform.png" alt="Window Transform settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/window-transform.png" alt="Window Transform settings"></p>
 
 <a id="hyper-key"></a>
-<p align="center"><img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings"></p>
 
 <a id="mouse"></a>
-<p align="center"><img src=".github/screenshots/mouse.png" alt="Mouse settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/mouse.png" alt="Mouse settings"></p>
 
 <a id="display-brightness"></a>
-<p align="center"><img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings"></p>
 
 <a id="media-keys"></a>
-<p align="center"><img src=".github/screenshots/media-keys.png" alt="Media Keys settings" width="720"></p>
+<p align="center"><img src=".github/screenshots/media-keys.png" alt="Media Keys settings"></p>
 
 ## 📄 Config file
 
