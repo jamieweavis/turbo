@@ -14,7 +14,7 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 ![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Rust](https://img.shields.io/badge/rust-1.88%2B-orange)
 
-[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Features](#features) · [Screenshots](#screenshots) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
+[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Features](#features) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
 
 <img src=".github/screenshots/general.png" alt="Jaycast's settings window" width="760">
 
@@ -26,14 +26,23 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 
 - [Why Jaycast](#why-jaycast)
 - [Features](#features)
-  - [Launcher](#-launcher)
-  - [Clipboard & text](#-clipboard--text)
-  - [Windows](#-windows)
-  - [Mouse & keyboard](#-mouse--keyboard)
-  - [Displays & system](#-displays--system)
+  - [Launcher](#launcher)
+  - [Quicklinks](#quicklinks)
+  - [Shell Commands](#shell-commands)
+  - [File Search](#file-search)
+  - [Snippets](#snippets)
+  - [Clipboard](#clipboard)
+  - [Window Management](#window-management)
+  - [Keep Awake](#keep-awake)
+  - [Colour Picker](#colour-picker)
+  - [Emoji Picker](#emoji-picker)
+  - [Window Transform](#window-transform)
+  - [Hyper Key](#hyper-key)
+  - [Mouse](#mouse)
+  - [Display Brightness](#display-brightness)
+  - [Media Keys](#media-keys)
   - [Config file](#-config-file)
   - [Coming soon](#-coming-soon)
-- [Screenshots](#screenshots)
 - [Privacy](#privacy)
 - [Keyboard](#keyboard)
 - [Yours to keep](#yours-to-keep)
@@ -61,53 +70,52 @@ with one app, one settings file and one process.
 ## Features
 
 Every tool is reachable from the palette, from its own hotkey, or quietly in the background. Each one can
-be switched off on its own.
+be switched off on its own, and each has its own pane in the settings window, shown here in sidebar order.
 
-### 🔍 Launcher
+<a name="launcher"></a>
+<p align="center"><img src=".github/screenshots/launcher.png" alt="Launcher settings" width="720"></p>
 
-One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space</kbd>.
+<a name="quicklinks"></a>
+<p align="center"><img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings" width="720"></p>
 
-| | |
-| --- | --- |
-| **Apps** | Fuzzy-search apps, ranked by how often you use them, with per-app hotkeys and aliases. |
-| **Calculator** | Type maths straight into the palette, with unit and currency conversion. |
-| **Quicklinks** | Open websites and searches by keyword: `g rust traits`. |
-| **Shell Commands** | Run shell commands from the palette. |
-| **File Search** | Spotlight search, scoped to the folders you choose. |
+<a name="shell-commands"></a>
+<p align="center"><img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings" width="720"></p>
 
-### 📋 Clipboard & text
+<a name="file-search"></a>
+<p align="center"><img src=".github/screenshots/file-search.png" alt="File Search settings" width="720"></p>
 
-| | |
-| --- | --- |
-| **Clipboard History** | Search and paste everything you've copied: text, links, colours and images. Pin what you want to keep. |
-| **Snippets** | Expand saved text by keyword, anywhere you type, with `{clipboard}`, `{date}` and `{cursor}` placeholders. |
-| **Emoji** | Search and insert emoji from a grid. |
-| **Colour Picker** | Pick a colour from anywhere on screen, copied and kept in a history. |
+<a name="snippets"></a>
+<p align="center"><img src=".github/screenshots/snippets.png" alt="Snippets settings" width="720"></p>
 
-### 🪟 Windows
+<a name="clipboard"></a>
+<p align="center"><img src=".github/screenshots/clipboard.png" alt="Clipboard settings" width="720"></p>
 
-| | |
-| --- | --- |
-| **Window Management** | Snap to halves and quarters, maximise, centre, restore and move windows between displays with hotkeys. |
-| **Window Transform** | Move and resize a window by dragging anywhere in it with <kbd>⌃</kbd><kbd>⌘</kbd> held. |
+<a name="window-management"></a>
+<p align="center"><img src=".github/screenshots/window-management.png" alt="Window Management settings" width="720"></p>
 
-### 🖱️ Mouse & keyboard
+<a name="keep-awake"></a>
+<p align="center"><img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings" width="720"></p>
 
-| | |
-| --- | --- |
-| **Mouse** | Smooth scrolling, scroll modifiers and button remapping for ordinary mice. |
-| **Hyper Key** | Turn Caps Lock or a modifier into <kbd>⌃</kbd><kbd>⌥</kbd><kbd>⇧</kbd><kbd>⌘</kbd> for shortcuts that never clash. |
-| **Hotkeys** | Bind any app, system action or System Settings pane to its own global hotkey. |
+<a name="colour-picker"></a>
+<p align="center"><img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings" width="720"></p>
 
-### 🖥️ Displays & system
+<a name="emoji-picker"></a>
+<p align="center"><img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings" width="720"></p>
 
-| | |
-| --- | --- |
-| **Brightness** | Control external monitors over DDC/CI with the brightness keys, dimming below their minimum to black. |
-| **Media Keys** | Send play/pause, next and previous to Spotify, Music or VLC (whichever you used last, or always the one you pick), so they never launch Apple Music. Also in the palette as Play/Pause, Next Track and Previous Track. |
-| **Keep Awake** | Stop your Mac (and optionally the display) sleeping while you need it. |
-| **Camera Preview** | Check your webcam before a call, from the palette. Switch cameras (iPhone included) and mirroring from <kbd>⌘</kbd><kbd>K</kbd>. |
-| **System Actions** | Lock Screen, Sleep, Empty Trash and more, plus every System Settings pane, from the palette. |
+<a name="window-transform"></a>
+<p align="center"><img src=".github/screenshots/window-transform.png" alt="Window Transform settings" width="720"></p>
+
+<a name="hyper-key"></a>
+<p align="center"><img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings" width="720"></p>
+
+<a name="mouse"></a>
+<p align="center"><img src=".github/screenshots/mouse.png" alt="Mouse settings" width="720"></p>
+
+<a name="display-brightness"></a>
+<p align="center"><img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings" width="720"></p>
+
+<a name="media-keys"></a>
+<p align="center"><img src=".github/screenshots/media-keys.png" alt="Media Keys settings" width="720"></p>
 
 ### 📄 Config file
 
@@ -141,28 +149,6 @@ action = "Back"
 | | |
 | --- | --- |
 | **Icon Changer** | Swap macOS app icons, and reapply them automatically when apps update. *(Name TBC.)* |
-
-## Screenshots
-
-Every tool has its own pane in the settings window, shown here in sidebar order.
-
-<p align="center">
-  <img src=".github/screenshots/launcher.png" alt="Launcher settings" width="720">
-  <img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings" width="720">
-  <img src=".github/screenshots/shell-commands.png" alt="Shell Commands settings" width="720">
-  <img src=".github/screenshots/file-search.png" alt="File Search settings" width="720">
-  <img src=".github/screenshots/snippets.png" alt="Snippets settings" width="720">
-  <img src=".github/screenshots/clipboard.png" alt="Clipboard settings" width="720">
-  <img src=".github/screenshots/window-management.png" alt="Window Management settings" width="720">
-  <img src=".github/screenshots/keep-awake.png" alt="Keep Awake settings" width="720">
-  <img src=".github/screenshots/colour-picker.png" alt="Colour Picker settings" width="720">
-  <img src=".github/screenshots/emoji-picker.png" alt="Emoji Picker settings" width="720">
-  <img src=".github/screenshots/window-transform.png" alt="Window Transform settings" width="720">
-  <img src=".github/screenshots/hyper-key.png" alt="Hyper Key settings" width="720">
-  <img src=".github/screenshots/mouse.png" alt="Mouse settings" width="720">
-  <img src=".github/screenshots/display-brightness.png" alt="Display Brightness settings" width="720">
-  <img src=".github/screenshots/media-keys.png" alt="Media Keys settings" width="720">
-</p>
 
 ## Privacy
 
