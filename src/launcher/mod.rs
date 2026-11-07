@@ -5,6 +5,8 @@
 //!   usage-based ranking, and `search` / `open`.
 //! - `system`: the system actions (lock, sleep, dark mode, …) listed by `system::actions`
 //!   and run by `system::perform`.
+//! - `audio`: sound devices (listed, cached and watched here) and volume, through Core Audio.
+//! - `shortcuts`: the user's Shortcuts (listed, cached and refreshed here) and running them.
 //! - `settings_panes`: System Settings panes and privacy sections, opened by URL.
 //! - `hotkeys`: global hotkeys (palette + per-app) and the focus-or-hide app toggle.
 //! - `running`: running apps for the palette's actions menu (is running, hide, quit).
@@ -15,6 +17,7 @@
 //! from here, but implemented in their own modules.
 
 mod apps;
+mod audio;
 mod calc;
 mod extensions;
 pub(crate) mod fuzzy;
@@ -22,6 +25,7 @@ mod hotkeys;
 mod ranking;
 pub(crate) mod running;
 mod settings_panes;
+mod shortcuts;
 mod system;
 
 use parking_lot::{Mutex, RwLock};
@@ -100,6 +104,27 @@ pub enum OpenOutcome {
     KeepAwake {
         active: bool,
     },
+    /// Close the palette and confirm what changed ("Wi-Fi off", "Volume 56%").
+    Status {
+        status: Status,
+    },
+}
+
+/// A confirmation for an action whose effect isn't visible by itself, shown in a pill.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct Status {
+    /// SF Symbol name.
+    pub symbol: String,
+    pub text: String,
+}
+
+impl Status {
+    pub(crate) fn new(symbol: &str, text: impl Into<String>) -> Self {
+        Self {
+            symbol: symbol.to_owned(),
+            text: text.into(),
+        }
+    }
 }
 
 /// What the palette is showing.
@@ -293,7 +318,8 @@ pub struct LauncherItem {
     /// The search result id, used as `ItemSettings::id`.
     pub id: String,
     pub title: String,
-    /// "Application", "Jaycast", "System", "System Settings" or "Window".
+    /// "Application", "Jaycast", "System", "System Settings", "Window", "Sound Output",
+    /// "Sound Input" or "Shortcut".
     pub category: String,
     /// The bundle to draw the icon from (apps, settings panes).
     pub path: Option<String>,
@@ -316,7 +342,8 @@ pub struct AppInfo {
 pub trait LauncherObserver: Send + Sync {
     /// The palette hotkey was pressed.
     fn toggle_palette(&self);
-    /// The app index changed (an app was installed, removed or renamed).
+    /// The app index changed (an app was installed, removed or renamed), or the commands
+    /// listed with the apps did (a sound device or shortcut came or went).
     fn apps_changed(&self);
     /// A shell command with `CommandOutput::Show` finished (or any command failed).
     /// Called from a background thread.
@@ -332,6 +359,9 @@ pub trait LauncherObserver: Send + Sync {
     fn keep_awake_changed(&self, active: bool);
     /// The colour picker hotkey was pressed: show the magnifier. Called on the main thread.
     fn pick_color(&self);
+    /// A hotkey ran an action that confirms what it did (`OpenOutcome::Status`). Called on
+    /// the main thread.
+    fn show_status(&self, status: Status);
 }
 
 /// Calculator results go above everything; a quicklink or command whose keyword was typed
@@ -433,7 +463,13 @@ impl Prefs {
 
 pub(crate) struct Launcher {
     index: RwLock<Arc<Index>>,
-    system: Vec<SystemEntry>,
+    /// The built-in entries followed by the sound devices and shortcuts; rebuilt (under
+    /// `rebuild`) when either of those changes.
+    system: RwLock<Arc<Vec<SystemEntry>>>,
+    rebuild: Mutex<()>,
+    devices: Mutex<Vec<audio::Device>>,
+    audio_watcher: Mutex<Option<audio::Watcher>>,
+    shortcuts: Mutex<ShortcutsState>,
     usage: Mutex<Usage>,
     store: UsageStore,
     observer: Mutex<Option<Arc<dyn LauncherObserver>>>,
@@ -444,6 +480,63 @@ pub(crate) struct Launcher {
     windows: Arc<WindowManager>,
     keep_awake: Arc<KeepAwake>,
     media: Arc<MediaKeys>,
+}
+
+/// How long a shortcut list is trusted before opening the palette refreshes it.
+const SHORTCUTS_STALE_AFTER: Duration = Duration::from_secs(30);
+
+#[derive(Default)]
+struct ShortcutsState {
+    list: Vec<shortcuts::Shortcut>,
+    refreshed: Option<Instant>,
+    refreshing: bool,
+}
+
+/// The fixed built-in entries, then the sound devices and shortcuts, in palette order.
+fn system_entries(
+    devices: &[audio::Device],
+    shortcuts: &[shortcuts::Shortcut],
+) -> Vec<SystemEntry> {
+    MODES
+        .iter()
+        .map(SystemEntry::mode)
+        .chain([SystemEntry::pick_color()])
+        .chain(KEEP_AWAKE_COMMANDS.iter().map(SystemEntry::keep_awake))
+        .chain(MEDIA_COMMANDS.iter().map(SystemEntry::media))
+        .chain(system::actions().iter().map(SystemEntry::new))
+        .chain(devices.iter().map(SystemEntry::audio_device))
+        .chain(shortcuts.iter().map(SystemEntry::shortcut))
+        .chain(
+            settings_panes::panes()
+                .iter()
+                .map(SystemEntry::settings_pane),
+        )
+        .chain(windows::ACTIONS.iter().map(SystemEntry::window))
+        .collect()
+}
+
+/// The result id of a sound device for one direction.
+fn audio_result_id(device: &audio::Device) -> String {
+    format!("{}:{}", device.direction.id_prefix(), device.uid)
+}
+
+/// What switching to an output or input confirms.
+fn audio_status(direction: audio::Direction, name: &str, symbol: &str) -> Status {
+    Status::new(symbol, format!("{}: {name}", direction.label()))
+}
+
+/// The "volume 40" result.
+fn volume_result(percent: u8) -> SearchResult {
+    SearchResult {
+        id: format!("volume:{percent}"),
+        title: format!("Set Volume to {percent}%"),
+        subtitle: "System".into(),
+        kind: ResultKind::SystemAction,
+        path: None,
+        symbol: Some(system::volume_status(f32::from(percent) / 100.0).symbol),
+        needs_confirmation: false,
+        completion: None,
+    }
 }
 
 #[derive(Default)]
@@ -580,6 +673,53 @@ impl SystemEntry {
         }
     }
 
+    fn audio_device(device: &audio::Device) -> Self {
+        let keywords: &[&str] = match device.direction {
+            audio::Direction::Output => &[
+                "sound output",
+                "audio output",
+                "speakers",
+                "headphones",
+                "switch audio",
+            ],
+            audio::Direction::Input => &[
+                "sound input",
+                "audio input",
+                "microphone",
+                "mic",
+                "switch audio",
+            ],
+        };
+        Self {
+            id: audio_result_id(device),
+            title: device.name.clone(),
+            subtitle: device.direction.label(),
+            title_match: Prepared::new(&device.name),
+            keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
+            symbol: device.symbol.to_owned(),
+            path: None,
+            needs_confirmation: false,
+            kind: ResultKind::SystemAction,
+        }
+    }
+
+    fn shortcut(shortcut: &shortcuts::Shortcut) -> Self {
+        Self {
+            id: format!("shortcut:{}", shortcut.id),
+            title: shortcut.name.clone(),
+            subtitle: "Shortcut",
+            title_match: Prepared::new(&shortcut.name),
+            keywords: ["shortcut", "run shortcut"]
+                .iter()
+                .map(|k| Prepared::new(k))
+                .collect(),
+            symbol: "square.2.layers.3d".to_owned(),
+            path: Some(shortcuts::APP_PATH.to_owned()),
+            needs_confirmation: false,
+            kind: ResultKind::SystemAction,
+        }
+    }
+
     fn media(&(_, id, title, keywords, symbol): &MediaEntry) -> Self {
         Self {
             id: format!("media:{id}"),
@@ -621,20 +761,11 @@ impl Launcher {
         let store = UsageStore::new(data_dir);
         let launcher = Arc::new(Self {
             index: RwLock::new(Arc::new(Index::default())),
-            system: MODES
-                .iter()
-                .map(SystemEntry::mode)
-                .chain([SystemEntry::pick_color()])
-                .chain(KEEP_AWAKE_COMMANDS.iter().map(SystemEntry::keep_awake))
-                .chain(MEDIA_COMMANDS.iter().map(SystemEntry::media))
-                .chain(system::actions().iter().map(SystemEntry::new))
-                .chain(
-                    settings_panes::panes()
-                        .iter()
-                        .map(SystemEntry::settings_pane),
-                )
-                .chain(windows::ACTIONS.iter().map(SystemEntry::window))
-                .collect(),
+            system: RwLock::new(Arc::new(system_entries(&[], &[]))),
+            rebuild: Mutex::new(()),
+            devices: Mutex::new(Vec::new()),
+            audio_watcher: Mutex::new(None),
+            shortcuts: Mutex::new(ShortcutsState::default()),
             usage: Mutex::new(store.load()),
             store,
             observer: Mutex::new(None),
@@ -654,9 +785,23 @@ impl Launcher {
                 let Some(launcher) = weak.upgrade() else {
                     return;
                 };
+                launcher.refresh_devices();
+                launcher.refresh_shortcuts();
                 launcher.reindex(true);
-                // The watcher holds only a weak reference, so dropping the launcher drops
-                // the watcher, which ends its thread.
+                // The watchers hold only a weak reference, so dropping the launcher drops
+                // them, which ends their threads and listeners.
+                let weak = Arc::downgrade(&launcher);
+                *launcher.audio_watcher.lock() = Some(audio::watch(move || {
+                    let weak = weak.clone();
+                    // Off Core Audio's notification thread, which shouldn't be kept waiting.
+                    thread::spawn(move || {
+                        if let Some(launcher) = weak.upgrade()
+                            && launcher.refresh_devices()
+                        {
+                            launcher.notify_changed();
+                        }
+                    });
+                }));
                 let weak = Arc::downgrade(&launcher);
                 let watcher = apps::Watcher::start(move || {
                     if let Some(launcher) = weak.upgrade() {
@@ -682,12 +827,16 @@ impl Launcher {
     /// Best matches for `query`, apps and system actions together, at most `limit`. An empty
     /// query returns everything, most used first, ignoring `limit`. Fast enough to call on
     /// every keystroke (no I/O).
-    pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
+    pub fn search(self: &Arc<Self>, query: &str, limit: usize) -> Vec<SearchResult> {
         let started = Instant::now();
         let index = Arc::clone(&self.index.read());
+        let system = Arc::clone(&self.system.read());
         let config = Arc::clone(&self.config.read());
         let mut extra = Vec::new();
         if query.trim().is_empty() {
+            // The palette just opened (or was cleared): a good moment to pick up shortcuts
+            // made since, in time for the next search.
+            self.refresh_shortcuts_if_stale();
             extra.extend(extensions::all(&config).into_iter().map(|r| (0, r)));
             extra.extend(
                 crate::snippets::all(&config.snippets)
@@ -700,6 +849,9 @@ impl Launcher {
             {
                 extra.push((CALCULATOR_SCORE, calculation.result()));
             }
+            if let Some(percent) = audio::parse_volume_query(query) {
+                extra.push((KEYWORD_SCORE, volume_result(percent)));
+            }
             extra.extend(extensions::results(query, &config));
             extra.extend(crate::snippets::results(query, &config.snippets));
         }
@@ -709,7 +861,7 @@ impl Launcher {
         let results = rank(
             &fuzzy::fold_query(query),
             &index,
-            &self.system,
+            &system,
             &prefs,
             extra,
             &usage,
@@ -766,7 +918,45 @@ impl Launcher {
                 })?;
             launch(&app.info.path)?;
         } else if let Some(action) = id.strip_prefix("system:") {
-            system::perform(action)?;
+            let title = system::actions()
+                .iter()
+                .find(|a| a.id == action)
+                .map_or(action, |a| a.title);
+            if let Some(status) = system::perform(action, self.failure_reporter(title))? {
+                outcome = OpenOutcome::Status { status };
+            }
+        } else if let Some(percent) = id.strip_prefix("volume:") {
+            let percent: u8 = percent.parse().map_err(|_| CoreError::Other {
+                message: format!("not a volume: {percent}"),
+            })?;
+            let volume = audio::set_output_volume(f32::from(percent) / 100.0)?;
+            // Like calculations: the id embeds what was typed, so it isn't ranked.
+            return Ok(OpenOutcome::Status {
+                status: system::volume_status(volume),
+            });
+        } else if let Some((direction, uid)) = id
+            .split_once(':')
+            .and_then(|(prefix, uid)| Some((audio::Direction::from_id_prefix(prefix)?, uid)))
+        {
+            let name = audio::set_default(direction, uid)?;
+            let symbol = self
+                .devices
+                .lock()
+                .iter()
+                .find(|d| d.direction == direction && d.uid == uid)
+                .map_or("speaker.wave.2", |d| d.symbol);
+            outcome = OpenOutcome::Status {
+                status: audio_status(direction, &name, symbol),
+            };
+        } else if let Some(shortcut) = id.strip_prefix("shortcut:") {
+            let name = self
+                .shortcuts
+                .lock()
+                .list
+                .iter()
+                .find(|s| s.id == shortcut)
+                .map_or_else(|| "Shortcut".to_owned(), |s| s.name.clone());
+            shortcuts::run(shortcut, self.failure_reporter(&name))?;
         } else if let Some(pane) = id.strip_prefix("settings:") {
             settings_panes::open(pane)?;
         } else if let Some(action) = id.strip_prefix("window:") {
@@ -853,7 +1043,8 @@ impl Launcher {
             symbol: None,
             window_action: None,
         });
-        let commands = self.system.iter().map(|entry| LauncherItem {
+        let system = Arc::clone(&self.system.read());
+        let commands = system.iter().map(|entry| LauncherItem {
             id: entry.id.clone(),
             title: entry.title.clone(),
             category: match entry.kind {
@@ -868,6 +1059,90 @@ impl Launcher {
                 .and_then(windows::action_for_id),
         });
         apps.chain(commands).collect()
+    }
+
+    /// Reports a failure that happens after `open` returned (a disk that wouldn't eject, a
+    /// shortcut that failed) the way failed shell commands are.
+    fn failure_reporter(&self, name: &str) -> impl FnOnce(String) + Send + 'static {
+        failure_reporter(self.observer.lock().clone(), name)
+    }
+
+    /// Re-reads the sound devices; true if they changed.
+    fn refresh_devices(&self) -> bool {
+        let devices = audio::devices();
+        {
+            let mut current = self.devices.lock();
+            if *current == devices {
+                return false;
+            }
+            log::info!("{} sound devices", devices.len());
+            *current = devices;
+        }
+        self.rebuild_entries();
+        true
+    }
+
+    /// Re-lists the shortcuts (blocking, ~40 ms); true if they changed.
+    fn refresh_shortcuts(&self) -> bool {
+        let listed = shortcuts::list();
+        let changed = {
+            let mut state = self.shortcuts.lock();
+            state.refreshing = false;
+            state.refreshed = Some(Instant::now());
+            match listed {
+                Ok(list) if list != state.list => {
+                    log::info!("{} shortcuts", list.len());
+                    state.list = list;
+                    true
+                }
+                Ok(_) => false,
+                Err(error) => {
+                    log::warn!("{error}");
+                    false
+                }
+            }
+        };
+        if changed {
+            self.rebuild_entries();
+        }
+        changed
+    }
+
+    /// Refreshes the shortcuts on a thread if the list is older than
+    /// `SHORTCUTS_STALE_AFTER`; the palette picks up changes through `apps_changed`.
+    fn refresh_shortcuts_if_stale(self: &Arc<Self>) {
+        {
+            let mut state = self.shortcuts.lock();
+            let fresh = state
+                .refreshed
+                .is_some_and(|at| at.elapsed() < SHORTCUTS_STALE_AFTER);
+            if fresh || state.refreshing {
+                return;
+            }
+            state.refreshing = true;
+        }
+        let weak = Arc::downgrade(self);
+        thread::spawn(move || {
+            if let Some(launcher) = weak.upgrade()
+                && launcher.refresh_shortcuts()
+            {
+                launcher.notify_changed();
+            }
+        });
+    }
+
+    fn rebuild_entries(&self) {
+        let _rebuilding = self.rebuild.lock();
+        let devices = self.devices.lock().clone();
+        let shortcuts = self.shortcuts.lock().list.clone();
+        *self.system.write() = Arc::new(system_entries(&devices, &shortcuts));
+    }
+
+    fn notify_changed(&self) {
+        let observer = self.observer.lock().clone();
+        if let Some(observer) = observer {
+            observer.apps_changed();
+        }
     }
 
     /// Saves synchronously: the file is a few KB and opens happen once per palette use, so
@@ -1078,6 +1353,19 @@ fn now() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0.0, |d| d.as_secs_f64())
+}
+
+/// Reports a late failure to the shell as a failed command named `name`.
+pub(crate) fn failure_reporter(
+    observer: Option<Arc<dyn LauncherObserver>>,
+    name: &str,
+) -> impl FnOnce(String) + Send + 'static {
+    let name = name.to_owned();
+    move |message| {
+        if let Some(observer) = observer {
+            observer.command_finished(name, message, false);
+        }
+    }
 }
 
 /// Applies a new launcher config to the hotkeys.

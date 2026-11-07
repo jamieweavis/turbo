@@ -424,6 +424,8 @@ final class PaletteModel {
     @ObservationIgnored var onPickColor: (() -> Void)?
     /// A Keep Awake command turned it on or off here.
     @ObservationIgnored var onKeepAwakeChanged: ((Bool) -> Void)?
+    /// An action confirmed what it did (Wi-Fi off, the new volume); the palette has closed.
+    @ObservationIgnored var onStatus: ((Status) -> Void)?
     /// A colour was deleted from the history here.
     @ObservationIgnored var onColorsChanged: (() -> Void)?
     /// Called after an emoji is pasted or copied, so its recently used list can refresh.
@@ -730,6 +732,9 @@ final class PaletteModel {
             case .keepAwake(let active):
                 onClose?()
                 onKeepAwakeChanged?(active)
+            case .status(let status):
+                onClose?()
+                onStatus?(status)
             }
         } catch {
             Logger.palette.error("couldn't open a \(String(describing: result.kind), privacy: .public) result: \(error, privacy: .public)")

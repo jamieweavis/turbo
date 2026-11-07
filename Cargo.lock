@@ -539,6 +539,7 @@ dependencies = [
  "objc2-av-foundation",
  "objc2-core-foundation",
  "objc2-core-graphics",
+ "objc2-core-wlan",
  "objc2-foundation",
  "oslog",
  "parking_lot",
@@ -770,6 +771,16 @@ checksum = "583300ad934cba24ff5292aee751ecc070f7ca6b39a574cc21b7b5e588e06a0b"
 dependencies = [
  "libc",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-core-wlan"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c71e34919aba0d701380d911702455038a8a3587467fe0141d6a71501e7ffe48"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
 ]
 
 [[package]]

@@ -46,6 +46,7 @@ final class AppModel {
             keepAwake.refresh()
             pill.show(.keepAwake(active))
         }
+        palette.model.onStatus = { [pill] status in pill.show(.status(status)) }
         colorPicker.onPicked = { [pill] color, text in pill.show(.color(color, text: text)) }
     }
 
@@ -75,7 +76,8 @@ final class AppModel {
                 keepAwake.refresh()
                 pill.show(.keepAwake(active))
             },
-            onPickColor: { [colorPicker] in colorPicker.pick() }
+            onPickColor: { [colorPicker] in colorPicker.pick() },
+            onShowStatus: { [pill] status in pill.show(.status(status)) }
         ))
         // Hotkeys don't need Accessibility, so they work before it's granted.
         core.startHotkeys()

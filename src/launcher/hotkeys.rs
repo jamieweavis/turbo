@@ -16,7 +16,10 @@ use std::sync::Arc;
 use objc2_app_kit::{NSRunningApplication, NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::NSString;
 
-use super::{LauncherObserver, PICK_COLOR_ID, PaletteMode, settings_panes, system};
+use super::{
+    LauncherObserver, PICK_COLOR_ID, PaletteMode, Status, audio, failure_reporter, settings_panes,
+    shortcuts, system,
+};
 use crate::config::{Hotkey, LauncherConfig, Modifier, WindowAction};
 use crate::error::CoreError;
 use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
@@ -69,6 +72,10 @@ enum Target {
     PickColor,
     /// A System Settings pane, by id.
     Settings(String),
+    /// Make a sound device (by UID) the default output or input.
+    AudioDevice(audio::Direction, String),
+    /// Run a shortcut, by its identifier.
+    Shortcut(String),
 }
 
 impl Target {
@@ -83,7 +90,11 @@ impl Target {
             "window" => crate::windows::action_for_id(rest).map(Target::Window),
             "keep-awake" => super::keep_awake_command_for_id(rest).map(Target::KeepAwake),
             "media" => super::media_command_for_id(rest).map(Target::Media),
+            "shortcut" => Some(Target::Shortcut(rest.to_owned())),
             _ if id == PICK_COLOR_ID => Some(Target::PickColor),
+            _ if let Some(direction) = audio::Direction::from_id_prefix(kind) => {
+                Some(Target::AudioDevice(direction, rest.to_owned()))
+            }
             _ => None,
         }
     }
@@ -105,7 +116,9 @@ impl Target {
             | Target::App(_)
             | Target::System(_)
             | Target::Media(_)
-            | Target::Settings(_) => true,
+            | Target::Settings(_)
+            | Target::AudioDevice(..)
+            | Target::Shortcut(_) => true,
         }
     }
 }
@@ -244,8 +257,33 @@ impl Inner {
                 }
             }
             Some(Target::System(action)) => {
-                if let Err(error) = system::perform(&action) {
-                    log::error!("system action hotkey {action} failed: {error}");
+                let title = system::actions()
+                    .iter()
+                    .find(|a| a.id == action)
+                    .map_or(action.as_str(), |a| a.title);
+                let observer = self.observer.lock().clone();
+                match system::perform(&action, failure_reporter(observer, title)) {
+                    Ok(Some(status)) => self.show_status(status),
+                    Ok(None) => {}
+                    Err(error) => log::error!("system action hotkey {action} failed: {error}"),
+                }
+            }
+            Some(Target::AudioDevice(direction, uid)) => {
+                match audio::set_default(direction, &uid) {
+                    Ok(name) => {
+                        let symbol = match direction {
+                            audio::Direction::Output => "speaker.wave.2",
+                            audio::Direction::Input => "mic",
+                        };
+                        self.show_status(super::audio_status(direction, &name, symbol));
+                    }
+                    Err(error) => log::error!("sound device hotkey failed: {error}"),
+                }
+            }
+            Some(Target::Shortcut(id)) => {
+                let observer = self.observer.lock().clone();
+                if let Err(error) = shortcuts::run(&id, failure_reporter(observer, "Shortcut")) {
+                    log::error!("shortcut hotkey failed: {error}");
                 }
             }
             Some(Target::Window(action)) => {
@@ -280,6 +318,15 @@ impl Inner {
                 }
             }
             None => {}
+        }
+    }
+}
+
+impl Inner {
+    fn show_status(&self, status: Status) {
+        let observer = self.observer.lock().clone();
+        if let Some(observer) = observer {
+            observer.show_status(status);
         }
     }
 }

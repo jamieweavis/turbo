@@ -469,6 +469,7 @@ final class LauncherObserverBridge: LauncherObserver {
     private let onClipboardChanged: @MainActor @Sendable () -> Void
     private let onKeepAwakeChanged: @MainActor @Sendable (Bool) -> Void
     private let onPickColor: @MainActor @Sendable () -> Void
+    private let onShowStatus: @MainActor @Sendable (Status) -> Void
 
     init(
         onTogglePalette: @escaping @MainActor @Sendable () -> Void,
@@ -477,7 +478,8 @@ final class LauncherObserverBridge: LauncherObserver {
         onShowMode: @escaping @MainActor @Sendable (PaletteMode) -> Void,
         onClipboardChanged: @escaping @MainActor @Sendable () -> Void,
         onKeepAwakeChanged: @escaping @MainActor @Sendable (Bool) -> Void,
-        onPickColor: @escaping @MainActor @Sendable () -> Void
+        onPickColor: @escaping @MainActor @Sendable () -> Void,
+        onShowStatus: @escaping @MainActor @Sendable (Status) -> Void
     ) {
         self.onTogglePalette = onTogglePalette
         self.onAppsChanged = onAppsChanged
@@ -486,6 +488,7 @@ final class LauncherObserverBridge: LauncherObserver {
         self.onClipboardChanged = onClipboardChanged
         self.onKeepAwakeChanged = onKeepAwakeChanged
         self.onPickColor = onPickColor
+        self.onShowStatus = onShowStatus
     }
 
     func togglePalette() {
@@ -521,6 +524,12 @@ final class LauncherObserverBridge: LauncherObserver {
     func pickColor() {
         DispatchQueue.main.async { [onPickColor] in
             MainActor.assumeIsolated { onPickColor() }
+        }
+    }
+
+    func showStatus(status: Status) {
+        DispatchQueue.main.async { [onShowStatus] in
+            MainActor.assumeIsolated { onShowStatus(status) }
         }
     }
 

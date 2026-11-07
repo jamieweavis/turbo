@@ -10,6 +10,8 @@ final class Pill {
     enum Content: Equatable {
         case keepAwake(Bool)
         case color(PickedColor, text: String)
+        /// What a launcher action changed ("Wi-Fi off", "Volume 56%").
+        case status(Status)
     }
 
     private let panel: NSPanel
@@ -105,6 +107,10 @@ private struct PillView: View {
                 Image(systemName: active ? "eye.fill" : "eye.slash")
                     .font(.system(size: 12, weight: .semibold))
                 Text(active ? "Keep Awake on" : "Keep Awake off")
+            case .status(let status):
+                Image(systemName: status.symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(status.text)
             case .color(let color, let text):
                 Circle()
                     .fill(color.color)

@@ -17,6 +17,8 @@ let package = Package(
                 .linkedFramework("CoreDisplay"),  // ddc-macos
                 .linkedFramework("AVFoundation"),  // camera
                 .linkedFramework("CoreServices"),  // media keys' Apple Event permission check
+                .linkedFramework("CoreAudio"),  // sound devices and volume
+                .linkedFramework("CoreWLAN"),  // Toggle Wi-Fi
             ]
         ),
         .executableTarget(
