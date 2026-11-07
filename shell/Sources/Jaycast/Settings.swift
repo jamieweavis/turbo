@@ -122,11 +122,11 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .windowDrag: "Window Transform"
         case .keyboard: "Hyper Key"
         case .mouse: "Mouse"
-        case .monitor: "Brightness"
+        case .monitor: "Display Brightness"
         case .mediaKeys: "Media Keys"
         case .keepAwake: "Keep Awake"
         case .colorPicker: "Colour Picker"
-        case .emoji: "Emoji"
+        case .emoji: "Emoji Picker"
         }
     }
 
