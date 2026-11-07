@@ -84,6 +84,10 @@ impl Machine {
         }
     }
 
+    pub fn is_held(&self) -> bool {
+        self.held_since.is_some()
+    }
+
     /// Forgets a held press, e.g. after the tap was disabled and may have missed its key-up.
     pub fn reset(&mut self) {
         self.held_since = None;

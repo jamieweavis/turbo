@@ -5,11 +5,13 @@
 //! - `remap`: remapping the chosen key in the HID event system, and toggling Caps Lock.
 //! - `machine`: what happens to each event while Hyper is or isn't held (pure).
 //! - `tap`: the HID-level tap that applies it.
+//! - `power`: sleep/wake notifications, so a press cut short by sleep doesn't stick.
 //!
 //! The key is only remapped while the tap runs, so it never goes dead: with Accessibility
 //! revoked, input stopped or the setting off, it's back to being itself.
 
 mod machine;
+mod power;
 mod remap;
 mod tap;
 

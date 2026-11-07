@@ -24,6 +24,7 @@ use objc2_core_graphics::{
 };
 
 use super::machine::{Input, Machine, Outcome};
+use super::power::{self, PowerNotifier};
 use super::remap::{self, HYPER_KEY_CODE};
 use crate::config::{HyperKeyConfig, QuickPress};
 use crate::error::CoreError;
@@ -158,6 +159,7 @@ fn run_tap_thread(
         config,
         machine: Machine::default(),
         port: None,
+        power: None,
     }));
 
     let mask: CGEventMask = EVENTS_OF_INTEREST
@@ -191,8 +193,17 @@ fn run_tap_thread(
     // SAFETY: the mode constants are immutable CF globals.
     let common_modes = unsafe { kCFRunLoopCommonModes };
     run_loop.add_source(Some(&source), common_modes);
+    // SAFETY: `state` outlives the notifier (it owns it), and the callback runs on this
+    // run loop's thread.
+    let power = unsafe { PowerNotifier::register(&run_loop, state.cast(), power_callback) };
+    if power.is_none() {
+        log::warn!("couldn't register for sleep/wake; a Hyper press cut short by sleep may stick");
+    }
     // SAFETY: still the only user of `state`; the run loop isn't running yet.
-    unsafe { (*state).port = Some(port.clone()) };
+    unsafe {
+        (*state).port = Some(port.clone());
+        (*state).power = power;
+    }
     CGEvent::tap_enable(&port, true);
     let _ = ready.send(Ok(RunLoopHandle(run_loop.clone())));
 
@@ -205,8 +216,32 @@ fn run_tap_thread(
     CGEvent::tap_enable(&port, false);
     source.invalidate();
     port.invalidate();
-    // SAFETY: the tap and source are invalidated, so no callback can run again.
+    // SAFETY: the tap and source are invalidated, and dropping the state deregisters the
+    // power notifier, so no callback can run again.
     drop(unsafe { Box::from_raw(state) });
+}
+
+/// Sleep and wake: forget a held Hyper press, whose key-up can be lost while asleep.
+unsafe extern "C-unwind" fn power_callback(
+    refcon: *mut c_void,
+    _service: u32,
+    message: u32,
+    argument: *mut c_void,
+) {
+    // SAFETY: `refcon` is the TapState pointer, used only on this thread.
+    let state = unsafe { &mut *refcon.cast::<TapState>() };
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(event) = power::classify(message) {
+            if state.machine.is_held() {
+                log::info!("Hyper released on {event:?}; its key-up may never arrive");
+            }
+            state.machine.reset();
+        }
+    }));
+    // Always answer, even after a panic, or sleep waits 30 seconds for us.
+    if let Some(power) = &state.power {
+        power.acknowledge(message, argument);
+    }
 }
 
 unsafe extern "C-unwind" fn tap_callback(
@@ -244,6 +279,7 @@ struct TapState {
     config: Arc<HyperKeyConfig>,
     machine: Machine,
     port: Option<CFRetained<CFMachPort>>,
+    power: Option<PowerNotifier>,
 }
 
 impl TapState {
