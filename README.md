@@ -110,6 +110,7 @@ One palette for the things you do all day, opened with <kbd>⌥</kbd><kbd>Space<
 
 Every setting, from hotkeys and snippets to quicklinks and mouse buttons, lives in one plain TOML file at
 `~/.config/jaycast.toml`. Check it into your dotfiles and a new Mac is set up the moment Jaycast launches.
+Symlink it from your dotfiles repo if you like: Jaycast writes through the link to the real file and leaves the link in place.
 
 ```toml
 [launcher.hotkey]

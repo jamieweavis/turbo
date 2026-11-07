@@ -4,6 +4,7 @@
 //! as fields are added.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -932,7 +933,14 @@ impl ConfigStore {
     pub fn load(&self) -> Result<Config, CoreError> {
         match fs::read_to_string(&self.path) {
             Ok(text) => {
-                log::info!("loading config from {}", self.path.display());
+                match resolve_symlinks(&self.path) {
+                    Ok(target) if target != self.path => log::info!(
+                        "loading config from {} (a link to {})",
+                        self.path.display(),
+                        target.display()
+                    ),
+                    _ => log::info!("loading config from {}", self.path.display()),
+                }
                 toml::from_str(&text).map_err(|error| {
                     log::error!("couldn't parse {}: {error}", self.path.display());
                     error.into()
@@ -962,15 +970,70 @@ impl ConfigStore {
         self.write(&toml::to_string_pretty(config)?)
     }
 
+    /// When the config is a symlink (into a dotfiles repo, say), the file it points to is
+    /// replaced and the link left alone; renaming over the link itself would swap it for a
+    /// plain file and quietly detach the config from the repo. The link is resolved on every
+    /// write so repointing it while Jaycast runs is picked up. A dangling link creates its
+    /// target. The replaced file keeps its permissions.
     fn write(&self, text: &str) -> Result<(), CoreError> {
-        if let Some(dir) = self.path.parent() {
-            fs::create_dir_all(dir)?;
+        let target = resolve_symlinks(&self.path)?;
+        let dir = match target.parent() {
+            Some(dir) if !dir.as_os_str().is_empty() => dir,
+            _ => Path::new("."),
+        };
+        fs::create_dir_all(dir)?;
+        let name = target.file_name().map_or_else(
+            || "jaycast.toml".into(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        // Beside the target, so the rename stays on one filesystem; hidden, so a dotfiles
+        // repo's `git status` doesn't flash it.
+        let tmp = dir.join(format!(".{name}.tmp"));
+        let result = write_replacing(&tmp, &target, text);
+        if result.is_err() {
+            let _ = fs::remove_file(&tmp);
         }
-        let tmp = self.path.with_extension("toml.tmp");
-        fs::write(&tmp, text)?;
-        fs::rename(&tmp, &self.path)?;
-        Ok(())
+        result
     }
+}
+
+fn write_replacing(tmp: &Path, target: &Path, text: &str) -> Result<(), CoreError> {
+    let mut file = fs::File::create(tmp)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()?;
+    if let Ok(metadata) = fs::metadata(target) {
+        fs::set_permissions(tmp, metadata.permissions())?;
+    }
+    fs::rename(tmp, target)?;
+    Ok(())
+}
+
+/// Most links followed before giving up, as with the kernel's `MAXSYMLINKS`.
+const MAX_SYMLINKS: usize = 32;
+
+/// Follows `path` through any chain of symlinks to the file it names, which needn't exist
+/// yet. Relative links resolve against the directory holding the link. Directory symlinks
+/// along the way are left as they are: renaming inside one works.
+fn resolve_symlinks(path: &Path) -> std::io::Result<PathBuf> {
+    let mut current = path.to_path_buf();
+    for _ in 0..MAX_SYMLINKS {
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                let link = fs::read_link(&current)?;
+                current = match current.parent() {
+                    Some(dir) if link.is_relative() => dir.join(link),
+                    _ => link,
+                };
+            }
+            Ok(_) => return Ok(current),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(current),
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::other(format!(
+        "too many levels of symbolic links at {}",
+        path.display()
+    )))
 }
 
 /// How long settings must stay unchanged before they're written, so dragging a slider
@@ -1257,6 +1320,74 @@ mod tests {
         });
         store.save(&config).unwrap();
         assert_eq!(store.load().unwrap(), config);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn assert_link_to(link: &Path, target: &Path) {
+        assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+        assert_eq!(resolve_symlinks(link).unwrap(), target);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_through_a_symlink_keeps_the_link() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let dir = temp_dir("symlink");
+        let dotfiles = dir.join("dotfiles");
+        fs::create_dir_all(&dotfiles).unwrap();
+        let target = dotfiles.join("jaycast.toml");
+        fs::write(&target, "[mouse]\nbuttons_enabled = false\n").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let link = dir.join("jaycast.toml");
+        symlink(&target, &link).unwrap();
+
+        let store = store(&dir);
+        let mut config = store.load().unwrap();
+        assert!(!config.mouse.buttons_enabled);
+        config.mouse.smooth_scroll.speed = 1.5;
+        store.save(&config).unwrap();
+
+        assert_link_to(&link, &target);
+        assert_eq!(store.load().unwrap(), config);
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let leftovers: Vec<_> = fs::read_dir(&dotfiles).unwrap().collect();
+        assert_eq!(leftovers.len(), 1, "temp file left behind");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_and_chained_symlinks_resolve() {
+        use std::os::unix::fs::symlink;
+        let dir = temp_dir("symlink-chain");
+        fs::create_dir_all(dir.join("dotfiles/jaycast")).unwrap();
+        // jaycast.toml -> dotfiles/current.toml -> jaycast/config.toml (both relative).
+        symlink("jaycast/config.toml", dir.join("dotfiles/current.toml")).unwrap();
+        symlink("dotfiles/current.toml", dir.join("jaycast.toml")).unwrap();
+        let target = dir.join("dotfiles/jaycast/config.toml");
+
+        // Dangling: the save creates the file at the end of the chain.
+        let store = store(&dir);
+        store.save(&speed(2.0)).unwrap();
+        assert!(target.is_file());
+        assert_link_to(&dir.join("jaycast.toml"), &target);
+        assert_eq!(store.load().unwrap(), speed(2.0));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_loop_is_an_error_not_a_hang() {
+        use std::os::unix::fs::symlink;
+        let dir = temp_dir("symlink-loop");
+        fs::create_dir_all(&dir).unwrap();
+        symlink("b.toml", dir.join("jaycast.toml")).unwrap();
+        symlink("jaycast.toml", dir.join("b.toml")).unwrap();
+        assert!(store(&dir).save(&Config::default()).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
 
