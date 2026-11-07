@@ -14,7 +14,7 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 ![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Rust](https://img.shields.io/badge/rust-1.88%2B-orange)
 
-[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Features](#features) · [Utilities](#utilities) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
+[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Launcher Features](#launcher-features) · [Utilities](#utilities) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
 
 <img src=".github/screenshots/general.png" alt="Jaycast's settings window" width="760">
 
@@ -25,7 +25,7 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 ## Contents
 
 - [Why Jaycast](#why-jaycast)
-- [Features](#features)
+- [Launcher Features](#launcher-features)
   - [Launcher](#launcher)
   - [Quicklinks](#quicklinks)
   - [Shell Commands](#shell-commands)
@@ -68,7 +68,7 @@ with one app, one settings file and one process.
 | **🔒 Local** | Your clipboard, snippets and settings never leave your Mac. |
 | **🔓 Yours** | MIT licensed. Every feature is free, there is no Pro tier, and you can build it yourself. |
 
-## Features
+## Launcher Features
 
 Everything in the palette, opened with <kbd>⌥</kbd><kbd>Space</kbd>, and most of it on its own hotkey too.
 Each feature can be switched off on its own.
