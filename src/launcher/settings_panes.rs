@@ -584,7 +584,7 @@ mod tests {
 
     /// Bundles move between macOS versions (the app falls back to System Settings' icon),
     /// so this only holds on the macOS the list was written against.
-    /// Run with `cargo test -p jaycast -- --ignored icon_bundles_exist_on_this_macos`.
+    /// Run with `cargo test -p backpack -- --ignored icon_bundles_exist_on_this_macos`.
     #[test]
     #[ignore = "depends on the macOS version"]
     fn icon_bundles_exist_on_this_macos() {

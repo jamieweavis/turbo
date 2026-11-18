@@ -249,7 +249,7 @@ impl Watcher {
             }
         }
         thread::Builder::new()
-            .name("jaycast-app-watcher".into())
+            .name("backpack-app-watcher".into())
             .spawn(move || {
                 // Ends when the watcher (and with it the sender) is dropped.
                 while rx.recv().is_ok() {
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn reads_bundles_and_skips_background_only() {
-        let dir = std::env::temp_dir().join(format!("jaycast-apps-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-apps-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let make = |rel: &str, plist: &str| {
             let contents = dir.join(rel).join("Contents");

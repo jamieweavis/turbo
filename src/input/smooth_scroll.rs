@@ -51,7 +51,7 @@ impl SmoothScroller {
             wake: Condvar::new(),
         });
         let thread = thread::Builder::new()
-            .name("jaycast-smooth-scroll".into())
+            .name("backpack-smooth-scroll".into())
             .spawn({
                 let shared = Arc::clone(&shared);
                 move || run_emitter(&shared)

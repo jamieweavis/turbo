@@ -112,7 +112,7 @@ impl Worker {
             wake: Condvar::new(),
         });
         let thread = thread::Builder::new()
-            .name(format!("jaycast-ddc-{display_id}"))
+            .name(format!("backpack-ddc-{display_id}"))
             .spawn({
                 let shared = Arc::clone(&shared);
                 move || run(&shared, monitor, on_read)

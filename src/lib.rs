@@ -1,4 +1,4 @@
-//! Jaycast core: everything that decides or does something lives here.
+//! Backpack core: everything that decides or does something lives here.
 //! The Swift shell draws UI and forwards user intent through the FFI below.
 
 uniffi::setup_scaffolding!();
@@ -19,6 +19,7 @@ mod launcher;
 mod logging;
 mod media_keys;
 mod pasteboard;
+mod rename;
 mod snippets;
 mod windows;
 
@@ -140,7 +141,7 @@ pub struct Core {
 #[uniffi::export]
 impl Core {
     /// `data_dir` is where history and state live (the shell passes Application
-    /// Support/Jaycast); the config itself is `~/.config/jaycast.toml`.
+    /// Support/Backpack); the config itself is `~/.config/backpack.toml`.
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
         logging::init();
@@ -150,10 +151,9 @@ impl Core {
             env!("CARGO_PKG_VERSION")
         );
         let data_dir = PathBuf::from(data_dir);
-        let saver = ConfigSaver::new(
-            ConfigStore::new(ConfigStore::default_path()?, &data_dir),
-            SAVE_DEBOUNCE,
-        );
+        let config_path = ConfigStore::default_path()?;
+        rename::migrate_from_jaycast(&config_path, &data_dir);
+        let saver = ConfigSaver::new(ConfigStore::new(config_path, &data_dir), SAVE_DEBOUNCE);
         let config = saver.load()?;
         config::log_non_defaults(&config);
         let input = InputEngine::new(config.mouse.clone());
@@ -317,7 +317,7 @@ impl Core {
         self.media_keys.perform(command)
     }
 
-    /// Whether Jaycast may control a player (macOS's Automation permission), without asking.
+    /// Whether Backpack may control a player (macOS's Automation permission), without asking.
     /// Can block indefinitely: call it off the main thread.
     pub fn media_player_access(&self, bundle_id: String) -> AutomationAccess {
         self.media_keys.access(&bundle_id)
@@ -364,7 +364,7 @@ impl Core {
     }
 
     /// Turns keeping the Mac awake on or off. It's remembered, so it comes back on when
-    /// Jaycast relaunches (after an update, say).
+    /// Backpack relaunches (after an update, say).
     pub fn set_keep_awake_active(&self, active: bool) -> Result<(), CoreError> {
         self.keep_awake.set_active(active)
     }
@@ -436,7 +436,7 @@ impl Core {
         self.cameras.select(&id)
     }
 
-    /// Whether Jaycast may use the camera.
+    /// Whether Backpack may use the camera.
     pub fn camera_access(&self) -> CameraAccess {
         camera::access()
     }
@@ -626,7 +626,7 @@ mod tests {
     #[test]
     fn core_info_reports_crate_version() {
         let info = core_info();
-        assert_eq!(info.name, "jaycast");
+        assert_eq!(info.name, "backpack");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
     }
 
@@ -645,7 +645,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("jaycast-lib-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-lib-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }
@@ -654,9 +654,9 @@ mod tests {
         ConfigStore::new(config_path.to_owned(), &dir.join("data"))
     }
 
-    /// Settings saving to `<dir>/jaycast.toml`, written only on flush.
+    /// Settings saving to `<dir>/backpack.toml`, written only on flush.
     fn settings(dir: &Path) -> Settings {
-        settings_at(&dir.join("jaycast.toml"), dir)
+        settings_at(&dir.join("backpack.toml"), dir)
     }
 
     fn settings_at(config_path: &Path, dir: &Path) -> Settings {
@@ -681,10 +681,10 @@ mod tests {
             .unwrap();
         assert!(settings.read(|c| c.media_keys.enabled));
         // Saving is debounced: nothing reaches the file until flushed.
-        assert!(!dir.join("jaycast.toml").exists());
+        assert!(!dir.join("backpack.toml").exists());
 
         settings.flush().unwrap();
-        let saved = store(&dir.join("jaycast.toml"), &dir).load().unwrap();
+        let saved = store(&dir.join("backpack.toml"), &dir).load().unwrap();
         assert!(saved.media_keys.enabled);
         fs::remove_dir_all(dir).unwrap();
     }
@@ -723,7 +723,7 @@ mod tests {
         let changed = settings.read(|c| c.hyper_key.enabled);
         assert_ne!(changed, Config::default().hyper_key.enabled);
         settings.flush().unwrap();
-        let saved = store(&dir.join("jaycast.toml"), &dir).load().unwrap();
+        let saved = store(&dir.join("backpack.toml"), &dir).load().unwrap();
         assert_eq!(saved.hyper_key.enabled, changed);
         fs::remove_dir_all(dir).unwrap();
     }
@@ -735,7 +735,7 @@ mod tests {
         // A file where the config's directory should be makes every write fail.
         let blocker = dir.join("config");
         fs::write(&blocker, "").unwrap();
-        let settings = settings_at(&blocker.join("jaycast.toml"), &dir);
+        let settings = settings_at(&blocker.join("backpack.toml"), &dir);
         settings.update(|_| {}, |_| Ok(())).unwrap();
         assert!(settings.flush().is_err());
 

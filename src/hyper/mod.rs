@@ -38,7 +38,7 @@ struct State {
 }
 
 impl HyperKey {
-    /// Also removes a remapping left behind if Jaycast didn't get to quit cleanly.
+    /// Also removes a remapping left behind if Backpack didn't get to quit cleanly.
     pub fn new(config: HyperKeyConfig) -> Self {
         if let Err(error) = remap::apply(None) {
             log::error!("couldn't restore the Hyper key: {error}");

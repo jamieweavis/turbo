@@ -3,7 +3,7 @@
 //! Each action picks the mechanism that needs the fewest permission prompts:
 //! - Lock Screen: `SACLockScreenImmediate` (private login.framework). It needs no permission
 //!   and is what the menu bar's Lock Screen item uses; if the symbol ever disappears we fall
-//!   back to posting ⌃⌘Q, which needs the Accessibility grant Jaycast already asks for.
+//!   back to posting ⌃⌘Q, which needs the Accessibility grant Backpack already asks for.
 //! - Sleep / Sleep Displays: `pmset sleepnow` / `displaysleepnow`, which any user may run.
 //! - Restart / Shut Down / Log Out: the Apple Events loginwindow handles for the Apple menu
 //!   (`aevt/rest`, `aevt/shut`, `aevt/rlgo`). Apps can still cancel to save documents. The
@@ -27,7 +27,7 @@
 //!   permission. Mission Control falls back to opening Mission Control.app, auto-hide to
 //!   scripting System Events.
 //! - Take Screenshot: opening Screenshot.app (its toolbar), which records the screen
-//!   itself, so Jaycast needs no Screen Recording permission.
+//!   itself, so Backpack needs no Screen Recording permission.
 //!
 //! Nothing here blocks the caller for long: helpers run as child processes, reaped on a
 //! thread, and the Core Audio, CoreWLAN and CoreDock calls return within milliseconds.
@@ -534,7 +534,7 @@ fn eject_all(on_failure: impl FnOnce(String) + Send + 'static) -> Result<Status,
     }
     let count = volumes.len();
     thread::Builder::new()
-        .name("jaycast-eject".into())
+        .name("backpack-eject".into())
         .spawn(move || {
             let failures: Vec<String> = volumes
                 .into_iter()

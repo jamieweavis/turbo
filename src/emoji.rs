@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn removing_recent_drops_only_that_emoji() {
-        let dir = std::env::temp_dir().join(format!("jaycast-emoji-rm-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-emoji-rm-{}", std::process::id()));
         let picker = EmojiPicker::new(&dir);
         record(&mut picker.recent.lock(), "🚀");
         record(&mut picker.recent.lock(), "😀");
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn clearing_recent_empties_the_row_and_file() {
-        let dir = std::env::temp_dir().join(format!("jaycast-emoji-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-emoji-{}", std::process::id()));
         let picker = EmojiPicker::new(&dir);
         record(&mut picker.recent.lock(), "🚀");
         assert_eq!(picker.recent()[0].emoji, "🚀");

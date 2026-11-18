@@ -318,7 +318,7 @@ pub struct LauncherItem {
     /// The search result id, used as `ItemSettings::id`.
     pub id: String,
     pub title: String,
-    /// "Application", "Jaycast", "System", "System Settings", "Window", "Sound Output",
+    /// "Application", "Backpack", "System", "System Settings", "Window", "Sound Output",
     /// "Sound Input" or "Shortcut".
     pub category: String,
     /// The bundle to draw the icon from (apps, settings panes).
@@ -629,7 +629,7 @@ impl SystemEntry {
         Self {
             id: format!("mode:{id}"),
             title: title.to_owned(),
-            subtitle: "Jaycast",
+            subtitle: "Backpack",
             title_match: Prepared::new(title),
             keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: symbol.to_owned(),
@@ -643,7 +643,7 @@ impl SystemEntry {
         Self {
             id: PICK_COLOR_ID.to_owned(),
             title: "Pick Colour".to_owned(),
-            subtitle: "Jaycast",
+            subtitle: "Backpack",
             title_match: Prepared::new("Pick Colour"),
             keywords: ["pick color", "colour picker", "color picker", "eyedropper"]
                 .iter()
@@ -660,7 +660,7 @@ impl SystemEntry {
         Self {
             id: format!("keep-awake:{id}"),
             title: title.to_owned(),
-            subtitle: "Jaycast",
+            subtitle: "Backpack",
             title_match: Prepared::new(title),
             keywords: KEEP_AWAKE_KEYWORDS
                 .iter()
@@ -724,7 +724,7 @@ impl SystemEntry {
         Self {
             id: format!("media:{id}"),
             title: title.to_owned(),
-            subtitle: "Jaycast",
+            subtitle: "Backpack",
             title_match: Prepared::new(title),
             keywords: keywords.iter().map(|k| Prepared::new(k)).collect(),
             symbol: symbol.to_owned(),
@@ -780,7 +780,7 @@ impl Launcher {
 
         let weak = Arc::downgrade(&launcher);
         thread::Builder::new()
-            .name("jaycast-app-index".into())
+            .name("backpack-app-index".into())
             .spawn(move || {
                 let Some(launcher) = weak.upgrade() else {
                     return;

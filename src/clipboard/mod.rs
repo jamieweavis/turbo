@@ -100,7 +100,7 @@ impl ClipboardHistory {
 
         let weak = Arc::downgrade(&history);
         thread::Builder::new()
-            .name("jaycast-clipboard".into())
+            .name("backpack-clipboard".into())
             .spawn(move || run_monitor(&monitor, &weak))
             .expect("failed to spawn the clipboard thread");
         history
@@ -351,7 +351,7 @@ mod tests {
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "jaycast-clipboard-history-{name}-{}",
+            "backpack-clipboard-history-{name}-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&dir);

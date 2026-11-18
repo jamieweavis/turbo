@@ -3,14 +3,14 @@
 //!
 //! - `layout`: where a window goes for each action (pure, unit-tested).
 //! - `ax`: the AXUIElement calls that read and set a window's frame.
-//! - `memory`: what Jaycast remembers per window, kept bounded.
+//! - `memory`: what Backpack remembers per window, kept bounded.
 //!
 //! `perform` reads the displays from `NSScreen` (visible frames, flipped to the top-left
 //! origin Accessibility uses), finds the frontmost app's focused window and its frame, plans
 //! the target and applies it as size, position, size: an app may clamp a size that doesn't
 //! fit the display the window is still on, and the second resize lands once it has moved.
 //! Windows that won't take the size are aligned within the target instead. Each window's
-//! frame before Jaycast first moved it (for `Restore`) and its last snap (for cycling
+//! frame before Backpack first moved it (for `Restore`) and its last snap (for cycling
 //! repeated halves, and for keeping a snap when moving to another display) are remembered
 //! per pid and CGWindowID.
 //!
@@ -294,7 +294,7 @@ impl WindowManager {
         let plan = layout::plan(action, before, &screens, &memory, gap, almost_maximize).map_err(
             |error| {
                 other(match error {
-                    PlanError::NothingToRestore => "Jaycast hasn't moved this window",
+                    PlanError::NothingToRestore => "Backpack hasn't moved this window",
                     PlanError::OneDisplay => "there's only one display",
                 })
             },
@@ -481,7 +481,7 @@ mod tests {
     }
 
     /// Read-only: prints the displays and the frontmost app's focused window. Nothing is
-    /// moved. `cargo test -p jaycast windows::tests::probe -- --ignored --nocapture`
+    /// moved. `cargo test -p backpack windows::tests::probe -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn probe() {

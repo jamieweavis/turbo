@@ -12,7 +12,7 @@ import os
 final class CameraSession: @unchecked Sendable {
     /// Read by the preview layer. Only configured on `queue`.
     let session = AVCaptureSession()
-    private let queue = DispatchQueue(label: "com.jamieweavis.jaycast.camera")
+    private let queue = DispatchQueue(label: "com.jamieweavis.backpack.camera")
     /// Only touched on `queue`.
     private var input: AVCaptureDeviceInput?
 
@@ -265,7 +265,7 @@ struct CameraModeView: View {
         case .denied:
             CameraMessage(
                 symbol: "video.slash",
-                title: "Jaycast can't use the camera",
+                title: "Backpack can't use the camera",
                 detail: "Allow it in System Settings → Privacy & Security → Camera.",
                 button: ("Open Camera Settings", model.openCameraPrivacySettings)
             )

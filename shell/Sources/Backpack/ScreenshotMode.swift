@@ -1,12 +1,12 @@
 import AppKit
 import os
 
-/// `just screenshots`: launched with `JAYCAST_SCREENSHOTS=<dir>`, the app opens Settings, saves
+/// `just screenshots`: launched with `BACKPACK_SCREENSHOTS=<dir>`, the app opens Settings, saves
 /// each pane's window to `<dir>/<pane>.png` with `screencapture` (frame and shadow included) and
 /// quits. Capturing needs Screen Recording access.
 @MainActor
 enum ScreenshotMode {
-    static let directory: URL? = ProcessInfo.processInfo.environment["JAYCAST_SCREENSHOTS"]
+    static let directory: URL? = ProcessInfo.processInfo.environment["BACKPACK_SCREENSHOTS"]
         .flatMap { $0.isEmpty ? nil : URL(filePath: $0, directoryHint: .isDirectory) }
 
     static func capture(_ settings: SettingsWindowController, to directory: URL) async {

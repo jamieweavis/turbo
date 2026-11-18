@@ -1,14 +1,14 @@
 //! Routes the `log` macros to macOS unified logging, and panics with them.
 //!
 //! The app is launched by LaunchServices, so stderr goes nowhere. Everything goes to the
-//! `com.jamieweavis.jaycast` subsystem instead, one category per module; `just logs`
+//! `com.jamieweavis.backpack` subsystem instead, one category per module; `just logs`
 //! streams it. Never log what the user typed or copied: lengths and kinds only.
 
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use oslog::OsLog;
 use std::sync::{Once, OnceLock};
 
-pub const SUBSYSTEM: &str = "com.jamieweavis.jaycast";
+pub const SUBSYSTEM: &str = "com.jamieweavis.backpack";
 
 /// Categories, named after the top-level modules. Anything else logs as "core".
 const CATEGORIES: &[&str] = &[
@@ -89,7 +89,7 @@ fn os_level(level: Level) -> oslog::Level {
     }
 }
 
-/// `jaycast_core::input::tap` → `input`.
+/// `backpack_core::input::tap` → `input`.
 fn module(target: &str) -> &str {
     target.split("::").nth(1).unwrap_or("core")
 }
@@ -119,9 +119,9 @@ mod tests {
 
     #[test]
     fn module_paths_map_to_categories() {
-        assert_eq!(module("jaycast_core::input::tap"), "input");
-        assert_eq!(module("jaycast_core::config"), "config");
-        assert_eq!(module("jaycast_core"), "core");
+        assert_eq!(module("backpack_core::input::tap"), "input");
+        assert_eq!(module("backpack_core::config"), "config");
+        assert_eq!(module("backpack_core"), "core");
         assert_eq!(source_module("src/input/tap.rs"), "input");
         assert_eq!(source_module("src/config.rs"), "config");
     }

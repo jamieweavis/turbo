@@ -5,7 +5,7 @@
 //! layout, which typing it key by key wouldn't. The cost is borrowing the clipboard: what
 //! was there is copied out first (every item and type) and written back once the target app
 //! has had time to read the paste. Both writes carry `org.nspasteboard.TransientType`, so
-//! Jaycast's clipboard history and other clipboard managers skip them; for the restore that
+//! Backpack's clipboard history and other clipboard managers skip them; for the restore that
 //! means the user's original copy isn't recorded a second time (it was recorded when they
 //! made it), at the price of the marker staying on it.
 //!
@@ -181,7 +181,7 @@ impl Snapshot {
 }
 
 /// Presses and releases a key `count` times with exactly `flags` held, stamped as ours so
-/// Jaycast's own taps (the expander included) ignore it.
+/// Backpack's own taps (the expander included) ignore it.
 fn post_key_repeatedly(key: CGKeyCode, flags: CGEventFlags, count: usize) {
     for _ in 0..count {
         for down in [true, false] {

@@ -45,7 +45,7 @@ unsafe extern "C" {
     fn CGDisplayIsBuiltin(display: CGDirectDisplayID) -> u32;
 }
 
-/// An external display Jaycast knows about.
+/// An external display Backpack knows about.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct DisplayInfo {
     /// The `CGDirectDisplayID`; stable while the display stays connected.
@@ -130,7 +130,7 @@ impl DisplayManager {
         if scanning {
             let weak = Arc::downgrade(&manager);
             thread::Builder::new()
-                .name("jaycast-displays".into())
+                .name("backpack-displays".into())
                 .spawn(move || run_scanner(&scan, &weak))
                 .expect("failed to spawn the display scan thread");
         }

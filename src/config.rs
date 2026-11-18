@@ -1,4 +1,4 @@
-//! User settings, persisted as TOML at `~/.config/jaycast.toml`.
+//! User settings, persisted as TOML at `~/.config/backpack.toml`.
 //!
 //! Every struct uses `#[serde(default)]` so configs written by older builds keep loading
 //! as fields are added.
@@ -270,7 +270,7 @@ pub enum WindowAction {
     AlmostMaximize,
     /// Same size, centred.
     Center,
-    /// Back to the frame it had before Jaycast first moved it.
+    /// Back to the frame it had before Backpack first moved it.
     Restore,
     /// Same relative position and size on the next display.
     NextDisplay,
@@ -575,7 +575,7 @@ pub enum WhenNotRunning {
     Launch,
     /// Swallow the key.
     Ignore,
-    /// Let macOS handle the key as if Jaycast weren't running.
+    /// Let macOS handle the key as if Backpack weren't running.
     PassThrough,
 }
 
@@ -903,7 +903,7 @@ mod cleared {
     }
 }
 
-/// Loads and saves [`Config`] at `~/.config/jaycast.toml`.
+/// Loads and saves [`Config`] at `~/.config/backpack.toml`.
 pub struct ConfigStore {
     path: PathBuf,
     /// Where builds before the TOML config kept it, as JSON. Read only while `path` is missing.
@@ -919,16 +919,16 @@ impl ConfigStore {
         }
     }
 
-    /// `~/.config/jaycast.toml`, or `$JAYCAST_CONFIG` when set (`just screenshots` points it
+    /// `~/.config/backpack.toml`, or `$BACKPACK_CONFIG` when set (`just screenshots` points it
     /// at a demo config).
     pub fn default_path() -> Result<PathBuf, CoreError> {
-        if let Some(path) = std::env::var_os("JAYCAST_CONFIG").filter(|p| !p.is_empty()) {
+        if let Some(path) = std::env::var_os("BACKPACK_CONFIG").filter(|p| !p.is_empty()) {
             return Ok(PathBuf::from(path));
         }
         let home = std::env::home_dir().ok_or_else(|| CoreError::Other {
             message: "couldn't find the home directory".into(),
         })?;
-        Ok(home.join(".config").join("jaycast.toml"))
+        Ok(home.join(".config").join("backpack.toml"))
     }
 
     /// A missing file yields the defaults; an unreadable one is an error rather than
@@ -977,7 +977,7 @@ impl ConfigStore {
     /// When the config is a symlink (into a dotfiles repo, say), the file it points to is
     /// replaced and the link left alone; renaming over the link itself would swap it for a
     /// plain file and quietly detach the config from the repo. The link is resolved on every
-    /// write so repointing it while Jaycast runs is picked up. A dangling link creates its
+    /// write so repointing it while Backpack runs is picked up. A dangling link creates its
     /// target. The replaced file keeps its permissions.
     fn write(&self, text: &str) -> Result<(), CoreError> {
         let target = resolve_symlinks(&self.path)?;
@@ -987,7 +987,7 @@ impl ConfigStore {
         };
         fs::create_dir_all(dir)?;
         let name = target.file_name().map_or_else(
-            || "jaycast.toml".into(),
+            || "backpack.toml".into(),
             |name| name.to_string_lossy().into_owned(),
         );
         // Beside the target, so the rename stays on one filesystem; hidden, so a dotfiles
@@ -1080,7 +1080,7 @@ impl ConfigSaver {
         });
         let thread_shared = Arc::clone(&shared);
         let thread = thread::Builder::new()
-            .name("jaycast-config-saver".into())
+            .name("backpack-config-saver".into())
             .spawn(move || run_saver(&thread_shared))
             .inspect_err(|error| log::error!("couldn't start the config saver: {error}"))
             .ok();
@@ -1254,13 +1254,13 @@ mod tests {
     use super::*;
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("jaycast-test-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }
 
     fn store(dir: &Path) -> ConfigStore {
-        ConfigStore::new(dir.join("jaycast.toml"), &dir.join("data"))
+        ConfigStore::new(dir.join("backpack.toml"), &dir.join("data"))
     }
 
     #[test]
@@ -1303,7 +1303,7 @@ mod tests {
         let config = store(&dir).load().unwrap();
         assert!(!config.mouse.buttons_enabled);
         assert_eq!(config.launcher.hotkey, None);
-        assert!(dir.join("jaycast.toml").exists());
+        assert!(dir.join("backpack.toml").exists());
         assert_eq!(store(&dir).load().unwrap(), config);
         fs::remove_dir_all(dir).unwrap();
     }
@@ -1340,10 +1340,10 @@ mod tests {
         let dir = temp_dir("symlink");
         let dotfiles = dir.join("dotfiles");
         fs::create_dir_all(&dotfiles).unwrap();
-        let target = dotfiles.join("jaycast.toml");
+        let target = dotfiles.join("backpack.toml");
         fs::write(&target, "[mouse]\nbuttons_enabled = false\n").unwrap();
         fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
-        let link = dir.join("jaycast.toml");
+        let link = dir.join("backpack.toml");
         symlink(&target, &link).unwrap();
 
         let store = store(&dir);
@@ -1368,17 +1368,17 @@ mod tests {
     fn relative_and_chained_symlinks_resolve() {
         use std::os::unix::fs::symlink;
         let dir = temp_dir("symlink-chain");
-        fs::create_dir_all(dir.join("dotfiles/jaycast")).unwrap();
-        // jaycast.toml -> dotfiles/current.toml -> jaycast/config.toml (both relative).
-        symlink("jaycast/config.toml", dir.join("dotfiles/current.toml")).unwrap();
-        symlink("dotfiles/current.toml", dir.join("jaycast.toml")).unwrap();
-        let target = dir.join("dotfiles/jaycast/config.toml");
+        fs::create_dir_all(dir.join("dotfiles/backpack")).unwrap();
+        // backpack.toml -> dotfiles/current.toml -> backpack/config.toml (both relative).
+        symlink("backpack/config.toml", dir.join("dotfiles/current.toml")).unwrap();
+        symlink("dotfiles/current.toml", dir.join("backpack.toml")).unwrap();
+        let target = dir.join("dotfiles/backpack/config.toml");
 
         // Dangling: the save creates the file at the end of the chain.
         let store = store(&dir);
         store.save(&speed(2.0)).unwrap();
         assert!(target.is_file());
-        assert_link_to(&dir.join("jaycast.toml"), &target);
+        assert_link_to(&dir.join("backpack.toml"), &target);
         assert_eq!(store.load().unwrap(), speed(2.0));
         fs::remove_dir_all(dir).unwrap();
     }
@@ -1389,8 +1389,8 @@ mod tests {
         use std::os::unix::fs::symlink;
         let dir = temp_dir("symlink-loop");
         fs::create_dir_all(&dir).unwrap();
-        symlink("b.toml", dir.join("jaycast.toml")).unwrap();
-        symlink("jaycast.toml", dir.join("b.toml")).unwrap();
+        symlink("b.toml", dir.join("backpack.toml")).unwrap();
+        symlink("backpack.toml", dir.join("b.toml")).unwrap();
         assert!(store(&dir).save(&Config::default()).is_err());
         fs::remove_dir_all(dir).unwrap();
     }
@@ -1400,7 +1400,7 @@ mod tests {
         let dir = temp_dir("partial");
         fs::create_dir_all(&dir).unwrap();
         fs::write(
-            dir.join("jaycast.toml"),
+            dir.join("backpack.toml"),
             "[mouse]\nbuttons_enabled = false\n",
         )
         .unwrap();
@@ -1495,10 +1495,10 @@ mod tests {
         let saver = ConfigSaver::new(store(&dir), Duration::from_millis(50));
         saver.save(&speed(1.5)).unwrap();
         saver.save(&speed(2.0)).unwrap();
-        assert!(!dir.join("jaycast.toml").exists());
+        assert!(!dir.join("backpack.toml").exists());
 
         let deadline = Instant::now() + Duration::from_secs(5);
-        while !dir.join("jaycast.toml").exists() {
+        while !dir.join("backpack.toml").exists() {
             assert!(Instant::now() < deadline, "the config was never written");
             thread::sleep(Duration::from_millis(10));
         }
@@ -1529,7 +1529,7 @@ mod tests {
         let blocker = dir.join("config");
         fs::write(&blocker, "").unwrap();
         let saver = ConfigSaver::new(
-            ConfigStore::new(blocker.join("jaycast.toml"), &dir),
+            ConfigStore::new(blocker.join("backpack.toml"), &dir),
             Duration::from_secs(3600),
         );
         saver.save(&speed(1.5)).unwrap();
@@ -1541,7 +1541,7 @@ mod tests {
         assert!(saver.save(&speed(2.5)).is_ok());
         drop(saver);
         assert_eq!(
-            ConfigStore::new(blocker.join("jaycast.toml"), &dir)
+            ConfigStore::new(blocker.join("backpack.toml"), &dir)
                 .load()
                 .unwrap(),
             speed(2.5)

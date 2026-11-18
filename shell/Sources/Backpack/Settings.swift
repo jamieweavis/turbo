@@ -71,7 +71,7 @@ final class SettingsWindowController {
         window.backgroundColor = .clear
         // Still the window's name in the Window menu and Mission Control; each pane's header
         // shows its own title instead.
-        window.title = "Jaycast Settings"
+        window.title = "Backpack Settings"
         window.titleVisibility = .hidden
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
@@ -269,7 +269,7 @@ struct SettingsView: View {
             // so the selected (bold) "Window Management" fits.
             .frame(minWidth: 230)
             .safeAreaInset(edge: .bottom) {
-                Text("Jaycast \(coreInfo().version)")
+                Text("Backpack \(coreInfo().version)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)

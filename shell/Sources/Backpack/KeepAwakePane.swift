@@ -52,7 +52,7 @@ struct KeepAwakePane: View {
             Section {
                 Toggle(isOn: Binding(get: { state.isActive }, set: { state.setActive($0) })) {
                     Text("Keep Mac awake")
-                    Text("Stops the Mac sleeping while idle. Stays on when Jaycast relaunches.")
+                    Text("Stops the Mac sleeping while idle. Stays on when Backpack relaunches.")
                 }
                 Toggle(isOn: $settings.config.keepAwake.keepDisplayOn) {
                     Text("Keep display on")

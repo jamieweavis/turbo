@@ -1,6 +1,6 @@
 //! Keep Awake: keeps the Mac (and optionally the display) awake with an IOKit power
 //! assertion, the same mechanism `caffeinate` uses. The assertion belongs to the process,
-//! so macOS drops it if Jaycast quits or crashes; whether it's on is saved in
+//! so macOS drops it if Backpack quits or crashes; whether it's on is saved in
 //! `<data_dir>/keep-awake.json` and taken again at launch, so an update or relaunch doesn't
 //! turn it off.
 
@@ -34,7 +34,7 @@ const LEVEL_ON: u32 = 255;
 const PREVENT_DISPLAY_SLEEP: &str = "PreventUserIdleDisplaySleep";
 /// `kIOPMAssertPreventUserIdleSystemSleep`.
 const PREVENT_SYSTEM_SLEEP: &str = "PreventUserIdleSystemSleep";
-const ASSERTION_NAME: &str = "Jaycast Keep Awake";
+const ASSERTION_NAME: &str = "Backpack Keep Awake";
 
 /// What a Keep Awake hotkey or palette command does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,7 +74,7 @@ struct State {
 }
 
 impl KeepAwake {
-    /// Turns back on if it was on when Jaycast last quit; a missing or unreadable file
+    /// Turns back on if it was on when Backpack last quit; a missing or unreadable file
     /// leaves it off.
     pub fn new(data_dir: &Path, config: KeepAwakeConfig) -> Self {
         let path = data_dir.join("keep-awake.json");
@@ -202,7 +202,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("jaycast-test-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

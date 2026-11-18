@@ -59,7 +59,7 @@ enum MenuBarIcon {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "Jaycast"
+        image.accessibilityDescription = "Backpack"
         return image
     }()
 }

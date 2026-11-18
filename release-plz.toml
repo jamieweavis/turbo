@@ -9,7 +9,7 @@ git_release_draft = true
 semver_check = false
 
 [[package]]
-name = "jaycast"
+name = "backpack"
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
 

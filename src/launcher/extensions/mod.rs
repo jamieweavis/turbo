@@ -349,7 +349,7 @@ fn spawn_command(
 ) -> Result<(), CoreError> {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
     thread::Builder::new()
-        .name("jaycast-command".into())
+        .name("backpack-command".into())
         .spawn(move || {
             let result = runner::run(SHELL, &["-lc", &script], &home, COMMAND_TIMEOUT);
             let (message, success) = match runner::report(output, &result) {

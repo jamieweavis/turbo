@@ -978,7 +978,7 @@ mod tests {
         let manager = HotkeyManager::new(
             Arc::new(WindowManager::new(Default::default())),
             Arc::new(KeepAwake::new(
-                &std::env::temp_dir().join(format!("jaycast-test-hotkeys-{}", std::process::id())),
+                &std::env::temp_dir().join(format!("backpack-test-hotkeys-{}", std::process::id())),
                 Default::default(),
             )),
             Arc::new(MediaKeys::new(Default::default())),

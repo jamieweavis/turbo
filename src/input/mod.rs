@@ -25,7 +25,7 @@ unsafe extern "C" {
     fn AXIsProcessTrusted() -> u8;
 }
 
-/// Written to `kCGEventSourceUserData` on every event Jaycast posts, so the tap can let
+/// Written to `kCGEventSourceUserData` on every event Backpack posts, so the tap can let
 /// its own events through untouched instead of processing them again.
 pub(crate) const SYNTHETIC_EVENT_MARKER: i64 = 0x4A41_5943; // "JAYC"
 
@@ -37,7 +37,7 @@ pub(crate) struct InputEngine {
 struct State {
     /// `start` was called (and `stop` hasn't been since).
     started: bool,
-    /// With the mouse off the tap doesn't run, so mouse events never pass through Jaycast.
+    /// With the mouse off the tap doesn't run, so mouse events never pass through Backpack.
     enabled: bool,
 }
 

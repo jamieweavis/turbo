@@ -153,7 +153,7 @@ fn insert_expanding(text: String) -> Result<(), CoreError> {
         return Err(CoreError::PermissionDenied);
     }
     thread::Builder::new()
-        .name("jaycast-snippet-insert".into())
+        .name("backpack-snippet-insert".into())
         .spawn(move || insert::run(&text, 0, PASTE_DELAY))?;
     Ok(())
 }

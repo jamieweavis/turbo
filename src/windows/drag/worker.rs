@@ -2,7 +2,7 @@
 //! so a slow app never holds up the mouse. Drags arrive far faster than an app can follow,
 //! so only the newest queued position is applied.
 //!
-//! Jaycast's own windows are the exception: Accessibility calls on them are handled
+//! Backpack's own windows are the exception: Accessibility calls on them are handled
 //! in-process, by AppKit on the calling thread, and AppKit only allows that on the main
 //! thread. So a drag of one of those runs its calls on the main queue instead.
 
@@ -36,7 +36,7 @@ pub(super) enum Message {
 /// How far up from the element under the cursor to look for its window.
 const MAX_ANCESTORS: usize = 32;
 
-/// How long to wait for the main thread to move one of Jaycast's own windows. Bounded so
+/// How long to wait for the main thread to move one of Backpack's own windows. Bounded so
 /// stopping input from the main thread, which waits for this worker, can't deadlock.
 const MAIN_THREAD_WAIT: Duration = Duration::from_millis(500);
 
@@ -116,7 +116,7 @@ fn on_main<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Opti
     result.recv_timeout(MAIN_THREAD_WAIT).ok()
 }
 
-/// Whether one of Jaycast's own windows is at `point`, at or above the frontmost normal
+/// Whether one of Backpack's own windows is at `point`, at or above the frontmost normal
 /// window there. Asks the window server, not Accessibility, so it's safe off the main thread.
 fn is_own_window_at((x, y): (f64, f64)) -> bool {
     let own = i64::from(std::process::id());
@@ -189,12 +189,12 @@ struct Session {
     last: Rect,
     /// The app had `AXEnhancedUserInterface` on, which is off for the drag.
     enhanced: bool,
-    /// One of Jaycast's own windows, so only touched on the main thread.
+    /// One of Backpack's own windows, so only touched on the main thread.
     own: bool,
 }
 
 // SAFETY: the AXUIElements are CF objects, safe to retain, release and message from any
-// thread. A session on Jaycast's own window is only ever used on the main thread (`own`).
+// thread. A session on Backpack's own window is only ever used on the main thread (`own`).
 unsafe impl Send for Session {}
 
 impl Session {

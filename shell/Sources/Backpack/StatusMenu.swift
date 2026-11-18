@@ -47,7 +47,7 @@ struct StatusMenu: View {
 
                 Spacer()
 
-                Text("Jaycast \(core.version)")
+                Text("Backpack \(core.version)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
 

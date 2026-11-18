@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.4](https://github.com/jamieweavis/jaycast/compare/v0.1.3...v0.1.4) - 2026-11-07
+## [0.1.4](https://github.com/jamieweavis/backpack/compare/v0.1.3...v0.1.4) - 2026-11-07
 
 ### Added
 
@@ -25,13 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - drop screen drawing from the roadmap
 
-## [0.1.3](https://github.com/jamieweavis/jaycast/compare/v0.1.2...v0.1.3) - 2026-11-06
+## [0.1.3](https://github.com/jamieweavis/backpack/compare/v0.1.2...v0.1.3) - 2026-11-06
 
 ### Fixed
 
 - stop the media player permission check from hanging the app
 
-## [0.1.2](https://github.com/jamieweavis/jaycast/compare/v0.1.1...v0.1.2) - 2026-11-06
+## [0.1.2](https://github.com/jamieweavis/backpack/compare/v0.1.1...v0.1.2) - 2026-11-06
 
 ### Added
 
@@ -58,13 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - expand with features, install and badges; rename CI workflow to build
 - Menu bar: stop the popover resizing while open and leaving doubled corners
 
-## [0.1.1](https://github.com/jamieweavis/jaycast/compare/v0.1.0...v0.1.1) - 2026-10-30
+## [0.1.1](https://github.com/jamieweavis/backpack/compare/v0.1.0...v0.1.1) - 2026-10-30
 
 ### Other
 
 - release v0.1.0
 
-## [0.1.0](https://github.com/jamieweavis/jaycast/releases/tag/v0.1.0) - 2026-10-29
+## [0.1.0](https://github.com/jamieweavis/backpack/releases/tag/v0.1.0) - 2026-10-29
 
 ### Other
 

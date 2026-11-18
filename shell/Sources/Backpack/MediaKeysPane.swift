@@ -16,7 +16,7 @@ final class MediaKeysSettings {
     private(set) var saveError: String?
     /// Installed supported players, refreshed when the pane appears.
     private(set) var players: [MediaPlayer] = []
-    /// Whether Jaycast may control the chosen player.
+    /// Whether Backpack may control the chosen player.
     private(set) var access: AutomationAccess = .notDetermined
     @ObservationIgnored private let core: Core
 
@@ -38,7 +38,7 @@ final class MediaKeysSettings {
     /// the player), so it runs on its own serial queue, one check at a time, never on the main
     /// thread or the shared concurrency pool. Requests made while one is in flight collapse into a
     /// single re-check of the latest player once it returns.
-    @ObservationIgnored private let accessQueue = DispatchQueue(label: "com.jamieweavis.jaycast.media-access")
+    @ObservationIgnored private let accessQueue = DispatchQueue(label: "com.jamieweavis.backpack.media-access")
     @ObservationIgnored private var accessCheckRunning = false
     @ObservationIgnored private var accessCheckPending = false
 

@@ -3,7 +3,7 @@ import SwiftUI
 import os
 
 @main
-struct JaycastApp: App {
+struct BackpackApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -16,14 +16,14 @@ struct JaycastApp: App {
                 )
             } else {
                 VStack(alignment: .leading) {
-                    Text("Jaycast couldn't start")
-                    Button("Quit Jaycast") { NSApp.terminate(nil) }
+                    Text("Backpack couldn't start")
+                    Button("Quit Backpack") { NSApp.terminate(nil) }
                 }
                 .padding(14)
             }
         } label: {
             Image(nsImage: MenuBarIcon.backpack)
-                .accessibilityLabel("Jaycast")
+                .accessibilityLabel("Backpack")
         }
         .menuBarExtraStyle(.window)
     }
@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let model else {
             let alert = NSAlert()
-            alert.messageText = "Jaycast couldn't start"
+            alert.messageText = "Backpack couldn't start"
             alert.informativeText = startupError?.userMessage ?? ""
             alert.alertStyle = .critical
             NSApp.activate()

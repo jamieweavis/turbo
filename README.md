@@ -1,22 +1,22 @@
 <div align="center">
 
-# Jaycast
+# Backpack
 
 ### The all-in-one toolkit for macOS.
 
 **A launcher, clipboard manager, snippet expander, window manager, mouse fixer and monitor controller, in one small native app.**
 Written in Rust. Free and open source. No account, no telemetry, no subscription.
 
-[![build](https://github.com/jamieweavis/jaycast/actions/workflows/build.yml/badge.svg)](https://github.com/jamieweavis/jaycast/actions/workflows/build.yml)
-[![release](https://img.shields.io/github/v/release/jamieweavis/jaycast?label=release)](https://github.com/jamieweavis/jaycast/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/jamieweavis/jaycast/total?color=f97316)](https://github.com/jamieweavis/jaycast/releases)
+[![build](https://github.com/jamieweavis/backpack/actions/workflows/build.yml/badge.svg)](https://github.com/jamieweavis/backpack/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/jamieweavis/backpack?label=release)](https://github.com/jamieweavis/backpack/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/jamieweavis/backpack/total?color=f97316)](https://github.com/jamieweavis/backpack/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Rust](https://img.shields.io/badge/rust-1.88%2B-orange)
 
-[**Download for Mac**](https://github.com/jamieweavis/jaycast/releases/latest) · [Launcher Features](#launcher-features) · [Utilities](#utilities) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
+[**Download for Mac**](https://github.com/jamieweavis/backpack/releases/latest) · [Launcher Features](#launcher-features) · [Utilities](#utilities) · [Privacy](#privacy) · [Keyboard](#keyboard) · [Development](#development)
 
-<img src=".github/screenshots/general.png" alt="Jaycast's settings window">
+<img src=".github/screenshots/general.png" alt="Backpack's settings window">
 
 </div>
 
@@ -24,7 +24,7 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 
 ## Contents
 
-- [Why Jaycast](#why-jaycast)
+- [Why Backpack](#why-backpack)
 - [Launcher Features](#launcher-features)
   - [Launcher](#launcher)
   - [Quicklinks](#quicklinks)
@@ -51,11 +51,11 @@ Written in Rust. Free and open source. No account, no telemetry, no subscription
 - [Development](#development)
 - [Releasing](#releasing)
 
-## Why Jaycast
+## Why Backpack
 
 Most Macs end up running a handful of menu bar apps to fill the gaps in macOS: one for launching, one for
 the clipboard, one for windows, one to make a normal mouse scroll properly, one for external monitor
-brightness. Each has its own updater, its own settings and its own slice of memory. Jaycast replaces them
+brightness. Each has its own updater, its own settings and its own slice of memory. Backpack replaces them
 with one app, one settings file and one process.
 
 |  |  |
@@ -125,8 +125,8 @@ Background fixes for the keyboard, mouse, windows and displays, each with its ow
 ## 📄 Config file
 
 Every setting, from hotkeys and snippets to quicklinks and mouse buttons, lives in one plain TOML file at
-`~/.config/jaycast.toml`. Check it into your dotfiles and a new Mac is set up the moment Jaycast launches.
-Symlink it from your dotfiles repo if you like: Jaycast writes through the link to the real file and leaves the link in place.
+`~/.config/backpack.toml`. Check it into your dotfiles and a new Mac is set up the moment Backpack launches.
+Symlink it from your dotfiles repo if you like: Backpack writes through the link to the real file and leaves the link in place.
 
 ```toml
 [launcher.hotkey]
@@ -166,7 +166,7 @@ action = "Back"
 | Cloud sync | **0** |
 
 - **Clipboard history is stored on your Mac**, in a local SQLite database. It keeps 500 items for 30 days
-  by default (pinned items stay), and both limits are yours to change. Turn it off and Jaycast stops
+  by default (pinned items stay), and both limits are yours to change. Turn it off and Backpack stops
   watching the clipboard altogether.
 - **Passwords are never recorded.** Copies from Keychain Access, Passwords and password managers, and
   anything an app marks as concealed or transient, are skipped.
@@ -175,11 +175,11 @@ action = "Back"
   are sent.
 - **The camera only runs while Camera Preview is showing**, and stops the moment you leave it. Nothing is
   recorded or saved.
-- **Media keys only reach the music app they're for.** Jaycast sends it play/pause, next or previous
+- **Media keys only reach the music app they're for.** Backpack sends it play/pause, next or previous
   and nothing else, after macOS asks you to allow it. Which app played last comes from the apps' own
   broadcasts, not from watching what you play.
 - **Every feature can be switched off**, and a switched-off feature doesn't run.
-- **Settings are a plain text file** at `~/.config/jaycast.toml`: readable, diffable, and easy to back up
+- **Settings are a plain text file** at `~/.config/backpack.toml`: readable, diffable, and easy to back up
   or keep in your dotfiles.
 
 ## Keyboard
@@ -206,7 +206,7 @@ with another app's shortcuts.
 
 ## Yours to keep
 
-Jaycast is free and open source under the [MIT licence](LICENSE), and it stays that way.
+Backpack is free and open source under the [MIT licence](LICENSE), and it stays that way.
 
 - **No subscription, no Pro tier, no trial.** Every feature is included.
 - **No account to sign in to**, and no server that can switch your app off.
@@ -215,8 +215,8 @@ Jaycast is free and open source under the [MIT licence](LICENSE), and it stays t
 
 ## Install
 
-Download the `.dmg` from the [latest release](https://github.com/jamieweavis/jaycast/releases/latest), drag
-Jaycast to Applications and grant Accessibility access when asked. Media Keys also asks, once per music
+Download the `.dmg` from the [latest release](https://github.com/jamieweavis/backpack/releases/latest), drag
+Backpack to Applications and grant Accessibility access when asked. Media Keys also asks, once per music
 app, to control it. Requires macOS 26 or later.
 
 ## Development
@@ -231,7 +231,7 @@ app, to control it. Requires macOS 26 or later.
 ### Commands
 
 ```sh
-just run        # build the core + shell, bundle build/Jaycast.app, launch it
+just run        # build the core + shell, bundle build/Backpack.app, launch it
 just test       # Rust tests
 just check      # everything CI runs: fmt, clippy, tests, app build
 just logs       # stream the app's logs
@@ -240,7 +240,7 @@ just            # list all recipes
 ```
 
 `CONFIG=release just app` builds optimised. The app is signed with your "Apple Development" identity by
-default, so macOS keeps the Accessibility grant across rebuilds. Set `JAYCAST_SIGN_IDENTITY="-"` to sign
+default, so macOS keeps the Accessibility grant across rebuilds. Set `BACKPACK_SIGN_IDENTITY="-"` to sign
 ad hoc.
 
 `just screenshots` relaunches the app with the demo config in `.github/screenshots/demo-config.toml`,
@@ -251,7 +251,7 @@ It needs Screen Recording access the first time, and compresses the images if `o
 
 | Path | What's there |
 | --- | --- |
-| `src/` | The Rust core: all logic and system integration, built as `libjaycast_core.a`. |
+| `src/` | The Rust core: all logic and system integration, built as `libbackpack_core.a`. |
 | `shell/` | Swift/SwiftUI: menu bar, palette, settings and onboarding. Calls the core through [UniFFI](https://mozilla.github.io/uniffi-rs/) bindings generated at build time. |
 | `tools/uniffi-bindgen/` | The bindings generator, pinned to the core's UniFFI version. |
 

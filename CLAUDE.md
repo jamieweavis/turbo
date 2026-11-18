@@ -2,18 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Jaycast is a macOS menu bar app (launcher, clipboard history, snippets, window management, mouse fixes,
+Backpack is a macOS menu bar app (launcher, clipboard history, snippets, window management, mouse fixes,
 DDC monitor brightness, hyper key, keep awake). A Rust core does all the work; a thin SwiftUI shell
 draws the UI. Requires macOS 26+, Rust stable, Xcode's toolchain (the IDE is never opened) and `just`.
 
 ## Commands
 
 ```sh
-just run              # build core + bindings + shell, bundle build/Jaycast.app, (re)launch it
+just run              # build core + bindings + shell, bundle build/Backpack.app, (re)launch it
 just test             # cargo test --workspace (Rust only; the shell has no tests)
 just lint             # cargo fmt --check + clippy with -D warnings
 just check            # everything CI runs: lint, test, app build
-just logs [info]      # stream the app's os_log output (subsystem com.jamieweavis.jaycast)
+just logs [info]      # stream the app's os_log output (subsystem com.jamieweavis.backpack)
 just logs-recent 1h   # past logs (debug level isn't kept)
 just reset-permissions  # forget the Accessibility grant to re-test onboarding
 CONFIG=release just app # optimised build; `just dmg` packages it
@@ -24,24 +24,24 @@ just screenshots      # README settings screenshots → .github/screenshots (dem
   `#[ignore]` because they touch the real machine (app index, currency fetch, keystroke insertion);
   run them with `cargo test <name> -- --ignored --nocapture`.
 - The app is signed with the "Apple Development" identity by default so macOS keeps the Accessibility
-  grant across rebuilds. `JAYCAST_SIGN_IDENTITY="-"` signs ad hoc (what CI does).
+  grant across rebuilds. `BACKPACK_SIGN_IDENTITY="-"` signs ad hoc (what CI does).
 - `.cargo/config.toml` sets `MACOSX_DEPLOYMENT_TARGET=26.0` so bundled C code (SQLite) matches the app.
 
 ## Architecture
 
 **Rust core, thin Swift shell.** Anything that decides or does something belongs in `src/`. The shell
-(`shell/Sources/Jaycast/`) draws UI and forwards intent. When adding a feature, put logic, state,
+(`shell/Sources/Backpack/`) draws UI and forwards intent. When adding a feature, put logic, state,
 persistence and system integration in Rust and expose it over FFI; don't implement behaviour in Swift.
 
-**Build pipeline** (see `justfile`): `cargo build -p jaycast` produces `libjaycast_core.a` (crate name
-`jaycast`, lib name `jaycast_core`) → `tools/uniffi-bindgen` generates Swift bindings from the static
-library → the header/modulemap go to `shell/Sources/JaycastCoreFFI/include/` and `jaycast_core.swift`
-to `shell/Sources/Jaycast/Generated/` (both gitignored, regenerated on every build) → SwiftPM builds the
+**Build pipeline** (see `justfile`): `cargo build -p backpack` produces `libbackpack_core.a` (crate name
+`backpack`, lib name `backpack_core`) → `tools/uniffi-bindgen` generates Swift bindings from the static
+library → the header/modulemap go to `shell/Sources/BackpackCoreFFI/include/` and `backpack_core.swift`
+to `shell/Sources/Backpack/Generated/` (both gitignored, regenerated on every build) → SwiftPM builds the
 shell linking the `.a` → the bundle is assembled from `Resources/Info.plist` and codesigned. Any change
 to an exported Rust type or method requires rebuilding through `just build`/`just run` for Swift to see it.
 Frameworks the Rust crates need but Swift doesn't pull in must be added to `linkerSettings` in
 `shell/Package.swift` (a static lib can't carry link flags). The app is signed with the hardened runtime
-and `Resources/Jaycast.entitlements`: a protected device (the camera, today) needs both an entitlement there
+and `Resources/Backpack.entitlements`: a protected device (the camera, today) needs both an entitlement there
 and a usage string in `Info.plist`, or macOS silently refuses it (missing the string kills the app on the
 prompt). Apple Events (Media Keys) are the same: `com.apple.security.automation.apple-events` plus
 `NSAppleEventsUsageDescription`.
@@ -57,12 +57,12 @@ observer traits (`DisplayObserver`, `LauncherObserver`) registered via `set_*_ob
 Rust callbacks on arbitrary threads and must hop to `DispatchQueue.main.async` before
 `MainActor.assumeIsolated`. Slow calls (Spotlight file search) run in `Task.detached` with debouncing.
 
-**Config:** one `Config` struct (`src/config.rs`) persisted as TOML at `~/.config/jaycast.toml`.
+**Config:** one `Config` struct (`src/config.rs`) persisted as TOML at `~/.config/backpack.toml`.
 Every struct is `#[serde(default)]` so older/partial configs keep loading — keep it that way when adding
 fields, and use `#[serde(alias = ...)]` when renaming. `ConfigSaver` debounces writes (500 ms) and
 writes atomically (temp + rename). A legacy `config.json` in the data dir is migrated on first load.
 Other state (clipboard SQLite DB, usage ranking, colour/emoji history, chosen camera) lives in
-`~/Library/Application Support/Jaycast`, passed to `Core::new` as `data_dir`.
+`~/Library/Application Support/Backpack`, passed to `Core::new` as `data_dir`.
 
 **Event taps** (`input/tap.rs`, `hyper/tap.rs`, `snippets/tap.rs`, `windows/drag/tap.rs`,
 `display/keys.rs`, `media_keys/tap.rs`; the last two share `aux_keys.rs` for media/brightness keys): each runs on its own thread/run loop, wraps the callback in `catch_unwind` and passes

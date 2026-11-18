@@ -321,7 +321,9 @@ fn migrate(connection: &Connection) -> Result<(), CoreError> {
     }
     if version > SCHEMA_VERSION {
         return Err(CoreError::Other {
-            message: format!("clipboard history was written by a newer Jaycast (schema {version})"),
+            message: format!(
+                "clipboard history was written by a newer Backpack (schema {version})"
+            ),
         });
     }
     connection
@@ -395,7 +397,7 @@ mod tests {
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("jaycast-clipboard-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("backpack-clipboard-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }
@@ -592,7 +594,7 @@ mod tests {
         let Err(CoreError::Other { message }) = Store::open(&dir) else {
             panic!("a newer schema was opened");
         };
-        assert!(message.contains("newer Jaycast"), "{message}");
+        assert!(message.contains("newer Backpack"), "{message}");
         fs::remove_dir_all(dir).unwrap();
     }
 

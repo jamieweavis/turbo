@@ -92,7 +92,7 @@ impl DragTap {
         let (messages, inbox) = mpsc::channel();
         let windows = Arc::clone(&self.windows);
         let worker = thread::Builder::new()
-            .name("jaycast-window-drag".into())
+            .name("backpack-window-drag".into())
             .spawn(move || worker::run(inbox, &windows))?;
 
         let stop = Arc::new(AtomicBool::new(false));
@@ -100,7 +100,7 @@ impl DragTap {
         let shared = Arc::clone(&self.shared);
         let thread_stop = Arc::clone(&stop);
         let tap = thread::Builder::new()
-            .name("jaycast-window-drag-tap".into())
+            .name("backpack-window-drag-tap".into())
             .spawn(move || run_tap_thread(shared, messages, thread_stop, ready_tx));
         let tap = match tap {
             Ok(tap) => tap,
@@ -497,7 +497,7 @@ mod tests {
     }
 
     /// Creates a real tap, so it needs Accessibility for the test runner's host app.
-    /// Run with `cargo test -p jaycast -- --ignored drag_tap_starts_and_stops`.
+    /// Run with `cargo test -p backpack -- --ignored drag_tap_starts_and_stops`.
     #[test]
     #[ignore]
     fn drag_tap_starts_and_stops() {

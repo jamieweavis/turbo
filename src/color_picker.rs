@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn history_survives_a_reload() {
-        let dir = std::env::temp_dir().join(format!("jaycast-colors-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("backpack-colors-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let history = ColorHistory::new(&dir);
         {
