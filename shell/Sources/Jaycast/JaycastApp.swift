@@ -22,7 +22,7 @@ struct JaycastApp: App {
                 .padding(14)
             }
         } label: {
-            Image(nsImage: MenuBarIcon.multitool)
+            Image(nsImage: MenuBarIcon.backpack)
                 .accessibilityLabel("Jaycast")
         }
         .menuBarExtraStyle(.window)
