@@ -187,7 +187,8 @@ struct DisplayBrightnessRow: View {
 struct BrightnessSliderRow: View {
     let name: String
     let brightness: Double
-    let onChange: (Double) -> Void
+    /// `Binding(set:)` requires a `Sendable` setter; main-actor isolation makes the settings call safe.
+    let onChange: @MainActor @Sendable (Double) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
