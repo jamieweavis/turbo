@@ -198,7 +198,9 @@ struct BrightnessSliderRow: View {
             HStack(spacing: 8) {
                 Image(systemName: "sun.min")
                     .foregroundStyle(.secondary)
-                Slider(value: Binding(get: { brightness }, set: onChange), in: 0...1)
+                // A closure literal, not `set: onChange`: converting the function value needs a
+                // thunk that crashes Swift 6.3's IRGen (CI's Xcode 26.6).
+                Slider(value: Binding(get: { brightness }, set: { onChange($0) }), in: 0...1)
                     .labelsHidden()
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel("\(name) brightness")
