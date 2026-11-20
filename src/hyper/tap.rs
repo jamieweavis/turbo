@@ -98,7 +98,7 @@ impl HyperTap {
         let shared = Arc::clone(&self.shared);
         let thread_stop = Arc::clone(&stop);
         let thread = thread::Builder::new()
-            .name("backpack-hyper-tap".into())
+            .name("turbo-hyper-tap".into())
             .spawn(move || run_tap_thread(shared, thread_stop, ready_tx))?;
 
         match ready_rx.recv() {

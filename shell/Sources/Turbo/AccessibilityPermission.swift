@@ -3,7 +3,7 @@ import ApplicationServices
 import Observation
 import os
 
-/// Tracks whether Backpack is trusted for Accessibility, which the event tap,
+/// Tracks whether Turbo is trusted for Accessibility, which the event tap,
 /// window management and text expansion all need.
 ///
 /// macOS posts no notification when the user flips the switch in System Settings, so this
@@ -25,7 +25,7 @@ final class AccessibilityPermission {
         }
     }
 
-    /// Shows the system prompt, which adds Backpack to the Accessibility list.
+    /// Shows the system prompt, which adds Turbo to the Accessibility list.
     func request() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         isGranted = AXIsProcessTrustedWithOptions(options)

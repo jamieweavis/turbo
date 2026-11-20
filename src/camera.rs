@@ -47,7 +47,7 @@ pub struct CameraDevice {
     pub selected: bool,
 }
 
-/// Whether Backpack may use the camera.
+/// Whether Turbo may use the camera.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum CameraAccess {
     /// Not asked yet; `request_camera_access` shows the system prompt.
@@ -300,7 +300,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("backpack-test-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("turbo-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

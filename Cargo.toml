@@ -1,12 +1,12 @@
 [package]
-name = "backpack"
+name = "turbo"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# The Rust core. The Swift shell links it as libbackpack_core.a.
+# The Rust core. The Swift shell links it as libturbo_core.a.
 [lib]
-name = "backpack_core"
+name = "turbo_core"
 crate-type = ["lib", "staticlib"]
 
 [dependencies]

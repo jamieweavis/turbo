@@ -73,7 +73,7 @@ struct KeyboardPane: View {
                     Text("The Hyper key works once Accessibility is granted.")
                         .foregroundStyle(.red)
                 } else {
-                    Text("Hold the Hyper key to press ⌃⌥⇧⌘ at once, then use it in any shortcut, including Backpack's own hotkeys. The key loses its usual behaviour while it's the Hyper key.")
+                    Text("Hold the Hyper key to press ⌃⌥⇧⌘ at once, then use it in any shortcut, including Turbo's own hotkeys. The key loses its usual behaviour while it's the Hyper key.")
                 }
             }
         }

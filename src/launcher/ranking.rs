@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn store_round_trips_and_prunes() {
-        let dir = std::env::temp_dir().join(format!("backpack-usage-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("turbo-usage-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let store = UsageStore::new(&dir);
         assert_eq!(store.load(), Usage::default());
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn corrupt_file_starts_fresh() {
-        let dir = std::env::temp_dir().join(format!("backpack-usage-bad-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("turbo-usage-bad-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("launcher-usage.json"), b"{ not json").unwrap();
         assert_eq!(UsageStore::new(&dir).load(), Usage::default());

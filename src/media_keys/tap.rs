@@ -103,7 +103,7 @@ impl MediaKeyTap {
         let shared = Arc::clone(&self.shared);
         let thread_stop = Arc::clone(&stop);
         let thread = thread::Builder::new()
-            .name("backpack-media-keys".into())
+            .name("turbo-media-keys".into())
             .spawn(move || run_tap_thread(shared, thread_stop, ready_tx))?;
         match ready_rx.recv() {
             Ok(Ok(run_loop)) => {
@@ -302,7 +302,7 @@ fn slot(command: MediaCommand) -> usize {
     }
 }
 
-/// Per key: `Some(true)` while a press Backpack took is held, `Some(false)` while one it
+/// Per key: `Some(true)` while a press Turbo took is held, `Some(false)` while one it
 /// left to macOS is held.
 #[derive(Debug, Default)]
 struct PressTracker {
@@ -310,7 +310,7 @@ struct PressTracker {
 }
 
 impl PressTracker {
-    /// `take` routes a new press and says whether Backpack took it; repeats of a known press
+    /// `take` routes a new press and says whether Turbo took it; repeats of a known press
     /// follow it without routing again (holding next doesn't skip ten tracks).
     fn down(
         &mut self,

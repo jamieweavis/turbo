@@ -3,7 +3,7 @@ import SwiftUI
 import os
 
 @main
-struct BackpackApp: App {
+struct TurboApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -16,14 +16,14 @@ struct BackpackApp: App {
                 )
             } else {
                 VStack(alignment: .leading) {
-                    Text("Backpack couldn't start")
-                    Button("Quit Backpack") { NSApp.terminate(nil) }
+                    Text("Turbo couldn't start")
+                    Button("Quit Turbo") { NSApp.terminate(nil) }
                 }
                 .padding(14)
             }
         } label: {
             Image(nsImage: MenuBarIcon.backpack)
-                .accessibilityLabel("Backpack")
+                .accessibilityLabel("Turbo")
         }
         .menuBarExtraStyle(.window)
     }
@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let model else {
             let alert = NSAlert()
-            alert.messageText = "Backpack couldn't start"
+            alert.messageText = "Turbo couldn't start"
             alert.informativeText = startupError?.userMessage ?? ""
             alert.alertStyle = .critical
             NSApp.activate()

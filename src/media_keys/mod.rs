@@ -135,7 +135,7 @@ impl MediaKeys {
             .collect()
     }
 
-    /// Whether Backpack may control the player, without asking. Can block indefinitely (it waits
+    /// Whether Turbo may control the player, without asking. Can block indefinitely (it waits
     /// on TCC and the player even without a prompt): call it off the main thread.
     pub fn access(&self, bundle_id: &str) -> AutomationAccess {
         players::player(bundle_id).map_or(AutomationAccess::NotDetermined, |player| {
@@ -193,7 +193,7 @@ impl Shared {
         // Not started yet (or the worker died): start it and hand it the job.
         let (sender, receiver) = mpsc::channel::<Job>();
         thread::Builder::new()
-            .name("backpack-media".into())
+            .name("turbo-media".into())
             .spawn(move || {
                 for job in receiver {
                     run(&job);

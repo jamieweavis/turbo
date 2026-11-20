@@ -90,7 +90,7 @@ fn source_usage(source: HyperKeySource) -> i64 {
     })
 }
 
-/// A mapping Backpack made: one of the Hyper key choices onto the Hyper key code.
+/// A mapping Turbo made: one of the Hyper key choices onto the Hyper key code.
 fn is_ours(src: Option<i64>, dst: Option<i64>) -> bool {
     dst == Some(HYPER_USAGE)
         && src.is_some_and(|src| ALL_SOURCES.iter().any(|&s| source_usage(s) == src))

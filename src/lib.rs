@@ -1,4 +1,4 @@
-//! Backpack core: everything that decides or does something lives here.
+//! Turbo core: everything that decides or does something lives here.
 //! The Swift shell draws UI and forwards user intent through the FFI below.
 
 uniffi::setup_scaffolding!();
@@ -141,7 +141,7 @@ pub struct Core {
 #[uniffi::export]
 impl Core {
     /// `data_dir` is where history and state live (the shell passes Application
-    /// Support/Backpack); the config itself is `~/.config/backpack.toml`.
+    /// Support/Turbo); the config itself is `~/.config/turbo.toml`.
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
         logging::init();
@@ -152,7 +152,7 @@ impl Core {
         );
         let data_dir = PathBuf::from(data_dir);
         let config_path = ConfigStore::default_path()?;
-        rename::migrate_from_jaycast(&config_path, &data_dir);
+        rename::migrate_legacy(&config_path, &data_dir);
         let saver = ConfigSaver::new(ConfigStore::new(config_path, &data_dir), SAVE_DEBOUNCE);
         let config = saver.load()?;
         config::log_non_defaults(&config);
@@ -317,7 +317,7 @@ impl Core {
         self.media_keys.perform(command)
     }
 
-    /// Whether Backpack may control a player (macOS's Automation permission), without asking.
+    /// Whether Turbo may control a player (macOS's Automation permission), without asking.
     /// Can block indefinitely: call it off the main thread.
     pub fn media_player_access(&self, bundle_id: String) -> AutomationAccess {
         self.media_keys.access(&bundle_id)
@@ -364,7 +364,7 @@ impl Core {
     }
 
     /// Turns keeping the Mac awake on or off. It's remembered, so it comes back on when
-    /// Backpack relaunches (after an update, say).
+    /// Turbo relaunches (after an update, say).
     pub fn set_keep_awake_active(&self, active: bool) -> Result<(), CoreError> {
         self.keep_awake.set_active(active)
     }
@@ -436,7 +436,7 @@ impl Core {
         self.cameras.select(&id)
     }
 
-    /// Whether Backpack may use the camera.
+    /// Whether Turbo may use the camera.
     pub fn camera_access(&self) -> CameraAccess {
         camera::access()
     }
@@ -626,7 +626,7 @@ mod tests {
     #[test]
     fn core_info_reports_crate_version() {
         let info = core_info();
-        assert_eq!(info.name, "backpack");
+        assert_eq!(info.name, "turbo");
         assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
     }
 
@@ -645,7 +645,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("backpack-lib-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("turbo-lib-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }
@@ -654,9 +654,9 @@ mod tests {
         ConfigStore::new(config_path.to_owned(), &dir.join("data"))
     }
 
-    /// Settings saving to `<dir>/backpack.toml`, written only on flush.
+    /// Settings saving to `<dir>/turbo.toml`, written only on flush.
     fn settings(dir: &Path) -> Settings {
-        settings_at(&dir.join("backpack.toml"), dir)
+        settings_at(&dir.join("turbo.toml"), dir)
     }
 
     fn settings_at(config_path: &Path, dir: &Path) -> Settings {
@@ -681,10 +681,10 @@ mod tests {
             .unwrap();
         assert!(settings.read(|c| c.media_keys.enabled));
         // Saving is debounced: nothing reaches the file until flushed.
-        assert!(!dir.join("backpack.toml").exists());
+        assert!(!dir.join("turbo.toml").exists());
 
         settings.flush().unwrap();
-        let saved = store(&dir.join("backpack.toml"), &dir).load().unwrap();
+        let saved = store(&dir.join("turbo.toml"), &dir).load().unwrap();
         assert!(saved.media_keys.enabled);
         fs::remove_dir_all(dir).unwrap();
     }
@@ -723,7 +723,7 @@ mod tests {
         let changed = settings.read(|c| c.hyper_key.enabled);
         assert_ne!(changed, Config::default().hyper_key.enabled);
         settings.flush().unwrap();
-        let saved = store(&dir.join("backpack.toml"), &dir).load().unwrap();
+        let saved = store(&dir.join("turbo.toml"), &dir).load().unwrap();
         assert_eq!(saved.hyper_key.enabled, changed);
         fs::remove_dir_all(dir).unwrap();
     }
@@ -735,7 +735,7 @@ mod tests {
         // A file where the config's directory should be makes every write fail.
         let blocker = dir.join("config");
         fs::write(&blocker, "").unwrap();
-        let settings = settings_at(&blocker.join("backpack.toml"), &dir);
+        let settings = settings_at(&blocker.join("turbo.toml"), &dir);
         settings.update(|_| {}, |_| Ok(())).unwrap();
         assert!(settings.flush().is_err());
 

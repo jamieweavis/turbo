@@ -48,7 +48,7 @@ jobs:
       # Builds the bindings, the Swift shell and the bundle; CI has no signing identity, so sign ad hoc.
       - name: Build app
         env:
-          BACKPACK_SIGN_IDENTITY: "-"
+          TURBO_SIGN_IDENTITY: "-"
         run: just app
 
   release-pr:
@@ -129,7 +129,7 @@ jobs:
       - name: Build dmg
         env:
           CONFIG: release
-          BACKPACK_SIGN_IDENTITY: "-"
+          TURBO_SIGN_IDENTITY: "-"
         run: just dmg
 
       - name: Upload to release

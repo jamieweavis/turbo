@@ -2,18 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "Backpack",
+    name: "Turbo",
     platforms: [.macOS(.v26)],
     targets: [
         // UniFFI's C header for the Rust core. `just bindings` generates the header,
-        // and `just build` puts libbackpack_core.a on the linker search path.
+        // and `just build` puts libturbo_core.a on the linker search path.
         // A static library can't carry its own link flags, so frameworks the Rust crates
         // need but Swift doesn't already pull in are listed here.
         .target(
-            name: "backpack_coreFFI",
-            path: "Sources/BackpackCoreFFI",
+            name: "turbo_coreFFI",
+            path: "Sources/TurboCoreFFI",
             linkerSettings: [
-                .linkedLibrary("backpack_core"),
+                .linkedLibrary("turbo_core"),
                 .linkedFramework("CoreDisplay"),  // ddc-macos
                 .linkedFramework("AVFoundation"),  // camera
                 .linkedFramework("CoreServices"),  // media keys' Apple Event permission check
@@ -22,9 +22,9 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "Backpack",
-            dependencies: ["backpack_coreFFI"],
-            path: "Sources/Backpack"
+            name: "Turbo",
+            dependencies: ["turbo_coreFFI"],
+            path: "Sources/Turbo"
         ),
     ]
 )

@@ -115,7 +115,7 @@ impl EventTap {
         let shared = Arc::clone(&self.shared);
         let thread_stop = Arc::clone(&stop);
         let thread = thread::Builder::new()
-            .name("backpack-event-tap".into())
+            .name("turbo-event-tap".into())
             .spawn(move || run_tap_thread(shared, thread_stop, ready_tx))?;
 
         match ready_rx.recv() {
@@ -532,7 +532,7 @@ mod tests {
     }
 
     /// Creates a real tap, so it needs Accessibility for the test runner's host app.
-    /// Run with `cargo test -p backpack -- --ignored tap_starts_and_stops`.
+    /// Run with `cargo test -p turbo -- --ignored tap_starts_and_stops`.
     #[test]
     #[ignore]
     fn tap_starts_and_stops() {

@@ -88,7 +88,7 @@ fn four_cc(code: &[u8; 4]) -> u32 {
     u32::from_be_bytes(*code)
 }
 
-/// Whether Backpack may send Apple Events to an app (System Settings › Privacy & Security ›
+/// Whether Turbo may send Apple Events to an app (System Settings › Privacy & Security ›
 /// Automation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum AutomationAccess {

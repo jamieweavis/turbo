@@ -8,7 +8,7 @@
 
 use crate::config::WindowAction;
 
-/// Within this many points, a window is still where Backpack put it. Apps nudge frames by a
+/// Within this many points, a window is still where Turbo put it. Apps nudge frames by a
 /// point or so (rounding, backing scale), so exact equality would break cycling.
 const SAME_FRAME_TOLERANCE: f64 = 2.0;
 
@@ -122,17 +122,17 @@ pub(super) fn display_order(screens: &[Screen]) -> Vec<usize> {
     order
 }
 
-/// A snap Backpack made: the action, and for halves which step of the 1/2 → 2/3 → 1/3 cycle.
+/// A snap Turbo made: the action, and for halves which step of the 1/2 → 2/3 → 1/3 cycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Snap {
     pub action: WindowAction,
     pub step: usize,
 }
 
-/// What Backpack remembers about one window.
+/// What Turbo remembers about one window.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(super) struct Memory {
-    /// The frame before Backpack first moved it, for `Restore`.
+    /// The frame before Turbo first moved it, for `Restore`.
     pub original: Option<Rect>,
     /// The last snap and the frame the window actually ended up with.
     pub last: Option<(Snap, Rect)>,
@@ -217,7 +217,7 @@ pub(super) fn plan(
                 (at + order.len() - 1) % order.len()
             };
             let target = &screens[order[next]];
-            // A window still where Backpack snapped it is snapped the same way over there;
+            // A window still where Turbo snapped it is snapped the same way over there;
             // anything else keeps its relative position and size.
             match memory.still_snapped(&window) {
                 Some(snap) => Ok(snap_plan(snap, &window, target, gap, almost_maximize)),
@@ -688,7 +688,7 @@ mod tests {
     }
 
     #[test]
-    fn restore_returns_to_the_frame_before_backpack_and_forgets() {
+    fn restore_returns_to_the_frame_before_turbo_and_forgets() {
         let mut memory = Memory::default();
         let snapped = apply(LeftHalf, WINDOW, &[LAPTOP], &mut memory);
         let snapped = apply(TopRight, snapped, &[LAPTOP], &mut memory);

@@ -26,9 +26,9 @@ final class AppModel {
 
     init() throws {
         // `just screenshots` runs with a throwaway data directory, leaving the real history alone.
-        let dataDirectory = ProcessInfo.processInfo.environment["BACKPACK_DATA_DIR"]
+        let dataDirectory = ProcessInfo.processInfo.environment["TURBO_DATA_DIR"]
             .flatMap { $0.isEmpty ? nil : URL(filePath: $0, directoryHint: .isDirectory) }
-            ?? URL.applicationSupportDirectory.appending(path: "Backpack", directoryHint: .isDirectory)
+            ?? URL.applicationSupportDirectory.appending(path: "Turbo", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
         core = try Core(dataDir: dataDirectory.path(percentEncoded: false))
         mouse = MouseSettings(core: core)

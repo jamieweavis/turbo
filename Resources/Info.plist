@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Backpack</string>
+    <string>Turbo</string>
     <key>CFBundleDisplayName</key>
-    <string>Backpack</string>
+    <string>Turbo</string>
     <key>CFBundleIdentifier</key>
-    <string>com.jamieweavis.backpack</string>
+    <string>com.jamieweavis.turbo</string>
     <key>CFBundleExecutable</key>
-    <string>Backpack</string>
+    <string>Turbo</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <!-- Both versions are stamped from Cargo.toml by `just app`. -->
@@ -25,9 +25,9 @@
     <true/>
     <!-- Shown in the camera prompt. Without it macOS ends the app when it asks. -->
     <key>NSCameraUsageDescription</key>
-    <string>Backpack shows your camera in Camera Preview, only while the preview is open.</string>
+    <string>Turbo shows your camera in Camera Preview, only while the preview is open.</string>
     <!-- Shown in the Automation prompt the first time a media key goes to a music app. -->
     <key>NSAppleEventsUsageDescription</key>
-    <string>Backpack sends your media keys (play/pause, next and previous) to the music app you choose.</string>
+    <string>Turbo sends your media keys (play/pause, next and previous) to the music app you choose.</string>
 </dict>
 </plist>

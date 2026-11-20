@@ -23,7 +23,7 @@ final class OnboardingWindowController: NSObject {
             self?.window?.close()
         }
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Welcome to Backpack"
+        window.title = "Welcome to Turbo"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.center()
@@ -40,7 +40,7 @@ private struct OnboardingView: View {
             Label("Accessibility access", systemImage: "hand.raised")
                 .font(.title2.bold())
 
-            Text("Backpack needs Accessibility access to remap mouse buttons, smooth scrolling, handle brightness keys, manage windows and expand snippets.")
+            Text("Turbo needs Accessibility access to remap mouse buttons, smooth scrolling, handle brightness keys, manage windows and expand snippets.")
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {

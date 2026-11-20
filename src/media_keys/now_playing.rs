@@ -3,7 +3,7 @@
 //! Spotify and Music broadcast a distributed notification whenever playback starts, pauses
 //! or changes track. Listening needs no permission and asks nothing of the apps, so it's
 //! how a player you started by hand becomes the one the keys go to. Players that don't
-//! broadcast (VLC) become the last active one when Backpack sends them a key.
+//! broadcast (VLC) become the last active one when Turbo sends them a key.
 
 use std::ffi::c_void;
 use std::ptr;

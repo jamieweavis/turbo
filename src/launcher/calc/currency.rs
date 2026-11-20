@@ -164,7 +164,7 @@ impl RateStore {
         let weak = Arc::downgrade(&store);
         let path = data_dir.join("currency-rates.json");
         let spawned = thread::Builder::new()
-            .name("backpack-currency-rates".into())
+            .name("turbo-currency-rates".into())
             .spawn(move || refresh_loop(&weak, &path));
         if let Err(error) = spawned {
             log::error!("couldn't start the currency rate thread: {error}");
@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn cache_round_trips() {
-        let dir = std::env::temp_dir().join(format!("backpack-rates-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("turbo-rates-{}", std::process::id()));
         let path = dir.join("currency-rates.json");
         save(&path, &test_rates());
         let cache = load(&path).unwrap();

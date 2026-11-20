@@ -1,6 +1,6 @@
 //! The brightness keys: a session-level tap on system-defined events, on its own thread and
 //! run loop. A key press adjusts the external display under the cursor through
-//! [`DisplayManager::adjust`]; on the built-in display, or one Backpack can't control, the
+//! [`DisplayManager::adjust`]; on the built-in display, or one Turbo can't control, the
 //! key passes through so macOS handles it as usual.
 //!
 //! Key presses are rare, so the hot path may take the config lock briefly; it still never
@@ -87,7 +87,7 @@ impl BrightnessKeyTap {
     }
 
     /// Call after the monitor settings change: the tap only runs while monitor control and
-    /// the brightness keys are both on, so otherwise key presses never pass through Backpack.
+    /// the brightness keys are both on, so otherwise key presses never pass through Turbo.
     pub fn refresh(&self) -> Result<(), CoreError> {
         let started = self.started.lock();
         self.sync(*started)
@@ -119,7 +119,7 @@ impl BrightnessKeyTap {
         let displays = Arc::clone(&self.displays);
         let thread_stop = Arc::clone(&stop);
         let thread = thread::Builder::new()
-            .name("backpack-brightness-keys".into())
+            .name("turbo-brightness-keys".into())
             .spawn(move || run_tap_thread(displays, thread_stop, ready_tx))?;
 
         match ready_rx.recv() {
@@ -359,18 +359,18 @@ fn step(flags: CGEventFlags) -> f64 {
     }
 }
 
-/// Decides per press, not per event: the first key-down settles whether Backpack owns the
+/// Decides per press, not per event: the first key-down settles whether Turbo owns the
 /// press, and its auto-repeats and key-up follow. macOS never sees half a press.
 #[derive(Debug, Default)]
 struct PressTracker {
-    /// Per direction: `Some(true)` while a press Backpack swallowed is held, `Some(false)`
+    /// Per direction: `Some(true)` while a press Turbo swallowed is held, `Some(false)`
     /// while one it passed through is held.
     held: [Option<bool>; 2],
 }
 
 impl PressTracker {
     /// `enabled` is only consulted when a press starts; `try_adjust` changes the brightness
-    /// and reports whether this display is Backpack's to control.
+    /// and reports whether this display is Turbo's to control.
     fn down(
         &mut self,
         direction: Direction,
@@ -615,7 +615,7 @@ mod tests {
     }
 
     /// Creates a real tap, so it needs Accessibility for the test runner's host app.
-    /// Run with `cargo test -p backpack -- --ignored brightness_tap_starts_and_stops`.
+    /// Run with `cargo test -p turbo -- --ignored brightness_tap_starts_and_stops`.
     #[test]
     #[ignore]
     fn brightness_tap_starts_and_stops() {

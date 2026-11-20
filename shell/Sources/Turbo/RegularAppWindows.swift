@@ -1,6 +1,6 @@
 import AppKit
 
-/// Backpack is a menu-bar-only (accessory) app, which macOS won't activate. While one of its
+/// Turbo is a menu-bar-only (accessory) app, which macOS won't activate. While one of its
 /// ordinary windows (settings, onboarding) is open it becomes a regular app, so the window
 /// can take focus and gets a ⌘⇥ entry and the menu bar. It goes back once they're all closed.
 @MainActor

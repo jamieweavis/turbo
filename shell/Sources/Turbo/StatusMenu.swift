@@ -47,7 +47,7 @@ struct StatusMenu: View {
 
                 Spacer()
 
-                Text("Backpack \(core.version)")
+                Text("Turbo \(core.version)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
 

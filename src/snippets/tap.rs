@@ -116,7 +116,7 @@ impl ExpansionTap {
         let shared = Arc::clone(&self.shared);
         let thread_stop = Arc::clone(&stop);
         let thread = thread::Builder::new()
-            .name("backpack-snippet-tap".into())
+            .name("turbo-snippet-tap".into())
             .spawn(move || run_tap_thread(shared, thread_stop, ready_tx))?;
 
         match ready_rx.recv() {
@@ -171,7 +171,7 @@ fn run_tap_thread(
     // finishing any insertion in progress so the clipboard is always restored.
     let (jobs, queue) = mpsc::channel::<Job>();
     let spawned = thread::Builder::new()
-        .name("backpack-snippet-insert".into())
+        .name("turbo-snippet-insert".into())
         .spawn(move || {
             for job in queue {
                 insert::run(&job.text, job.erase, Duration::ZERO);
@@ -295,7 +295,7 @@ impl TapState {
             self.matcher.reset();
             return;
         }
-        // Our own Backspaces, ⌘V and arrows (and other Backpack input).
+        // Our own Backspaces, ⌘V and arrows (and other Turbo input).
         if CGEvent::integer_value_field(Some(event), CGEventField::EventSourceUserData)
             == SYNTHETIC_EVENT_MARKER
         {
@@ -321,7 +321,7 @@ impl TapState {
             self.matcher.reset();
             self.frontmost = frontmost;
         }
-        // Typing in Backpack itself (searching the palette for `;addr`) mustn't expand.
+        // Typing in Turbo itself (searching the palette for `;addr`) mustn't expand.
         if frontmost == Some(std::process::id() as i32)
             || self.shared.palette_visible.load(Ordering::Relaxed)
         {

@@ -12,7 +12,7 @@ struct LauncherPane: View {
     @State private var sortOrder: [KeyPathComparator<ItemRowModel>] = []
     @Environment(\.appearsActive) private var appearsActive
 
-    private static let categories = ["Application", "Backpack", "System", "Window", "System Settings"]
+    private static let categories = ["Application", "Turbo", "System", "Window", "System Settings"]
 
     var body: some View {
         @Bindable var settings = settings

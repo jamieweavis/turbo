@@ -229,7 +229,7 @@ mod tests {
         let scopes = vec![
             "~".to_owned(),
             home.clone(),
-            "~/definitely-not-a-folder-backpack".to_owned(),
+            "~/definitely-not-a-folder-turbo".to_owned(),
             "  ".to_owned(),
         ];
         assert_eq!(existing_scopes(&scopes, &home), vec![home]);
