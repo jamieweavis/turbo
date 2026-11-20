@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/jamieweavis/turbo/compare/v0.1.5...v0.1.6) - 2026-11-20
+
+### Added
+
+- swap the menu bar backpack icon for a turbo
+- rename the app to Turbo
+
+### Fixed
+
+- avoid a Swift 6.3 compiler crash in the brightness slider binding
+- make the brightness slider's change handler Sendable
+
 ## [0.1.5](https://github.com/jamieweavis/turbo/compare/v0.1.4...v0.1.5) - 2026-11-18
 
 ### Added

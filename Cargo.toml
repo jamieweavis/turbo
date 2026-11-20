@@ -43,7 +43,7 @@ members = ["tools/uniffi-bindgen"]
 
 [workspace.package]
 edition = "2024"
-version = "0.1.5"
+version = "0.1.6"
 publish = false
 
 [workspace.dependencies]
