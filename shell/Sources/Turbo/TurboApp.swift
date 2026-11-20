@@ -22,7 +22,7 @@ struct TurboApp: App {
                 .padding(14)
             }
         } label: {
-            Image(nsImage: MenuBarIcon.backpack)
+            Image(nsImage: MenuBarIcon.turbo)
                 .accessibilityLabel("Turbo")
         }
         .menuBarExtraStyle(.window)
