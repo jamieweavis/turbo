@@ -10,6 +10,8 @@
     <string>com.jamieweavis.turbo</string>
     <key>CFBundleExecutable</key>
     <string>Turbo</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <!-- Both versions are stamped from Cargo.toml by `just app`. -->

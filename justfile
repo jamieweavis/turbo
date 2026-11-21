@@ -36,11 +36,33 @@ app: build
     rm -rf {{app}}
     mkdir -p {{app}}/Contents/MacOS {{app}}/Contents/Resources
     cp Resources/Info.plist {{app}}/Contents/
+    cp Resources/AppIcon.icns {{app}}/Contents/Resources/
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $({{just_executable()}} version)" \
         -c "Set :CFBundleVersion $({{just_executable()}} version)" {{app}}/Contents/Info.plist
     cp "$(swift build --package-path shell -c {{config}} --show-bin-path)/Turbo" {{app}}/Contents/MacOS/
     codesign --force --options runtime --entitlements Resources/Turbo.entitlements \
         --sign "{{sign_identity}}" {{app}}
+
+# Render Resources/AppIcon.svg to Resources/AppIcon.icns and the README's .github/icon.png (both checked in; needs Google Chrome)
+icon:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    chrome="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
+    set="build/AppIcon.iconset"
+    rm -rf "$set"
+    mkdir -p "$set"
+    "$chrome" --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 \
+        --window-size=1024,1024 --screenshot="$PWD/$set/icon_512x512@2x.png" \
+        "file://$PWD/Resources/AppIcon.svg" 2>/dev/null
+    for size in 16 32 128 256 512; do
+        sips -z "$size" "$size" "$set/icon_512x512@2x.png" --out "$set/icon_${size}x${size}.png" >/dev/null
+        if [ "$size" -ne 512 ]; then
+            sips -z "$((size * 2))" "$((size * 2))" "$set/icon_512x512@2x.png" \
+                --out "$set/icon_${size}x${size}@2x.png" >/dev/null
+        fi
+    done
+    iconutil -c icns "$set" -o Resources/AppIcon.icns
+    cp "$set/icon_256x256@2x.png" .github/icon.png
 
 # Package build/Turbo.app as build/Turbo-<version>-macos-arm64.dmg (CONFIG=release to ship)
 dmg: app

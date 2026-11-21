@@ -18,6 +18,7 @@ just logs-recent 1h   # past logs (debug level isn't kept)
 just reset-permissions  # forget the Accessibility grant to re-test onboarding
 CONFIG=release just app # optimised build; `just dmg` packages it
 just screenshots      # README settings screenshots → .github/screenshots (demo config, dark)
+just icon             # Resources/AppIcon.svg → AppIcon.icns + .github/icon.png (checked in; needs Chrome)
 ```
 
 - Single test: `cargo test <name_substring>` (e.g. `cargo test calc::parser`). Some tests are

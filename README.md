@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src=".github/icon.png" alt="Turbo icon" width="128" height="128">
+
 # Turbo
 
 ### The all-in-one toolkit for macOS.
