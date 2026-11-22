@@ -127,7 +127,7 @@ Background fixes for the keyboard, mouse, windows and displays, each with its ow
 ## 📄 Config file
 
 Every setting, from hotkeys and snippets to quicklinks and mouse buttons, lives in one plain TOML file at
-`~/.config/turbo.toml`. Check it into your dotfiles and a new Mac is set up the moment Turbo launches.
+`~/.config/turbo/config.toml`. Check it into your dotfiles and a new Mac is set up the moment Turbo launches.
 Symlink it from your dotfiles repo if you like: Turbo writes through the link to the real file and leaves the link in place.
 
 ```toml
@@ -181,7 +181,7 @@ action = "Back"
   and nothing else, after macOS asks you to allow it. Which app played last comes from the apps' own
   broadcasts, not from watching what you play.
 - **Every feature can be switched off**, and a switched-off feature doesn't run.
-- **Settings are a plain text file** at `~/.config/turbo.toml`: readable, diffable, and easy to back up
+- **Settings are a plain text file** at `~/.config/turbo/config.toml`: readable, diffable, and easy to back up
   or keep in your dotfiles.
 
 ## Keyboard

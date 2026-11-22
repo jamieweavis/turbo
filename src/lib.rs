@@ -141,7 +141,7 @@ pub struct Core {
 #[uniffi::export]
 impl Core {
     /// `data_dir` is where history and state live (the shell passes Application
-    /// Support/Turbo); the config itself is `~/.config/turbo.toml`.
+    /// Support/Turbo); the config itself is `~/.config/turbo/config.toml`.
     #[uniffi::constructor]
     pub fn new(data_dir: String) -> Result<Arc<Self>, CoreError> {
         logging::init();

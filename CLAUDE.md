@@ -58,7 +58,7 @@ observer traits (`DisplayObserver`, `LauncherObserver`) registered via `set_*_ob
 Rust callbacks on arbitrary threads and must hop to `DispatchQueue.main.async` before
 `MainActor.assumeIsolated`. Slow calls (Spotlight file search) run in `Task.detached` with debouncing.
 
-**Config:** one `Config` struct (`src/config.rs`) persisted as TOML at `~/.config/turbo.toml`.
+**Config:** one `Config` struct (`src/config.rs`) persisted as TOML at `~/.config/turbo/config.toml`.
 Every struct is `#[serde(default)]` so older/partial configs keep loading — keep it that way when adding
 fields, and use `#[serde(alias = ...)]` when renaming. `ConfigSaver` debounces writes (500 ms) and
 writes atomically (temp + rename). A legacy `config.json` in the data dir is migrated on first load.

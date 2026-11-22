@@ -1,4 +1,4 @@
-//! User settings, persisted as TOML at `~/.config/turbo.toml`.
+//! User settings, persisted as TOML at `~/.config/turbo/config.toml`.
 //!
 //! Every struct uses `#[serde(default)]` so configs written by older builds keep loading
 //! as fields are added.
@@ -903,7 +903,7 @@ mod cleared {
     }
 }
 
-/// Loads and saves [`Config`] at `~/.config/turbo.toml`.
+/// Loads and saves [`Config`] at `~/.config/turbo/config.toml`.
 pub struct ConfigStore {
     path: PathBuf,
     /// Where builds before the TOML config kept it, as JSON. Read only while `path` is missing.
@@ -919,7 +919,7 @@ impl ConfigStore {
         }
     }
 
-    /// `~/.config/turbo.toml`, or `$TURBO_CONFIG` when set (`just screenshots` points it
+    /// `~/.config/turbo/config.toml`, or `$TURBO_CONFIG` when set (`just screenshots` points it
     /// at a demo config).
     pub fn default_path() -> Result<PathBuf, CoreError> {
         if let Some(path) = std::env::var_os("TURBO_CONFIG").filter(|p| !p.is_empty()) {
@@ -928,7 +928,7 @@ impl ConfigStore {
         let home = std::env::home_dir().ok_or_else(|| CoreError::Other {
             message: "couldn't find the home directory".into(),
         })?;
-        Ok(home.join(".config").join("turbo.toml"))
+        Ok(home.join(".config").join("turbo").join("config.toml"))
     }
 
     /// A missing file yields the defaults; an unreadable one is an error rather than
@@ -987,7 +987,7 @@ impl ConfigStore {
         };
         fs::create_dir_all(dir)?;
         let name = target.file_name().map_or_else(
-            || "turbo.toml".into(),
+            || "config.toml".into(),
             |name| name.to_string_lossy().into_owned(),
         );
         // Beside the target, so the rename stays on one filesystem; hidden, so a dotfiles
