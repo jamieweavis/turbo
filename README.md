@@ -60,11 +60,11 @@ Each app has its own updater, its own settings and its own slice of memory; Turb
 ## Install
 
 > [!IMPORTANT]
-> Requires macOS 26 or later.
+> Requires macOS 26 or later
 
 > [!WARNING]
 > macOS blocks Turbo the first time you open it, because the app isn't notarised by Apple.
-> Steps 2 and 3 below get you past it, and are only needed once.
+> Steps 2 and 3 below get you past it, and are only needed once
 
 1. Download the `.dmg` from the [latest release](https://github.com/jamieweavis/turbo/releases/latest)
    and drag Turbo to Applications.
@@ -94,7 +94,7 @@ action = "Back"
 ```
 
 > [!TIP]
-> Check the file into your dotfiles and a new Mac is set up the moment Turbo launches.
+> Add to your dotfiles to sync your Turbo configuration across machines
 
 ## Launcher Features
 
@@ -251,7 +251,3 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`fea
 push to `main`, [release-plz](https://release-plz.dev) opens or updates a release PR that bumps the version
 and writes `CHANGELOG.md`. Merging it tags `vX.Y.Z`, and CI attaches the `.dmg` (`just dmg`) to the GitHub
 Release.
-
-> [!NOTE]
-> CI needs a `RELEASE_PLZ_TOKEN` secret: a token with contents and pull-requests write access, so its PRs
-> trigger CI.
