@@ -97,6 +97,8 @@ screenshots: app
     # A copy, so anything the app saves while running doesn't touch the checked-in demo config.
     cp "$out/demo-config.toml" "$scratch/config.toml"
     mkdir "$scratch/data"
+    # The palette's suggestions come from usage; stamp the demo history as used just now.
+    sed "s/\"at\": 0/\"at\": $(date +%s)/g" "$out/demo-usage.json" > "$scratch/data/launcher-usage.json"
     # Only one Turbo can own the hotkeys; relaunch whichever copy was running afterwards.
     running="$(pgrep -x Turbo | head -1 || true)"
     previous=""
@@ -116,6 +118,7 @@ screenshots: app
         {{app}}
     if [ -n "$previous" ]; then open "$previous"; fi
     count="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"
+    # One per settings pane, but the palette shot stands in for General's.
     expected="$(grep -o 'case general.*' shell/Sources/Turbo/Settings.swift | tr ',' '\n' | wc -l | tr -d ' ')"
     if [ "$count" -ne "$expected" ]; then
         echo "Saved $count of $expected screenshots. Turbo needs Screen Recording access (System Settings ›"

@@ -66,9 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.start()
         if let directory = ScreenshotMode.directory {
             NSApp.appearance = NSAppearance(named: .darkAqua)
-            showSettings()
-            guard let settings else { return }
-            Task { await ScreenshotMode.capture(settings, to: directory) }
+            let settings = settingsController(model)
+            Task { await ScreenshotMode.capture(palette: model.palette, settings: settings, to: directory) }
         } else if !model.accessibility.isGranted {
             showOnboarding()
         }
@@ -95,10 +94,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showSettings() {
         guard let model else { return }
+        settingsController(model).show()
+    }
+
+    private func settingsController(_ model: AppModel) -> SettingsWindowController {
         let settings = self.settings ?? SettingsWindowController(model: model) { [weak self] in
             self?.showOnboarding()
         }
         self.settings = settings
-        settings.show()
+        return settings
     }
 }

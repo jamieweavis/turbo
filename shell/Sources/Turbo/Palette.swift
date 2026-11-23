@@ -41,6 +41,9 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel.isVisible }
 
+    /// The panel's frame on screen, for `just screenshots`.
+    var panelFrame: NSRect { panel.frame }
+
     /// For hotkeys: hide if the palette is already up in `mode`, otherwise show it in `mode`
     /// (switching in place if it's up in another mode).
     func toggle(mode: PaletteMode = .search) {

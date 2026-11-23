@@ -1,0 +1,12 @@
+{
+  "items": {
+    "system:toggle-dark-mode": { "value": 9, "at": 0 },
+    "app:com.apple.Safari": { "value": 8, "at": 0 },
+    "settings:displays": { "value": 7, "at": 0 },
+    "app:com.apple.Notes": { "value": 6, "at": 0 },
+    "color:pick": { "value": 5, "at": 0 },
+    "app:com.apple.ActivityMonitor": { "value": 4, "at": 0 },
+    "app:com.apple.Music": { "value": 3, "at": 0 },
+    "settings:privacy-security": { "value": 2, "at": 0 }
+  }
+}
