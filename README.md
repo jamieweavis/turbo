@@ -14,7 +14,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)
 
-[**Download for Mac**](https://github.com/jamieweavis/turbo/releases/latest) · [Launcher Features](#launcher-features) · [Utilities](#utilities) · [Development](#development)
+[**Download for Mac**](https://github.com/jamieweavis/turbo/releases/latest) · [Features](#launcher-features) · [Utilities](#utilities) · [Development](#development) · [Changelog](CHANGELOG.md)
 
 <img src=".github/screenshots/general.png" alt="Turbo's settings window">
 
