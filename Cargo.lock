@@ -1283,7 +1283,7 @@ checksum = "06bdbd8cfc056b8d2e2e85f29b56a3bdbecb527cef81eb39e3e7b98af4652770"
 
 [[package]]
 name = "turbo"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "block2",
  "ddc",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "uniffi",
 ]

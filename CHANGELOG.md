@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8](https://github.com/jamieweavis/turbo/compare/v0.1.7...v0.1.8) - 2026-11-24
+
+### Added
+
+- store the config at ~/.config/turbo/config.toml
+
+### Other
+
+- update the quicklink example
+- link the platform badge to releases
+- drop stale comment from release-plz config
+- add MIT licence
+- lead the README with a launcher screenshot
+- add a changelog link to the README nav
+- tidy README callouts
+- restructure the README
+
 ## [0.1.7](https://github.com/jamieweavis/turbo/compare/v0.1.6...v0.1.7) - 2026-11-21
 
 ### Added
