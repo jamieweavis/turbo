@@ -267,6 +267,11 @@ enum SetIconError {
 
 /// Sets the app's custom icon, or with `None` removes it.
 fn set_icon(app: &Path, icon: Option<&Path>) -> Result<(), SetIconError> {
+    // `setIcon:forFile:options:` isn't thread-safe: concurrent calls, even on different
+    // bundles, fail or crash. A sync already serialises its own calls, but this keeps any
+    // two callers (two `Shared`s in tests, say) from overlapping.
+    static SET_ICON: Mutex<()> = Mutex::new(());
+    let _serial = SET_ICON.lock();
     autoreleasepool(|_| {
         let image = match icon {
             Some(icon) => {
