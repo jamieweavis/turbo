@@ -1,6 +1,3 @@
-# release-plz opens a release PR (version bump + CHANGELOG.md from conventional commits) on every push
-# to main. When that PR is merged it pushes the `v{{ version }}` tag and creates a draft GitHub Release;
-# the package job in .github/workflows/ci.yml attaches the .dmg and publishes it.
 [workspace]
 # Not published to crates.io: take the current version from git tags instead of the registry.
 git_only = true
