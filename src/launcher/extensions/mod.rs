@@ -1,6 +1,6 @@
 //! Quicklinks (URL templates) and shell commands, found and run from the palette.
 //!
-//! Both are matched the same way. Typing `<keyword> <argument>` (`g rust traits`) fills
+//! Both are matched the same way. Typing `<keyword> <argument>` (`g yorkshire pudding recipe`) fills
 //! `{query}` and puts the result above every fuzzy match. Otherwise the name and keyword are
 //! fuzzy-matched like apps; one that takes `{query}` but has none yet completes the search
 //! field to `<keyword> ` instead of opening. Without a keyword, the name doubles as one.
@@ -417,13 +417,13 @@ mod tests {
 
     #[test]
     fn keyword_with_argument_ranks_above_everything_but_the_calculator() {
-        let results = results("g rust traits", &config());
+        let results = results("g yorkshire pudding recipe", &config());
         let (score, result) = find(&results, "quicklink:google").unwrap();
         assert_eq!(*score, KEYWORD_SCORE);
-        assert_eq!(result.title, "Search Google for “rust traits”");
+        assert_eq!(result.title, "Search Google for “yorkshire pudding recipe”");
         assert_eq!(
             result.subtitle,
-            "https://www.google.com/search?q=rust%20traits"
+            "https://www.google.com/search?q=yorkshire%20pudding%20recipe"
         );
         assert_eq!(result.kind, ResultKind::Quicklink);
         assert_eq!(result.symbol.as_deref(), Some("link"));

@@ -9,7 +9,7 @@ pub(super) fn uses(template: &str, name: &str) -> bool {
     template.contains(&format!("{{{name}}}"))
 }
 
-/// The argument typed after `keyword`: `g rust traits` → `rust traits`. The keyword matches
+/// The argument typed after `keyword`: `g yorkshire pudding recipe` → `yorkshire pudding recipe`. The keyword matches
 /// case-insensitively, must be followed by whitespace, and may contain spaces itself (names
 /// double as keywords). `Some("")` when only the keyword and a space have been typed.
 pub(super) fn split_argument<'a>(query: &'a str, keyword: &str) -> Option<&'a str> {
@@ -96,7 +96,10 @@ mod tests {
 
     #[test]
     fn argument_follows_the_keyword_and_whitespace() {
-        assert_eq!(split_argument("g rust traits", "g"), Some("rust traits"));
+        assert_eq!(
+            split_argument("g yorkshire pudding recipe", "g"),
+            Some("yorkshire pudding recipe")
+        );
         assert_eq!(split_argument("  G   rust  ", "g"), Some("rust"));
         assert_eq!(split_argument("g ", "g"), Some(""));
         assert_eq!(split_argument("yt\tcats", "yt"), Some("cats"));
@@ -143,7 +146,10 @@ mod tests {
 
     #[test]
     fn url_encoding_keeps_only_unreserved() {
-        assert_eq!(url_encode("rust traits"), "rust%20traits");
+        assert_eq!(
+            url_encode("yorkshire pudding recipe"),
+            "yorkshire%20pudding%20recipe"
+        );
         assert_eq!(url_encode("a+b&c=d/e?#"), "a%2Bb%26c%3Dd%2Fe%3F%23");
         assert_eq!(url_encode("Az09-._~"), "Az09-._~");
         assert_eq!(url_encode("café"), "caf%C3%A9");

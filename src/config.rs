@@ -445,7 +445,7 @@ pub struct Quicklink {
     /// Stable and unique (the shell generates a UUID for new ones).
     pub id: String,
     pub name: String,
-    /// Typed before the argument: `g rust traits`. May be empty (then found by name only).
+    /// Typed before the argument: `g yorkshire pudding recipe`. May be empty (then found by name only).
     pub keyword: String,
     pub url: String,
 }

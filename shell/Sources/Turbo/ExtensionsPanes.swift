@@ -44,7 +44,7 @@ struct QuicklinksPane: View {
                     draft = Draft(item: Quicklink(id: UUID().uuidString, name: "", keyword: "", url: ""), isNew: true)
                 }
             } footer: {
-                Text("Type a quicklink's keyword, a space and your search, like “g rust traits”, then press ↩.")
+                Text("Type a quicklink's keyword, a space and your search, like “g yorkshire pudding recipe”, then press ↩.")
             }
         }
         .formStyle(.grouped)

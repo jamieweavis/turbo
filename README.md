@@ -117,7 +117,7 @@ Fuzzy-search your apps, ranked by how often you use them, with per-app hotkeys a
 
 ### Quicklinks
 
-Open websites and searches by keyword: `g rust traits` searches Google for "rust traits". Each quicklink is a URL template with a `{query}` placeholder for what you type after the keyword, or `{clipboard}` for whatever you last copied, so any site with a search box can be one.
+Open websites and searches by keyword: `g yorkshire pudding recipe` searches Google for "yorkshire pudding recipe". Each quicklink is a URL template with a `{query}` placeholder for what you type after the keyword, or `{clipboard}` for whatever you last copied, so any site with a search box can be one.
 
 <p align="center"><img src=".github/screenshots/quicklinks.png" alt="Quicklinks settings"></p>
 
