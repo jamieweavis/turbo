@@ -12,7 +12,7 @@
 [![release](https://img.shields.io/github/v/release/jamieweavis/turbo?label=release)](https://github.com/jamieweavis/turbo/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/jamieweavis/turbo/total?color=f97316)](https://github.com/jamieweavis/turbo/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)
+[![Platforms](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/jamieweavis/turbo/releases)
 
 [**Download for Mac**](https://github.com/jamieweavis/turbo/releases/latest) · [Features](#launcher-features) · [Utilities](#utilities) · [Development](#development) · [Changelog](CHANGELOG.md)
 
