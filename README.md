@@ -46,6 +46,7 @@ Many Mac users end up running a handful of menu bar apps to fill the gaps in mac
 | **Brightness Key Fixer** | MonitorControl | Allow brightness keys to control external monitors |
 | **Media Key Fixer** | BeardedSpice | Control which app responds to media key presses |
 | **Window Transform** | Easy Move+Resize | Transform and manipulate windows on your screen with your mouse |
+| **App Icons** | CandyBar | Manage and customize app icons on your Mac |
 
 
 Each app has its own updater, its own settings and its own slice of memory; Turbo replaces them with one app, one settings file and one process:
@@ -178,6 +179,7 @@ Background fixes for the keyboard, mouse, windows and displays, each with its ow
 - [Mouse](#mouse)
 - [Display Brightness](#display-brightness)
 - [Media Keys](#media-keys)
+- [App Icons](#app-icons)
 
 ### Window Transform
 
@@ -208,6 +210,12 @@ Make the keyboard's brightness keys work on external monitors, by talking to the
 Send play/pause, next and previous to Spotify, Music or VLC (whichever you used last, or always the one you pick), so they never launch Apple Music. Also in the palette as Play/Pause, Next Track and Previous Track.
 
 <p align="center"><img src=".github/screenshots/media-keys.png" alt="Media Keys settings"></p>
+
+### App Icons
+
+Give apps custom icons that survive their updates. Put `.icns` files in `~/.config/turbo/icons/`, each named after its app (`Spotify.icns` goes on `Spotify.app`), and Turbo applies them and puts them back whenever an update clears one. Switching it off, or removing a file, gives the app its own icon again. macOS asks for the App Management permission the first time.
+
+<p align="center"><img src=".github/screenshots/app-icons.png" alt="App Icons settings"></p>
 
 ## Development
 

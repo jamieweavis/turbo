@@ -105,3 +105,6 @@ quick_press = "Escape"
 
 [media_keys]
 enabled = true
+
+[app_icons]
+enabled = true

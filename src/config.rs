@@ -24,6 +24,7 @@ pub struct Config {
     pub hyper_key: HyperKeyConfig,
     pub window_drag: WindowDragConfig,
     pub media_keys: MediaKeysConfig,
+    pub app_icons: AppIconsConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, uniffi::Record)]
@@ -559,6 +560,15 @@ impl Default for MediaKeysConfig {
             when_not_running: WhenNotRunning::Launch,
         }
     }
+}
+
+/// Custom app icons from the `icons` folder beside the config file: `Spotify.icns` there
+/// goes on `Spotify.app`, and back on after an update clears it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, uniffi::Record)]
+#[serde(default)]
+pub struct AppIconsConfig {
+    /// Off gives every app its own icon back.
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, uniffi::Enum)]
@@ -1461,6 +1471,15 @@ mod tests {
     }
 
     #[test]
+    fn app_icons_round_trip_and_default_off() {
+        assert!(!Config::default().app_icons.enabled);
+        let config: Config = toml::from_str("[app_icons]\nenabled = true\n").unwrap();
+        assert!(config.app_icons.enabled);
+        let saved = toml::to_string(&config).unwrap();
+        assert_eq!(toml::from_str::<Config>(&saved).unwrap(), config);
+    }
+
+    #[test]
     fn window_drag_round_trips_and_needs_a_modifier() {
         let dir = temp_dir("window-drag");
         let store = store(&dir);
@@ -1583,6 +1602,7 @@ mod tests {
             toml::from_str(include_str!("../.github/screenshots/demo-config.toml")).unwrap();
         assert!(config.hyper_key.enabled);
         assert!(config.media_keys.enabled);
+        assert!(config.app_icons.enabled);
         assert_eq!(config.launcher.app_hotkeys.len(), 3);
         assert_eq!(config.launcher.action_hotkeys.len(), 1);
         assert_eq!(config.launcher.quicklinks.len(), 5);

@@ -1290,6 +1290,7 @@ dependencies = [
  "ddc-macos",
  "dispatch2",
  "emojis",
+ "libc",
  "log",
  "notify",
  "objc2",

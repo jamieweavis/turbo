@@ -122,7 +122,7 @@ enum SettingsSection: CaseIterable, Identifiable {
 }
 
 enum SettingsPane: CaseIterable, Identifiable {
-    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, emoji, windowDrag, keyboard, mouse, monitor, mediaKeys
+    case general, launcher, quicklinks, commands, files, snippets, clipboard, windows, keepAwake, colorPicker, emoji, windowDrag, keyboard, mouse, monitor, mediaKeys, appIcons
 
     var id: Self { self }
 
@@ -130,7 +130,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         switch self {
         case .general: .main
         case .launcher, .quicklinks, .commands, .files, .snippets, .clipboard, .windows, .keepAwake, .colorPicker, .emoji: .launcher
-        case .windowDrag, .keyboard, .mouse, .monitor, .mediaKeys: .utilities
+        case .windowDrag, .keyboard, .mouse, .monitor, .mediaKeys, .appIcons: .utilities
         }
     }
 
@@ -149,6 +149,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .mouse: "Mouse"
         case .monitor: "Display Brightness"
         case .mediaKeys: "Media Keys"
+        case .appIcons: "App Icons"
         case .keepAwake: "Keep Awake"
         case .colorPicker: "Colour Picker"
         case .emoji: "Emoji Picker"
@@ -171,6 +172,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .mouse: "Smooth scrolling, scroll modifiers and button remapping."
         case .monitor: "Adjust your displays' brightness, external monitors included."
         case .mediaKeys: "Send play/pause, next and previous to your music app, never Music by surprise."
+        case .appIcons: "Give apps custom icons that survive their updates."
         case .keepAwake: "Stop your Mac sleeping while you need it."
         case .colorPicker: "Pick a colour from anywhere on screen."
         case .emoji: "Search emoji by name or shortcode and paste them anywhere."
@@ -193,6 +195,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .mouse: .pink
         case .monitor: .yellow
         case .mediaKeys: .green
+        case .appIcons: .indigo
         case .keepAwake: .brown
         case .colorPicker: .red
         case .emoji: .yellow
@@ -211,7 +214,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .keepAwake: .keepAwake
         case .colorPicker: .colorPicker
         case .emoji: .emoji
-        case .general, .launcher, .windowDrag, .keyboard, .mouse, .monitor, .mediaKeys: nil
+        case .general, .launcher, .windowDrag, .keyboard, .mouse, .monitor, .mediaKeys, .appIcons: nil
         }
     }
 
@@ -230,6 +233,7 @@ enum SettingsPane: CaseIterable, Identifiable {
         case .mouse: "computermouse"
         case .monitor: "sun.max"
         case .mediaKeys: "playpause.fill"
+        case .appIcons: "paintbrush.fill"
         case .keepAwake: "eye"
         case .colorPicker: "eyedropper"
         case .emoji: "face.smiling"
@@ -248,6 +252,12 @@ struct SettingsView: View {
     /// The height below the toolbar at which the sidebar shows every row without scrolling, once
     /// measured.
     @State private var sidebarFitHeight: CGFloat = 0
+
+    /// What the panes that warn about Accessibility go by. Screenshots show the panes as they are
+    /// once it's granted, whether or not the build taking them has it.
+    private var isInputRunning: Bool {
+        model.isInputRunning || ScreenshotMode.directory != nil
+    }
 
     var body: some View {
         // A nil selection (a ⌘-click on the selected row) keeps the current pane.
@@ -291,11 +301,12 @@ struct SettingsView: View {
                 case .clipboard: ClipboardPane(settings: model.launcher)
                 case .files: FileSearchPane(settings: model.launcher)
                 case .windows: WindowsPane(settings: model.launcher)
-                case .windowDrag: WindowDragPane(settings: model.windowDrag, isInputRunning: model.isInputRunning)
-                case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: model.isInputRunning)
+                case .windowDrag: WindowDragPane(settings: model.windowDrag, isInputRunning: isInputRunning)
+                case .keyboard: KeyboardPane(settings: model.hyperKey, isInputRunning: isInputRunning)
                 case .mouse: MousePane(settings: model.mouse)
                 case .monitor: MonitorPane(settings: model.displays)
-                case .mediaKeys: MediaKeysPane(settings: model.mediaKeys, isInputRunning: model.isInputRunning)
+                case .mediaKeys: MediaKeysPane(settings: model.mediaKeys, isInputRunning: isInputRunning)
+                case .appIcons: AppIconsPane(settings: model.appIcons)
                 case .keepAwake: KeepAwakePane(state: model.keepAwake, settings: model.launcher)
                 case .colorPicker: ColorPickerPane(picker: model.colorPicker, settings: model.launcher)
                 case .emoji: EmojiPane(state: model.emoji, settings: model.launcher)
@@ -396,6 +407,9 @@ extension SettingsView {
         case .mediaKeys:
             let mediaKeys = model.mediaKeys
             return Binding(get: { mediaKeys.config.enabled }, set: { mediaKeys.config.enabled = $0 })
+        case .appIcons:
+            let appIcons = model.appIcons
+            return Binding(get: { appIcons.config.enabled }, set: { appIcons.config.enabled = $0 })
         default:
             return nil
         }
@@ -591,10 +605,12 @@ struct PaneIcon: View {
                 WindowActionIcon(action: .leftHalf, width: size * 0.6)
             } else {
                 // The diamond fills more of its box than other symbols, which shows at sidebar size;
-                // play/pause is twice as wide as it is tall, at every size.
+                // play/pause is twice as wide as it is tall, and the paintbrush fills its box corner
+                // to corner, at every size.
                 let scale = switch pane {
                 case .keyboard where size <= 20: 0.35
                 case .mediaKeys: 0.36
+                case .appIcons: 0.4
                 default: 0.5
                 }
                 Image(systemName: pane.systemImage)

@@ -49,9 +49,9 @@ prompt). Apple Events (Media Keys) are the same: `com.apple.security.automation.
 
 **FFI surface:** `src/lib.rs` defines the single `Core` `uniffi::Object` the shell creates at launch.
 It owns one subsystem per feature module (`input`, `display`, `launcher`, `clipboard`, `files`,
-`windows`, `snippets`, `hyper`, `keep_awake`, `color_picker`, `emoji`, `camera`, `media_keys`) and exposes paired
+`windows`, `snippets`, `hyper`, `keep_awake`, `color_picker`, `emoji`, `camera`, `media_keys`, `app_icons`) and exposes paired
 `<area>_config()` / `set_<area>_config()` methods plus feature actions. Callbacks to Swift go through
-observer traits (`DisplayObserver`, `LauncherObserver`) registered via `set_*_observer`.
+observer traits (`DisplayObserver`, `LauncherObserver`, `AppIconsObserver`) registered via `set_*_observer`.
 
 **Shell side:** `AppModel` owns the `Core` and one `@Observable` settings/state class per area
 (`LauncherSettings`, `DisplaySettings`, …). Observer bridges (e.g. `LauncherObserverBridge`) receive
@@ -62,6 +62,7 @@ Rust callbacks on arbitrary threads and must hop to `DispatchQueue.main.async` b
 Every struct is `#[serde(default)]` so older/partial configs keep loading — keep it that way when adding
 fields, and use `#[serde(alias = ...)]` when renaming. `ConfigSaver` debounces writes (500 ms) and
 writes atomically (temp + rename). A legacy `config.json` in the data dir is migrated on first load.
+Custom app icons (`.icns` files named after their app) live in `icons/` beside the config.
 Other state (clipboard SQLite DB, usage ranking, colour/emoji history, chosen camera) lives in
 `~/Library/Application Support/Turbo`, passed to `Core::new` as `data_dir`.
 

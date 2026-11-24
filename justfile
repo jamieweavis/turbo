@@ -99,6 +99,14 @@ screenshots: app
     mkdir "$scratch/data"
     # The palette's suggestions come from usage; stamp the demo history as used just now.
     sed "s/\"at\": 0/\"at\": $(date +%s)/g" "$out/demo-usage.json" > "$scratch/data/launcher-usage.json"
+    # App Icons changes the apps it finds, so it gets stand-ins instead of /Applications: an
+    # empty bundle for each icon in your own icons folder.
+    mkdir "$scratch/icons" "$scratch/apps"
+    for icon in "$HOME"/.config/turbo/icons/*.icns; do
+        [ -e "$icon" ] || continue
+        cp "$icon" "$scratch/icons/"
+        mkdir -p "$scratch/apps/$(basename "$icon" .icns).app/Contents"
+    done
     # Only one Turbo can own the hotkeys; relaunch whichever copy was running afterwards.
     running="$(pgrep -x Turbo | head -1 || true)"
     previous=""
@@ -115,6 +123,7 @@ screenshots: app
         --env TURBO_SCREENSHOTS="$out" \
         --env TURBO_CONFIG="$scratch/config.toml" \
         --env TURBO_DATA_DIR="$scratch/data" \
+        --env TURBO_APPS_DIR="$scratch/apps" \
         {{app}}
     if [ -n "$previous" ]; then open "$previous"; fi
     count="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"

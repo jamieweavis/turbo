@@ -3,6 +3,7 @@
 
 uniffi::setup_scaffolding!();
 
+mod app_icons;
 mod aux_keys;
 mod camera;
 mod clipboard;
@@ -27,6 +28,8 @@ use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use app_icons::AppIcons;
+pub use app_icons::{AppIcon, AppIconStatus, AppIconsObserver};
 use camera::Cameras;
 pub use camera::{CameraAccess, CameraDevice, CameraKind};
 use clipboard::ClipboardHistory;
@@ -136,6 +139,7 @@ pub struct Core {
     emoji: EmojiPicker,
     cameras: Cameras,
     media_keys: Arc<MediaKeys>,
+    app_icons: AppIcons,
 }
 
 #[uniffi::export]
@@ -153,6 +157,7 @@ impl Core {
         let data_dir = PathBuf::from(data_dir);
         let config_path = ConfigStore::default_path()?;
         rename::migrate_legacy(&config_path, &data_dir);
+        let icon_dir = config_path.with_file_name("icons");
         let saver = ConfigSaver::new(ConfigStore::new(config_path, &data_dir), SAVE_DEBOUNCE);
         let config = saver.load()?;
         config::log_non_defaults(&config);
@@ -185,6 +190,7 @@ impl Core {
         let colors = ColorHistory::new(&data_dir);
         let emoji = EmojiPicker::new(&data_dir);
         let cameras = Cameras::new(&data_dir);
+        let app_icons = AppIcons::new(&config.app_icons, icon_dir);
         Ok(Arc::new(Self {
             settings: Settings::new(saver, config),
             input,
@@ -203,6 +209,7 @@ impl Core {
             emoji,
             cameras,
             media_keys,
+            app_icons,
         }))
     }
 
@@ -327,6 +334,49 @@ impl Core {
     /// Blocks until it is: call it off the main thread.
     pub fn request_media_player_access(&self, bundle_id: String) -> AutomationAccess {
         self.media_keys.request_access(&bundle_id)
+    }
+
+    pub fn app_icons_config(&self) -> AppIconsConfig {
+        self.settings.read(|config| config.app_icons.clone())
+    }
+
+    /// Saves the setting and, in the background, applies the icons (on) or gives the apps
+    /// their own icons back (off).
+    pub fn set_app_icons_config(&self, app_icons: AppIconsConfig) -> Result<(), CoreError> {
+        self.settings.update(
+            |config| config.app_icons = app_icons,
+            |config| {
+                self.app_icons.set_config(&config.app_icons);
+                Ok(())
+            },
+        )
+    }
+
+    /// The `.icns` files in the icons folder and whether each is on its app, as of the last
+    /// sync. Changes arrive through the observer.
+    pub fn app_icons(&self) -> Vec<AppIcon> {
+        self.app_icons.icons()
+    }
+
+    /// The folder `.icns` files go in: `icons` beside the config file. Created if missing,
+    /// so the shell can open it.
+    pub fn app_icons_folder(&self) -> String {
+        let folder = self.app_icons.icon_dir();
+        if let Err(error) = std::fs::create_dir_all(folder) {
+            log::warn!("couldn't create {}: {error}", folder.display());
+        }
+        folder.to_string_lossy().into_owned()
+    }
+
+    /// Looks at the folder and the apps again in the background, retrying anything macOS
+    /// refused before (say, now that App Management is allowed).
+    pub fn sync_app_icons(&self) {
+        self.app_icons.sync();
+    }
+
+    /// Registers the shell's observer for app icon changes (`None` clears it).
+    pub fn set_app_icons_observer(&self, observer: Option<Arc<dyn AppIconsObserver>>) {
+        self.app_icons.set_observer(observer);
     }
 
     pub fn launcher_config(&self) -> LauncherConfig {

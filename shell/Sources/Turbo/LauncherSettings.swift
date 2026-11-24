@@ -546,6 +546,11 @@ enum AppIcons {
     private static var cache: [String: NSImage] = [:]
     private static var pathsByBundleID: [String: String?] = [:]
 
+    /// Forgets every icon, for when App Icons changes what apps look like.
+    static func invalidate() {
+        cache.removeAll()
+    }
+
     /// The installed app's icon for a bundle id, if Launch Services knows the app.
     static func icon(forBundleID bundleID: String) -> NSImage? {
         let path = pathsByBundleID[bundleID] ?? {

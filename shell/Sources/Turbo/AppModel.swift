@@ -14,6 +14,7 @@ final class AppModel {
     let hyperKey: HyperKeySettings
     let windowDrag: WindowDragSettings
     let mediaKeys: MediaKeysSettings
+    let appIcons: AppIconsSettings
     let keepAwake: KeepAwakeState
     let colorPicker: ColorPickerState
     let emoji: EmojiState
@@ -38,6 +39,7 @@ final class AppModel {
         hyperKey = HyperKeySettings(core: core)
         windowDrag = WindowDragSettings(core: core)
         mediaKeys = MediaKeysSettings(core: core)
+        appIcons = AppIconsSettings(core: core)
         keepAwake = KeepAwakeState(core: core)
         colorPicker = ColorPickerState(core: core)
         emoji = EmojiState(core: core)
@@ -82,6 +84,10 @@ final class AppModel {
             onPickColor: { [colorPicker] in colorPicker.pick() },
             onShowStatus: { [pill] status in pill.show(.status(status)) }
         ))
+        core.setAppIconsObserver(observer: AppIconsObserverBridge(settings: appIcons))
+        // Catch a sync that finished between init and registering the observer.
+        appIcons.iconsChanged(core.appIcons())
+
         // Hotkeys don't need Accessibility, so they work before it's granted.
         core.startHotkeys()
         launcher.refreshFailed()
