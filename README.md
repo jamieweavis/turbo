@@ -28,7 +28,23 @@
 - [Install](#install)
 - [Config file](#config-file)
 - [Launcher Features](#launcher-features)
+  - [Launcher](#launcher)
+  - [Quicklinks](#quicklinks)
+  - [Shell Commands](#shell-commands)
+  - [File Search](#file-search)
+  - [Snippets](#snippets)
+  - [Clipboard](#clipboard)
+  - [Window Management](#window-management)
+  - [Keep Awake](#keep-awake)
+  - [Colour Picker](#colour-picker)
+  - [Emoji Picker](#emoji-picker)
 - [Utilities](#utilities)
+  - [Window Transform](#window-transform)
+  - [Hyper Key](#hyper-key)
+  - [Mouse](#mouse)
+  - [Display Brightness](#display-brightness)
+  - [Media Keys](#media-keys)
+  - [App Icons](#app-icons)
 - [Development](#development)
 - [Releasing](#releasing)
 
@@ -99,17 +115,6 @@ action = "Back"
 
 ## Launcher Features
 
-- [Launcher](#launcher)
-- [Quicklinks](#quicklinks)
-- [Shell Commands](#shell-commands)
-- [File Search](#file-search)
-- [Snippets](#snippets)
-- [Clipboard](#clipboard)
-- [Window Management](#window-management)
-- [Keep Awake](#keep-awake)
-- [Colour Picker](#colour-picker)
-- [Emoji Picker](#emoji-picker)
-
 ### Launcher
 
 Fuzzy-search your apps, ranked by how often you use them, with per-app hotkeys and aliases. Type maths straight into the palette, with unit and currency conversion, or run system actions like Lock Screen, Sleep and Empty Trash, open any System Settings pane and check your webcam with Camera Preview.
@@ -173,13 +178,6 @@ Search every emoji by name or shortcode (`tada`) in a grid, with the ones you us
 ## Utilities
 
 Background fixes for the keyboard, mouse, windows and displays, each with its own switch.
-
-- [Window Transform](#window-transform)
-- [Hyper Key](#hyper-key)
-- [Mouse](#mouse)
-- [Display Brightness](#display-brightness)
-- [Media Keys](#media-keys)
-- [App Icons](#app-icons)
 
 ### Window Transform
 
