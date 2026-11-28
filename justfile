@@ -87,7 +87,7 @@ run: app
     @while [ -n "$(lsappinfo find bundleid={{bundle_id}})" ]; do sleep 0.1; done
     open {{app}}
 
-# Capture every settings pane (dark, demo config) to .github/screenshots; needs Screen Recording
+# Capture the palette, menu bar popover and every settings pane (dark, demo config) to .github/screenshots; needs Screen Recording
 screenshots: app
     #!/usr/bin/env bash
     set -euo pipefail
@@ -116,7 +116,7 @@ screenshots: app
         while [ -n "$(lsappinfo find bundleid={{bundle_id}})" ]; do sleep 0.1; done
     fi
     rm -f "$out"/*.png
-    echo "Capturing settings panes, don't touch the mouse…"
+    echo "Capturing the palette, menu bar and settings panes, don't touch the mouse…"
     # Through LaunchServices rather than running the binary, so macOS treats it as Turbo
     # itself: its Accessibility grant applies and the Screen Recording prompt names it.
     open -W \
@@ -127,8 +127,9 @@ screenshots: app
         {{app}}
     if [ -n "$previous" ]; then open "$previous"; fi
     count="$(find "$out" -name '*.png' | wc -l | tr -d ' ')"
-    # One per settings pane, but the palette shot stands in for General's.
-    expected="$(grep -o 'case general.*' shell/Sources/Turbo/Settings.swift | tr ',' '\n' | wc -l | tr -d ' ')"
+    # One per settings pane (the palette shot stands in for General's), plus the menu bar's.
+    panes="$(grep -o 'case general.*' shell/Sources/Turbo/Settings.swift | tr ',' '\n' | wc -l | tr -d ' ')"
+    expected=$((panes + 1))
     if [ "$count" -ne "$expected" ]; then
         echo "Saved $count of $expected screenshots. Turbo needs Screen Recording access (System Settings ›"
         echo "Privacy & Security); \`just logs-recent 5m\` shows what failed."

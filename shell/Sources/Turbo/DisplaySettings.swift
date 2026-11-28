@@ -36,8 +36,8 @@ final class DisplaySettings {
     init(core: Core) {
         self.core = core
         config = core.monitorConfig()
-        displays = core.displays()
-        builtinBrightness = core.builtinBrightness()
+        displays = Self.posed(core.displays())
+        builtinBrightness = Self.posed(core.builtinBrightness())
     }
 
     /// Displays whose brightness can be controlled.
@@ -56,7 +56,7 @@ final class DisplaySettings {
     /// keys, auto-brightness, opening and closing the lid).
     func refreshBuiltin() {
         guard ContinuousClock.now - lastBuiltinWrite > .milliseconds(500) else { return }
-        builtinBrightness = core.builtinBrightness()
+        builtinBrightness = Self.posed(core.builtinBrightness())
     }
 
     func setBuiltinBrightness(_ brightness: Double) {
@@ -78,7 +78,7 @@ final class DisplaySettings {
         // menu's next poll, so the menu doesn't change height while it's open.
         refreshBuiltin()
         // Keep the slider's value for a display mid-drag rather than the core's older one.
-        self.displays = displays.map { display in
+        self.displays = Self.posed(displays).map { display in
             guard writing.contains(display.id), let current = self.displays.first(where: { $0.id == display.id }) else {
                 return display
             }
@@ -99,8 +99,25 @@ final class DisplaySettings {
 
     // MARK: Private
 
+    /// `just screenshots` shows every display at full brightness, whatever it's really at (and
+    /// without changing it).
+    private static let posing = ScreenshotMode.directory != nil
+
+    private static func posed(_ brightness: Double?) -> Double? {
+        posing ? brightness.map { _ in 1 } : brightness
+    }
+
+    private static func posed(_ displays: [DisplayInfo]) -> [DisplayInfo] {
+        guard posing else { return displays }
+        return displays.map { display in
+            var display = display
+            display.brightness = 1
+            return display
+        }
+    }
+
     private func updateLocal(_ displayID: UInt32, _ brightness: Double) {
-        guard let index = displays.firstIndex(where: { $0.id == displayID }) else { return }
+        guard !Self.posing, let index = displays.firstIndex(where: { $0.id == displayID }) else { return }
         displays[index].brightness = brightness
     }
 

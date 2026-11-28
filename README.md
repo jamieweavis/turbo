@@ -16,7 +16,7 @@
 
 [**Download for Mac**](https://github.com/jamieweavis/turbo/releases/latest) · [Features](#launcher-features) · [Utilities](#utilities) · [Development](#development) · [Changelog](CHANGELOG.md)
 
-<img src=".github/screenshots/palette.png" alt="Turbo's launcher" width="776">
+<img src=".github/screenshots/palette.png" alt="Turbo's launcher" height="392"> <img src=".github/screenshots/menubar.png" alt="Turbo's menu bar popover" height="392">
 
 </div>
 
@@ -240,8 +240,9 @@ default, so macOS keeps the Accessibility grant across rebuilds. Set `TURBO_SIGN
 ad hoc.
 
 `just screenshots` relaunches the app with the demo config in `.github/screenshots/demo-config.toml`,
-hides your other apps, captures the launcher over the desktop and every settings pane in dark mode to
-`.github/screenshots/`, then unhides the apps and relaunches your usual copy.
+hides your other apps, captures the launcher over the desktop, the menu bar popover (under
+Turbo's icon alone) and every settings pane in dark mode to `.github/screenshots/`, then
+unhides the apps and relaunches your usual copy.
 It needs Screen Recording access the first time, and compresses the images if `oxipng` is installed.
 
 ### Project layout

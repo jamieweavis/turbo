@@ -23,7 +23,8 @@ struct StatusMenu: View {
             Divider()
             keyboard
 
-            if !model.accessibility.isGranted {
+            // Screenshots show the menu as it is once set up.
+            if !model.accessibility.isGranted, ScreenshotMode.directory == nil {
                 MenuRow(title: "Grant Accessibility…", systemImage: "hand.raised") {
                     dismiss()
                     onShowOnboarding()

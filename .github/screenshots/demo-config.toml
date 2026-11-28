@@ -108,3 +108,6 @@ enabled = true
 
 [app_icons]
 enabled = true
+
+[mouse.scroll_modifiers]
+reverse_direction = true
