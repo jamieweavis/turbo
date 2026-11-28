@@ -560,6 +560,7 @@ final class PaletteModel {
         } else {
             query = ""
         }
+        if mode == .clipboard { clipboard.selectFirst() }
         focusRequest += 1
     }
 

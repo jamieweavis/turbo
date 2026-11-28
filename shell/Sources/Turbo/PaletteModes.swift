@@ -42,6 +42,12 @@ final class ClipboardBrowser: MultiSelecting {
         pruneMarks()
     }
 
+    /// Opening the history starts on the newest copy (or the first pin), wherever it was left.
+    func selectFirst() {
+        selection = 0
+        cursorMoved()
+    }
+
     /// Puts back marks taken before the palette closed for a paste that then failed.
     func restoreMarks(_ marks: Marks<Int64>) {
         self.marks = marks
@@ -149,6 +155,11 @@ struct ClipboardModeView: View {
             .scrollIndicators(.never)
             .onChange(of: browser.selection) {
                 if let id = browser.selected?.id { proxy.scrollTo(id) }
+            }
+            // Each time the history opens it starts from the top, even if it was left
+            // scrolled with the selection still on the first row.
+            .onChange(of: model.focusRequest) {
+                if let id = browser.items.first?.id { proxy.scrollTo(id, anchor: .top) }
             }
         }
     }
