@@ -713,6 +713,8 @@ final class EmojiBrowser {
         let grid = GridNavigation(sectionCounts: sections.map(\.emojis.count), columns: PaletteLayout.emojiColumns)
         selection = grid.move(selection, direction)
     }
+
+    var count: Int { flat.count }
 }
 
 struct EmojiModeView: View {

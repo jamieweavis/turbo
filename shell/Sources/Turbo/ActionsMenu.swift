@@ -381,6 +381,8 @@ struct ActionsMenuView: View {
                 switch command {
                 case .up: menu.move(by: -1)
                 case .down: menu.move(by: 1)
+                case .top: menu.selection = 0
+                case .bottom: menu.selection = max(menu.filtered.count - 1, 0)
                 case .submit, .alternateSubmit:
                     if let action = menu.selected { model.run(action) }
                 case .cancel: model.closeActions()

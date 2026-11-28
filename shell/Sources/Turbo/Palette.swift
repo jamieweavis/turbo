@@ -617,6 +617,36 @@ final class PaletteModel {
         }
     }
 
+    /// ⌘↑/⌘↓: the first or last row (or tile).
+    func jump(toEnd: Bool) {
+        confirmingDelete = false
+        defer { multiSelect?.cursorMoved() }
+        setSelection(toEnd: toEnd)
+    }
+
+    /// ⇧⌘↑/⇧⌘↓ where rows can be marked: marks everything from here to the top or bottom.
+    func extendMarks(toEnd: Bool) {
+        guard let browser = multiSelect else { return }
+        confirmingDelete = false
+        let previous = browser.selection
+        setSelection(toEnd: toEnd)
+        if browser.selection != previous { browser.extendMarks(from: previous) }
+    }
+
+    private func setSelection(toEnd: Bool) {
+        func index(in count: Int) -> Int { toEnd ? max(count - 1, 0) : 0 }
+        switch mode {
+        case .search:
+            confirming = nil
+            selection = index(in: results.count)
+        case .clipboard: clipboard.selection = index(in: clipboard.items.count)
+        case .files: files.selection = index(in: files.results.count)
+        case .colors: colors.selection = index(in: colors.colors.count)
+        case .emoji: emoji.selection = index(in: emoji.count)
+        case .camera: break
+        }
+    }
+
     /// ←/→ in grid modes; elsewhere they move the cursor in the field.
     func moveSideways(by offset: Int) {
         confirmingDelete = false
@@ -1155,6 +1185,10 @@ private struct PaletteView: View {
                     switch command {
                     case .up: model.move(by: -1)
                     case .down: model.move(by: 1)
+                    case .top: model.jump(toEnd: false)
+                    case .bottom: model.jump(toEnd: true)
+                    case .extendTop: model.extendMarks(toEnd: false)
+                    case .extendBottom: model.extendMarks(toEnd: true)
                     case .left: model.moveSideways(by: -1)
                     case .right: model.moveSideways(by: 1)
                     case .submit: model.openSelected()
@@ -1616,6 +1650,8 @@ struct SearchField: NSViewRepresentable {
     enum Command {
         case up, down, left, right, submit, alternateSubmit, complete, cancel
         case backtab, extendUp, extendDown, extendLeft, extendRight
+        /// ⌘↑/⌘↓, and with ⇧ where rows can be marked.
+        case top, bottom, extendTop, extendBottom
     }
 
     func makeNSView(context: Context) -> NSTextField {
@@ -1695,6 +1731,13 @@ struct SearchField: NSViewRepresentable {
             switch selector {
             case #selector(NSResponder.moveUp(_:)): parent.onCommand(.up)
             case #selector(NSResponder.moveDown(_:)): parent.onCommand(.down)
+            case #selector(NSResponder.moveToBeginningOfDocument(_:)): parent.onCommand(.top)
+            case #selector(NSResponder.moveToEndOfDocument(_:)): parent.onCommand(.bottom)
+            case #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:))
+                where parent.extendsSelection:
+                parent.onCommand(.extendTop)
+            case #selector(NSResponder.moveToEndOfDocumentAndModifySelection(_:)) where parent.extendsSelection:
+                parent.onCommand(.extendBottom)
             case #selector(NSResponder.moveLeft(_:)) where parent.takesSidewaysArrows: parent.onCommand(.left)
             case #selector(NSResponder.moveRight(_:)) where parent.takesSidewaysArrows: parent.onCommand(.right)
             case #selector(NSResponder.insertNewline(_:)):
