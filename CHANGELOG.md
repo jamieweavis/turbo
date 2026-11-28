@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9](https://github.com/jamieweavis/turbo/compare/v0.1.8...v0.1.9) - 2026-11-28
+
+### Added
+
+- add launcher favourites
+- show the Turbo glyph in the launcher's search field
+- show every launcher item's hotkey on its palette row
+- jump to the first or last row with ⌘↑ and ⌘↓
+- mark several clipboard items or colours for bulk actions
+- add App Icons, custom app icons that survive updates
+
+### Fixed
+
+- open clipboard history at the top
+- serialise NSWorkspace setIcon calls, which aren't thread-safe
+
+### Other
+
+- add the menu bar popover to the README screenshots
+- nest the section lists in the README contents
+- regenerate screenshots with App Icons in the sidebar
+
 ## [0.1.8](https://github.com/jamieweavis/turbo/compare/v0.1.7...v0.1.8) - 2026-11-24
 
 ### Added
