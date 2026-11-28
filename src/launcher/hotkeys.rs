@@ -347,6 +347,46 @@ struct Plan {
     duplicates: Vec<Hotkey>,
 }
 
+/// The hotkey of each launcher item that has one, by its search result id, in the order
+/// they're registered. Leaves out the ones that aren't registered: those of features turned
+/// off, and of ids that are no longer anything.
+pub(crate) fn item_hotkeys(config: &LauncherConfig) -> Vec<(String, Hotkey)> {
+    let own = |id: &str, hotkey: &Option<Hotkey>| hotkey.clone().map(|h| (id.to_owned(), h));
+    let mut hotkeys: Vec<(String, Hotkey)> = Vec::new();
+    hotkeys.extend(own("mode:clipboard", &config.clipboard.hotkey));
+    hotkeys.extend(own("mode:files", &config.files.hotkey));
+    hotkeys.extend(
+        config
+            .app_hotkeys
+            .iter()
+            .map(|app| (format!("app:{}", app.bundle_id), app.hotkey.clone())),
+    );
+    hotkeys.extend(
+        config
+            .action_hotkeys
+            .iter()
+            .map(|action| (format!("system:{}", action.action), action.hotkey.clone())),
+    );
+    if config.windows.hotkeys_enabled {
+        hotkeys.extend(config.windows.hotkeys.iter().filter_map(|binding| {
+            let id = crate::windows::id_for_action(binding.action)?;
+            Some((format!("window:{id}"), binding.hotkey.clone()))
+        }));
+    }
+    hotkeys.extend(own("keep-awake:toggle", &config.keep_awake.toggle_hotkey));
+    hotkeys.extend(own("keep-awake:on", &config.keep_awake.on_hotkey));
+    hotkeys.extend(own("keep-awake:off", &config.keep_awake.off_hotkey));
+    hotkeys.extend(own(PICK_COLOR_ID, &config.color_picker.hotkey));
+    hotkeys.extend(
+        config
+            .items
+            .iter()
+            .filter_map(|item| Some((item.id.clone(), item.hotkey.clone()?))),
+    );
+    hotkeys.retain(|(id, _)| Target::for_item(id).is_some_and(|target| target.is_enabled(config)));
+    hotkeys
+}
+
 /// Numbers the hotkeys to register, palette first, dropping repeated combinations.
 fn plan(config: &LauncherConfig) -> Plan {
     let wanted = config
@@ -354,66 +394,10 @@ fn plan(config: &LauncherConfig) -> Plan {
         .iter()
         .map(|hotkey| (hotkey.clone(), Target::Palette))
         .chain(
-            config
-                .clipboard
-                .hotkey
-                .iter()
-                .map(|hotkey| (hotkey.clone(), Target::Mode(PaletteMode::Clipboard))),
-        )
-        .chain(
-            config
-                .files
-                .hotkey
-                .iter()
-                .map(|hotkey| (hotkey.clone(), Target::Mode(PaletteMode::Files))),
-        )
-        .chain(
-            config
-                .app_hotkeys
-                .iter()
-                .map(|app| (app.hotkey.clone(), Target::App(app.bundle_id.clone()))),
-        )
-        .chain(
-            config
-                .action_hotkeys
-                .iter()
-                .map(|action| (action.hotkey.clone(), Target::System(action.action.clone()))),
-        )
-        .chain(
-            config
-                .windows
-                .hotkeys
-                .iter()
-                .filter(|_| config.windows.hotkeys_enabled)
-                .map(|binding| (binding.hotkey.clone(), Target::Window(binding.action))),
-        )
-        .chain(
-            [
-                (&config.keep_awake.toggle_hotkey, KeepAwakeCommand::Toggle),
-                (&config.keep_awake.on_hotkey, KeepAwakeCommand::On),
-                (&config.keep_awake.off_hotkey, KeepAwakeCommand::Off),
-            ]
-            .into_iter()
-            .filter_map(|(hotkey, command)| {
-                hotkey
-                    .clone()
-                    .map(|hotkey| (hotkey, Target::KeepAwake(command)))
-            }),
-        )
-        .chain(
-            config
-                .color_picker
-                .hotkey
-                .iter()
-                .map(|hotkey| (hotkey.clone(), Target::PickColor)),
-        )
-        .chain(
-            config
-                .items
-                .iter()
-                .filter_map(|item| Some((item.hotkey.clone()?, Target::for_item(&item.id)?))),
-        )
-        .filter(|(_, target)| target.is_enabled(config));
+            item_hotkeys(config)
+                .into_iter()
+                .filter_map(|(id, hotkey)| Some((hotkey, Target::for_item(&id)?))),
+        );
 
     let mut seen = Vec::new();
     let mut hotkeys = Vec::new();
@@ -721,6 +705,83 @@ mod tests {
         config.files.hotkey = None;
         config.windows.hotkeys.clear();
         config
+    }
+
+    #[test]
+    fn item_hotkeys_are_listed_by_result_id() {
+        use crate::config::ItemSettings;
+        let option = |key_code| hotkey(key_code, &[Modifier::Option]);
+        let mut config = without_mode_hotkeys();
+        config.clipboard.hotkey = Some(option(0));
+        config.files.hotkey = Some(option(1));
+        config.app_hotkeys = vec![app("com.apple.Safari", option(2))];
+        config.action_hotkeys = vec![ActionHotkey {
+            action: "lock".into(),
+            hotkey: option(3),
+        }];
+        config.windows.hotkeys = vec![WindowHotkey {
+            action: WindowAction::LeftHalf,
+            hotkey: option(4),
+        }];
+        config.keep_awake.toggle_hotkey = Some(option(5));
+        config.keep_awake.on_hotkey = Some(option(6));
+        config.keep_awake.off_hotkey = Some(option(7));
+        config.color_picker.hotkey = Some(option(8));
+        let item = |id: &str, key_code| ItemSettings {
+            id: id.into(),
+            hotkey: Some(option(key_code)),
+            ..ItemSettings::default()
+        };
+        config.items = vec![
+            item("mode:emoji", 9),
+            item("settings:sound", 10),
+            item("media:play-pause", 11),
+            item("shortcut:ABC", 12),
+            item("unknown:thing", 13),
+        ];
+        let ids = |config: &LauncherConfig| -> Vec<String> {
+            item_hotkeys(config).into_iter().map(|(id, _)| id).collect()
+        };
+        let all = ids(&config);
+        assert_eq!(
+            all,
+            [
+                "mode:clipboard",
+                "mode:files",
+                "app:com.apple.Safari",
+                "system:lock",
+                "window:left-half",
+                "keep-awake:toggle",
+                "keep-awake:on",
+                "keep-awake:off",
+                "color:pick",
+                "mode:emoji",
+                "settings:sound",
+                "media:play-pause",
+                "shortcut:ABC",
+            ]
+        );
+        // Each goes with its own hotkey, and the plan registers exactly these.
+        assert_eq!(item_hotkeys(&config)[4].1, option(4));
+        assert_eq!(plan(&config).hotkeys.len(), all.len() + 1);
+
+        // Hotkeys that aren't registered aren't listed.
+        config.windows.hotkeys_enabled = false;
+        config.keep_awake.enabled = false;
+        config.clipboard.enabled = false;
+        config.emoji.enabled = false;
+        assert_eq!(
+            ids(&config),
+            [
+                "mode:files",
+                "app:com.apple.Safari",
+                "system:lock",
+                "color:pick",
+                "settings:sound",
+                "media:play-pause",
+                "shortcut:ABC",
+            ]
+        );
     }
 
     #[test]

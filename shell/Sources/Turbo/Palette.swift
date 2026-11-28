@@ -517,20 +517,6 @@ final class PaletteModel {
         results.indices.contains(selection) ? results[selection] : nil
     }
 
-    /// The hotkey set for an app or system action in settings, shown on its row.
-    func hotkey(for result: SearchResult) -> Hotkey? {
-        let config = settings.config
-        if result.id.hasPrefix("app:") {
-            let bundleId = result.id.dropFirst("app:".count)
-            return config.appHotkeys.first { $0.bundleId == bundleId }?.hotkey
-        }
-        if result.id.hasPrefix("system:") {
-            let action = result.id.dropFirst("system:".count)
-            return config.actionHotkeys.first { $0.action == action }?.hotkey
-        }
-        return nil
-    }
-
     // MARK: Showing and modes
 
     func prepareForShow(mode: PaletteMode) {
@@ -1364,7 +1350,7 @@ private struct ResultsList: View {
                         .padding(.horizontal, 10)
                         .frame(height: PaletteLayout.sectionHeaderHeight, alignment: .center)
                     ForEach(Array(model.results.enumerated()), id: \.element.id) { index, result in
-                        ResultRow(result: result, hotkey: model.hotkey(for: result), isSelected: index == model.selection)
+                        ResultRow(result: result, hotkey: result.hotkey, isSelected: index == model.selection)
                             .id(result.id)
                             .contentShape(.rect)
                             .onContinuousHover { phase in

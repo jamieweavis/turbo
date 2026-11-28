@@ -111,6 +111,7 @@ impl<'a> Entry<'a> {
             ),
             needs_confirmation: self.needs_confirmation,
             completion,
+            hotkey: None,
         }
     }
 }

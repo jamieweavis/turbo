@@ -39,7 +39,7 @@ use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSWorkspace, NSWorkspaceOpenConfiguration};
 use objc2_foundation::{NSString, NSURL};
 
-use crate::config::{LauncherConfig, WindowAction};
+use crate::config::{Hotkey, LauncherConfig, WindowAction};
 use crate::error::CoreError;
 use crate::keep_awake::{KeepAwake, KeepAwakeCommand};
 use crate::media_keys::{MediaCommand, MediaKeys};
@@ -69,6 +69,9 @@ pub struct SearchResult {
     /// When set, choosing the result fills the search field with this instead of opening it,
     /// e.g. `g ` for a quicklink that still needs its argument.
     pub completion: Option<String>,
+    /// The item's global hotkey, if it has one that's registered, for the shell to show on
+    /// its row. Filled in by `Launcher::search`.
+    pub hotkey: Option<Hotkey>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -403,6 +406,8 @@ struct Prefs {
     disabled_features: Vec<&'static str>,
     /// Result id → its aliases.
     aliases: HashMap<String, Vec<Alias>>,
+    /// Result id → its hotkey, for the ones that are registered.
+    hotkeys: HashMap<String, Hotkey>,
 }
 
 struct Alias {
@@ -416,6 +421,10 @@ impl Prefs {
             disabled_features: disabled_features(config),
             ..Self::default()
         };
+        for (id, hotkey) in hotkeys::item_hotkeys(config) {
+            // Like registering them: the first hotkey listed for an item wins.
+            prefs.hotkeys.entry(id).or_insert(hotkey);
+        }
         for item in &config.items {
             if !item.enabled {
                 prefs.disabled.insert(item.id.clone());
@@ -536,6 +545,7 @@ fn volume_result(percent: u8) -> SearchResult {
         symbol: Some(system::volume_status(f32::from(percent) / 100.0).symbol),
         needs_confirmation: false,
         completion: None,
+        hotkey: None,
     }
 }
 
@@ -744,6 +754,7 @@ impl SystemEntry {
             symbol: Some(self.symbol.clone()),
             needs_confirmation: self.needs_confirmation,
             completion: None,
+            hotkey: None,
         }
     }
 }
@@ -858,7 +869,7 @@ impl Launcher {
         let prefs = Arc::clone(&self.prefs.read());
         extra.retain(|(_, result)| prefs.is_enabled(&result.id));
         let usage = self.usage.lock();
-        let results = rank(
+        let mut results = rank(
             &fuzzy::fold_query(query),
             &index,
             &system,
@@ -868,6 +879,12 @@ impl Launcher {
             now(),
             limit,
         );
+        drop(usage);
+        if !prefs.hotkeys.is_empty() {
+            for result in &mut results {
+                result.hotkey = prefs.hotkeys.get(&result.id).cloned();
+            }
+        }
         // The time and count only: never the query.
         if started.elapsed() > SLOW_SEARCH {
             log::debug!(
@@ -1321,6 +1338,7 @@ fn app_result(app: &App) -> SearchResult {
         symbol: None,
         needs_confirmation: false,
         completion: None,
+        hotkey: None,
     }
 }
 
@@ -1726,6 +1744,7 @@ mod tests {
             symbol: None,
             needs_confirmation: false,
             completion: None,
+            hotkey: None,
         };
         let extra = vec![
             (0, snippet("snippet:addr", "Address")),

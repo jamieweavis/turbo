@@ -54,6 +54,7 @@ impl Calculation {
             symbol: Some("equal.circle.fill".into()),
             needs_confirmation: false,
             completion: None,
+            hotkey: None,
         }
     }
 }

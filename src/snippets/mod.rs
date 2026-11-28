@@ -105,6 +105,7 @@ fn result(snippet: &Snippet) -> SearchResult {
         symbol: Some(SYMBOL.into()),
         needs_confirmation: false,
         completion: None,
+        hotkey: None,
     }
 }
 

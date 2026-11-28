@@ -234,6 +234,11 @@ pub(crate) fn action_for_id(id: &str) -> Option<WindowAction> {
     ACTIONS.iter().find(|a| a.1 == id).map(|a| a.0)
 }
 
+/// The id `action_for_id` takes; palette results use `window:<id>`.
+pub(crate) fn id_for_action(action: WindowAction) -> Option<&'static str> {
+    ACTIONS.iter().find(|a| a.0 == action).map(|a| a.1)
+}
+
 /// The window action a palette result (`window:<id>`) applies, for the shell's icons.
 #[uniffi::export]
 pub fn window_action_for_result(result_id: &str) -> Option<WindowAction> {
