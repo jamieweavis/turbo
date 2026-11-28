@@ -55,6 +55,7 @@ impl Calculation {
             needs_confirmation: false,
             completion: None,
             hotkey: None,
+            is_favourite: false,
         }
     }
 }

@@ -25,6 +25,7 @@ mod snippets;
 mod windows;
 
 use parking_lot::Mutex;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -563,6 +564,38 @@ impl Core {
         self.launcher.reset_ranking(&id)
     }
 
+    /// Adds a search result to the launcher's favourites (at the end), or removes it if it's
+    /// one, and saves that. Returns whether it's a favourite now.
+    pub fn toggle_launcher_favourite(&self, id: String) -> Result<bool, CoreError> {
+        if !launcher::favourites::can_favourite(&id) {
+            return Err(CoreError::Other {
+                message: format!("{id} can't be a favourite"),
+            });
+        }
+        let mut favourite = false;
+        self.update_favourites(|favourites| {
+            favourite = launcher::favourites::toggle(favourites, &id);
+        })?;
+        Ok(favourite)
+    }
+
+    /// Moves a favourite `offset` places among the ones the palette shows (negative is up),
+    /// and saves that. Returns whether it moved (not past either end).
+    pub fn move_launcher_favourite(&self, id: String, offset: i32) -> Result<bool, CoreError> {
+        let shown: HashSet<String> = self
+            .launcher
+            .search("", 0)
+            .into_iter()
+            .filter(|result| result.is_favourite)
+            .map(|result| result.id)
+            .collect();
+        let mut moved = false;
+        self.update_favourites(|favourites| {
+            moved = launcher::favourites::move_by(favourites, &id, offset, |f| shown.contains(f));
+        })?;
+        Ok(moved)
+    }
+
     /// Whether an app with this bundle id is running (to offer Hide and Quit).
     pub fn is_app_running(&self, bundle_id: String) -> bool {
         launcher::running::is_running(&bundle_id)
@@ -662,6 +695,20 @@ impl Core {
     /// needs a tap running.
     pub fn is_input_running(&self) -> bool {
         self.input.is_running() && self.brightness_keys.is_running()
+    }
+}
+
+impl Core {
+    /// Changes the favourites and saves them. Only the launcher needs to know: hotkeys and
+    /// the other subsystems don't depend on them.
+    fn update_favourites(&self, change: impl FnOnce(&mut Vec<String>)) -> Result<(), CoreError> {
+        self.settings.update(
+            |config| change(&mut config.launcher.favourites),
+            |config| {
+                self.launcher.set_config(config.launcher.clone());
+                Ok(())
+            },
+        )
     }
 }
 

@@ -58,6 +58,8 @@ pub struct LauncherConfig {
     /// Per-item settings for apps and built-in commands; items without one are enabled with
     /// no aliases.
     pub items: Vec<ItemSettings>,
+    /// Result ids listed first, in this order, while the palette's search field is empty.
+    pub favourites: Vec<String>,
 }
 
 impl Default for LauncherConfig {
@@ -83,6 +85,7 @@ impl Default for LauncherConfig {
             emoji: EmojiConfig::default(),
             camera: CameraConfig::default(),
             items: Vec::new(),
+            favourites: Vec::new(),
         }
     }
 }

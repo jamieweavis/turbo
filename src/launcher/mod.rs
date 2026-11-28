@@ -12,6 +12,7 @@
 //! - `running`: running apps for the palette's actions menu (is running, hide, quit).
 //! - `calc`: calculator, unit and currency conversion (`Calculator::evaluate`).
 //! - `extensions`: quicklinks and shell commands (`extensions::results` / `open`).
+//! - `favourites`: the favourites listed first in an empty search, and reordering them.
 //!
 //! Window actions (`crate::windows`) and snippets (`crate::snippets`) are listed and opened
 //! from here, but implemented in their own modules.
@@ -20,6 +21,7 @@ mod apps;
 mod audio;
 mod calc;
 mod extensions;
+pub(crate) mod favourites;
 pub(crate) mod fuzzy;
 mod hotkeys;
 mod ranking;
@@ -72,6 +74,8 @@ pub struct SearchResult {
     /// The item's global hotkey, if it has one that's registered, for the shell to show on
     /// its row. Filled in by `Launcher::search`.
     pub hotkey: Option<Hotkey>,
+    /// One of the favourites, which lead an empty search. Filled in by `rank`.
+    pub is_favourite: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -314,6 +318,13 @@ pub fn system_actions() -> Vec<SystemActionInfo> {
         .collect()
 }
 
+/// Whether a search result can be added to the favourites (not calculations or volume
+/// levels, whose ids embed what was typed).
+#[uniffi::export]
+pub fn can_favourite_result(id: String) -> bool {
+    favourites::can_favourite(&id)
+}
+
 /// An app or built-in command, as listed in the launcher settings to set its hotkey, aliases
 /// and whether it shows in search.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -408,6 +419,8 @@ struct Prefs {
     aliases: HashMap<String, Vec<Alias>>,
     /// Result id → its hotkey, for the ones that are registered.
     hotkeys: HashMap<String, Hotkey>,
+    /// `LauncherConfig::favourites`, in order, without repeats.
+    favourites: Vec<String>,
 }
 
 struct Alias {
@@ -421,6 +434,13 @@ impl Prefs {
             disabled_features: disabled_features(config),
             ..Self::default()
         };
+        let mut seen = HashSet::new();
+        prefs.favourites = config
+            .favourites
+            .iter()
+            .filter(|id| seen.insert(id.as_str()))
+            .cloned()
+            .collect();
         for (id, hotkey) in hotkeys::item_hotkeys(config) {
             // Like registering them: the first hotkey listed for an item wins.
             prefs.hotkeys.entry(id).or_insert(hotkey);
@@ -452,6 +472,10 @@ impl Prefs {
                 .disabled_features
                 .iter()
                 .any(|feature| id == *feature || feature.ends_with(':') && id.starts_with(feature))
+    }
+
+    fn is_favourite(&self, id: &str) -> bool {
+        self.favourites.iter().any(|f| f == id)
     }
 
     /// The best alias score for `id`: a full-weight match, or above every fuzzy match when
@@ -546,6 +570,7 @@ fn volume_result(percent: u8) -> SearchResult {
         needs_confirmation: false,
         completion: None,
         hotkey: None,
+        is_favourite: false,
     }
 }
 
@@ -755,6 +780,7 @@ impl SystemEntry {
             needs_confirmation: self.needs_confirmation,
             completion: None,
             hotkey: None,
+            is_favourite: false,
         }
     }
 }
@@ -1216,10 +1242,30 @@ fn rank(
     now: f64,
     limit: usize,
 ) -> Vec<SearchResult> {
-    if query.is_empty() {
-        return most_used(index, system, prefs, extra, usage, now);
+    let mut results = if query.is_empty() {
+        most_used(index, system, prefs, extra, usage, now)
+    } else {
+        best_matches(query, index, system, prefs, extra, usage, now, limit)
+    };
+    if !prefs.favourites.is_empty() {
+        for result in &mut results {
+            result.is_favourite = prefs.is_favourite(&result.id);
+        }
     }
+    results
+}
 
+#[allow(clippy::too_many_arguments)]
+fn best_matches(
+    query: &[char],
+    index: &Index,
+    system: &[SystemEntry],
+    prefs: &Prefs,
+    extra: Vec<(i32, SearchResult)>,
+    usage: &Usage,
+    now: f64,
+    limit: usize,
+) -> Vec<SearchResult> {
     struct Scored {
         score: i32,
         title_len: usize,
@@ -1291,7 +1337,7 @@ pub(crate) fn best_score<'a>(
     title.max(secondary)
 }
 
-/// Everything enabled: the most frecent first, then the remaining apps alphabetically, then
+/// Everything enabled: the favourites in their order, then the most frecent, then the remaining apps alphabetically, then
 /// `extra` (quicklinks, commands, snippets) and the built-in entries in their own order.
 fn most_used(
     index: &Index,
@@ -1302,19 +1348,21 @@ fn most_used(
     now: f64,
 ) -> Vec<SearchResult> {
     let extra: Vec<SearchResult> = extra.into_iter().map(|(_, result)| result).collect();
+    let resolve = |id: &str| match index.by_id.get(id) {
+        Some(&i) => Some(app_result(&index.apps[i])),
+        None => system
+            .iter()
+            .find(|e| e.id == id)
+            .map(SystemEntry::result)
+            .or_else(|| extra.iter().find(|r| r.id == id).cloned()),
+    };
     let mut seen = HashSet::new();
-    let mut results: Vec<SearchResult> = usage
-        .most_frecent(now)
-        .into_iter()
-        .filter(|(id, _)| prefs.is_enabled(id))
-        .filter_map(|(id, _)| match index.by_id.get(&id) {
-            Some(&i) => Some(app_result(&index.apps[i])),
-            None => system
-                .iter()
-                .find(|e| e.id == id)
-                .map(SystemEntry::result)
-                .or_else(|| extra.iter().find(|r| r.id == id).cloned()),
-        })
+    let favourites = prefs.favourites.iter().map(String::as_str);
+    let frecent = usage.most_frecent(now);
+    let mut results: Vec<SearchResult> = favourites
+        .chain(frecent.iter().map(|(id, _)| id.as_str()))
+        .filter(|id| prefs.is_enabled(id))
+        .filter_map(resolve)
         .filter(|result| seen.insert(result.id.clone()))
         .collect();
     let apps = index.apps.iter().map(app_result);
@@ -1339,6 +1387,7 @@ fn app_result(app: &App) -> SearchResult {
         needs_confirmation: false,
         completion: None,
         hotkey: None,
+        is_favourite: false,
     }
 }
 
@@ -1730,6 +1779,81 @@ mod tests {
     }
 
     #[test]
+    fn favourites_lead_an_empty_query_in_their_order() {
+        let index = index(NAMES);
+        let mut usage = Usage::default();
+        usage.record("app:test.Terminal", &[], NOW);
+        usage.record("app:test.Notes", &[], NOW);
+        let config = LauncherConfig {
+            // An uninstalled app and a hidden one are skipped; a repeat counts once.
+            favourites: vec![
+                "system:lock-screen".into(),
+                "app:test.Uninstalled".into(),
+                "app:test.Safari".into(),
+                "app:test.Notes".into(),
+                "app:test.TextEdit".into(),
+                "system:lock-screen".into(),
+            ],
+            items: vec![crate::config::ItemSettings {
+                id: "app:test.TextEdit".into(),
+                enabled: false,
+                ..Default::default()
+            }],
+            ..LauncherConfig::default()
+        };
+        let prefs = Prefs::new(&config);
+        let results = rank(
+            &[],
+            &index,
+            &[lock_screen()],
+            &prefs,
+            Vec::new(),
+            &usage,
+            NOW,
+            8,
+        );
+        let favourites: Vec<&str> = results
+            .iter()
+            .take_while(|r| r.is_favourite)
+            .map(|r| r.title.as_str())
+            .collect();
+        assert_eq!(favourites, ["Lock Screen", "Safari", "Notes"]);
+        // Then the suggestions, without the favourites again.
+        assert_eq!(results[3].title, "Terminal");
+        assert!(!results[3].is_favourite);
+        assert_eq!(results.iter().filter(|r| r.title == "Notes").count(), 1);
+        assert!(!titles(&results).contains(&"TextEdit"));
+    }
+
+    #[test]
+    fn favourites_are_marked_but_not_boosted_in_searches() {
+        let index = index(NAMES);
+        let config = LauncherConfig {
+            favourites: vec!["app:test.SystemSettings".into()],
+            ..LauncherConfig::default()
+        };
+        let prefs = Prefs::new(&config);
+        let query = fuzzy::fold_query("s");
+        let results = rank(
+            &query,
+            &index,
+            &[],
+            &prefs,
+            Vec::new(),
+            &Usage::default(),
+            NOW,
+            8,
+        );
+        assert_eq!(results[0].title, "Safari");
+        let settings = results
+            .iter()
+            .find(|r| r.title == "System Settings")
+            .unwrap();
+        assert!(settings.is_favourite);
+        assert!(!results[0].is_favourite);
+    }
+
+    #[test]
     fn empty_query_lists_everything_enabled_once() {
         let index = index(NAMES);
         let mut usage = Usage::default();
@@ -1745,6 +1869,7 @@ mod tests {
             needs_confirmation: false,
             completion: None,
             hotkey: None,
+            is_favourite: false,
         };
         let extra = vec![
             (0, snippet("snippet:addr", "Address")),

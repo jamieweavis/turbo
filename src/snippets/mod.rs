@@ -106,6 +106,7 @@ fn result(snippet: &Snippet) -> SearchResult {
         needs_confirmation: false,
         completion: None,
         hotkey: None,
+        is_favourite: false,
     }
 }
 

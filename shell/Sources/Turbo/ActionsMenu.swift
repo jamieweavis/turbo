@@ -24,6 +24,9 @@ enum ActionKeys {
     static let primary = ["↩"]
     static let alternate = ["⌘", "↩"]
     static let pin = ["⌘", "P"]
+    static let favourite = ["⌘", "F"]
+    static let moveUp = ["⇧", "⌘", "↑"]
+    static let moveDown = ["⇧", "⌘", "↓"]
     static let delete = ["⌘", "⌫"]
     static let quickLook = ["⌘", "Y"]
     static let copy = ["⌘", "C"]
@@ -162,6 +165,23 @@ extension PaletteModel {
                     PaletteAction(title: "Force Quit Application", symbol: "exclamationmark.octagon",
                                   isDestructive: true, needsConfirmation: true) {
                         self.attempt { try self.core.quitApp(bundleId: bundleId, force: true) }
+                    },
+                ]
+            }
+        }
+        if canFavouriteResult(id: result.id) {
+            let favourite = result.isFavourite
+            actions.append(PaletteAction(title: favourite ? "Remove from Favourites" : "Add to Favourites",
+                                         symbol: favourite ? "star.slash" : "star", keys: ActionKeys.favourite) {
+                self.toggleFavourite(result)
+            })
+            if favourite, showsFavourites {
+                actions += [
+                    PaletteAction(title: "Move Up in Favourites", symbol: "arrow.up", keys: ActionKeys.moveUp) {
+                        self.moveFavourite(result, by: -1)
+                    },
+                    PaletteAction(title: "Move Down in Favourites", symbol: "arrow.down", keys: ActionKeys.moveDown) {
+                        self.moveFavourite(result, by: 1)
                     },
                 ]
             }

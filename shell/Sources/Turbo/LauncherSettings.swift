@@ -25,6 +25,11 @@ final class LauncherSettings {
         config = core.launcherConfig()
     }
 
+    /// Re-reads the config after the core changed it directly (favourites, from the palette).
+    func reload() {
+        config = core.launcherConfig()
+    }
+
     /// Re-reads which hotkeys failed to register; call after the core (re)registers them.
     func refreshFailed() {
         failed = core.failedHotkeys()

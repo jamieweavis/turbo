@@ -253,11 +253,13 @@ private final class QuickLookSource: NSObject, QLPreviewPanelDataSource {
 }
 
 /// The ⌘ shortcuts the palette's modes act on, decoded from a key event.
-enum PaletteKey {
+enum PaletteKey: Equatable {
     /// ⌘↩: the other of paste/copy, or reveal in Finder.
     case alternateOpen
     /// ⌘P
     case togglePin
+    /// ⌘F
+    case toggleFavourite
     /// ⌘⌫
     case delete
     /// ⌘C, only when no text is selected in the field (otherwise it copies that text).
@@ -266,15 +268,27 @@ enum PaletteKey {
     case quickLook
     /// ⌘K: open or close the actions menu.
     case actions
+    /// ⌘1–⌘9: open the favourite at this index (0–8).
+    case openFavourite(Int)
+
+    /// The number keys' key codes, by the favourite they open (by key position, so they work on
+    /// layouts where those keys type something else without ⇧).
+    private static let rowKeys = [
+        kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5,
+        kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9,
+    ]
 
     init?(_ event: NSEvent, fieldHasSelection: Bool) {
         guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return nil }
         switch Int(event.keyCode) {
         case kVK_Return, kVK_ANSI_KeypadEnter: self = .alternateOpen
         case kVK_Delete: self = .delete
+        case let code where Self.rowKeys.contains(code):
+            self = .openFavourite(Self.rowKeys.firstIndex(of: code)!)
         default:
             switch event.charactersIgnoringModifiers {
             case "p": self = .togglePin
+            case "f": self = .toggleFavourite
             case "y": self = .quickLook
             case "k": self = .actions
             case "c" where !fieldHasSelection: self = .copyPath
@@ -346,8 +360,10 @@ enum PaletteLayout {
         case .search:
             var height = searchHeight + message
             if !model.results.isEmpty {
-                let rows = model.results.prefix(maxVisibleRows).reduce(0) { $0 + rowHeight(for: $1) }
-                height += sectionHeaderHeight + rows + actionBarHeight
+                let visible = model.results.indices.prefix(maxVisibleRows)
+                let rows = visible.reduce(0) { $0 + rowHeight(for: model.results[$1]) }
+                let headers = CGFloat(visible.count { model.sectionTitle(before: $0) != nil })
+                height += headers * sectionHeaderHeight + rows + actionBarHeight
             }
             return CGSize(width: width(for: .search), height: height)
         case .clipboard:
@@ -515,6 +531,64 @@ final class PaletteModel {
 
     var selectedResult: SearchResult? {
         results.indices.contains(selection) ? results[selection] : nil
+    }
+
+    /// The search field is empty, so the favourites lead the results.
+    var showsFavourites: Bool {
+        mode == .search && query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The header above row `index`, if one starts there: "Favourites" over the favourites
+    /// that lead an empty search, then "Suggestions"; "Results" while searching.
+    func sectionTitle(before index: Int) -> String? {
+        guard results.indices.contains(index) else { return nil }
+        guard showsFavourites else { return index == 0 ? "Results" : nil }
+        let isFavourite = results[index].isFavourite
+        if index == 0 { return isFavourite ? "Favourites" : "Suggestions" }
+        return results[index - 1].isFavourite && !isFavourite ? "Suggestions" : nil
+    }
+
+    /// The N of the ⌘N that opens row `index`: the first nine favourites, while they lead an
+    /// empty search (so a number always means the same favourite).
+    func quickOpenNumber(for index: Int) -> Int? {
+        guard showsFavourites, index < 9, results.indices.contains(index), results[index].isFavourite else {
+            return nil
+        }
+        return index + 1
+    }
+
+    /// ⌘F: adds the result to the favourites, or removes it; the selection follows it.
+    func toggleFavourite(_ result: SearchResult) {
+        do {
+            _ = try core.toggleLauncherFavourite(id: result.id)
+            reloadFavourites(selecting: result.id)
+        } catch {
+            report(error)
+        }
+    }
+
+    /// ⇧⌘↑/⇧⌘↓ on a favourite in an empty search: moves it up or down the favourites.
+    func moveSelectedFavourite(by offset: Int32) {
+        guard showsFavourites, let result = selectedResult, result.isFavourite else { return }
+        moveFavourite(result, by: offset)
+    }
+
+    func moveFavourite(_ result: SearchResult, by offset: Int32) {
+        do {
+            if try core.moveLauncherFavourite(id: result.id, offset: offset) {
+                reloadFavourites(selecting: result.id)
+            }
+        } catch {
+            report(error)
+        }
+    }
+
+    /// Picks up the changed favourites (the settings too, so a later settings change doesn't
+    /// write the old ones back) and keeps the moved result selected.
+    private func reloadFavourites(selecting id: String) {
+        settings.reload()
+        search()
+        if let index = results.firstIndex(where: { $0.id == id }) { selection = index }
     }
 
     // MARK: Showing and modes
@@ -707,6 +781,13 @@ final class PaletteModel {
             pasteSelected(paste: !clipboardConfig.pasteOnOpen)
         case (.clipboard, .togglePin):
             clipboard.togglePinTargets()
+        case (.search, .openFavourite(let index)):
+            guard quickOpenNumber(for: index) != nil else { return false }
+            selection = index
+            open(results[index])
+        case (.search, .toggleFavourite):
+            guard let result = selectedResult, canFavouriteResult(id: result.id) else { return false }
+            toggleFavourite(result)
         case (.clipboard, .delete), (.colors, .delete):
             deleteTargets()
         case (.files, .alternateOpen):
@@ -1178,7 +1259,9 @@ private struct PaletteView: View {
                     takesSidewaysArrows: model.mode.isGrid,
                     extendsSelection: model.mode.hasMarkableRows,
                     // Nothing to search while the camera shows.
-                    isEditable: model.mode != .camera
+                    isEditable: model.mode != .camera,
+                    // With an empty field there's no text to select, only favourites to move.
+                    reordersRows: model.showsFavourites
                 ) { command in
                     switch command {
                     case .up: model.move(by: -1)
@@ -1187,6 +1270,8 @@ private struct PaletteView: View {
                     case .bottom: model.jump(toEnd: true)
                     case .extendTop: model.extendMarks(toEnd: false)
                     case .extendBottom: model.extendMarks(toEnd: true)
+                    case .moveRowUp: model.moveSelectedFavourite(by: -1)
+                    case .moveRowDown: model.moveSelectedFavourite(by: 1)
                     case .left: model.moveSideways(by: -1)
                     case .right: model.moveSideways(by: 1)
                     case .submit: model.openSelected()
@@ -1355,13 +1440,16 @@ private struct ResultsList: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    Text(model.query.trimmingCharacters(in: .whitespaces).isEmpty ? "Suggestions" : "Results")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .frame(height: PaletteLayout.sectionHeaderHeight, alignment: .center)
                     ForEach(Array(model.results.enumerated()), id: \.element.id) { index, result in
-                        ResultRow(result: result, hotkey: result.hotkey, isSelected: index == model.selection)
+                        if let title = model.sectionTitle(before: index) {
+                            Text(title)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .frame(height: PaletteLayout.sectionHeaderHeight, alignment: .center)
+                        }
+                        ResultRow(result: result, hotkey: result.hotkey, isSelected: index == model.selection,
+                                  quickOpenNumber: model.quickOpenNumber(for: index))
                             .id(result.id)
                             .contentShape(.rect)
                             .onContinuousHover { phase in
@@ -1408,6 +1496,8 @@ private struct ResultRow: View {
     let result: SearchResult
     let hotkey: Hotkey?
     let isSelected: Bool
+    /// The N of the ⌘N that opens this row (the first nine favourites).
+    var quickOpenNumber: Int?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1431,6 +1521,12 @@ private struct ResultRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+            }
+            if let quickOpenNumber {
+                Text("⌘\(quickOpenNumber)")
+                    .font(.system(size: 12).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .fixedSize()
             }
         }
         .padding(.horizontal, 10)
@@ -1643,6 +1739,8 @@ struct SearchField: NSViewRepresentable {
     /// Off, the field only shows its placeholder; Esc and the ⌘ shortcuts still reach the
     /// panel.
     var isEditable = true
+    /// ⇧⌘↑ and ⇧⌘↓ move the selected row instead of selecting text.
+    var reordersRows = false
     let onCommand: (Command) -> Void
 
     enum Command {
@@ -1650,6 +1748,8 @@ struct SearchField: NSViewRepresentable {
         case backtab, extendUp, extendDown, extendLeft, extendRight
         /// ⌘↑/⌘↓, and with ⇧ where rows can be marked.
         case top, bottom, extendTop, extendBottom
+        /// ⇧⌘↑/⇧⌘↓ where rows can be reordered (favourites).
+        case moveRowUp, moveRowDown
     }
 
     func makeNSView(context: Context) -> NSTextField {
@@ -1731,6 +1831,10 @@ struct SearchField: NSViewRepresentable {
             case #selector(NSResponder.moveDown(_:)): parent.onCommand(.down)
             case #selector(NSResponder.moveToBeginningOfDocument(_:)): parent.onCommand(.top)
             case #selector(NSResponder.moveToEndOfDocument(_:)): parent.onCommand(.bottom)
+            case #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:)) where parent.reordersRows:
+                parent.onCommand(.moveRowUp)
+            case #selector(NSResponder.moveToEndOfDocumentAndModifySelection(_:)) where parent.reordersRows:
+                parent.onCommand(.moveRowDown)
             case #selector(NSResponder.moveToBeginningOfDocumentAndModifySelection(_:))
                 where parent.extendsSelection:
                 parent.onCommand(.extendTop)
