@@ -142,9 +142,9 @@ impl ColorHistory {
         Ok(text)
     }
 
-    pub fn delete(&self, color: PickedColor) -> Result<(), CoreError> {
+    pub fn delete(&self, deleted: &[PickedColor]) -> Result<(), CoreError> {
         let mut colors = self.colors.lock();
-        colors.retain(|c| !c.same_color(&color));
+        colors.retain(|c| !deleted.iter().any(|d| c.same_color(d)));
         self.save(&colors)
     }
 
@@ -278,7 +278,7 @@ mod tests {
             insert(&mut colors, color(40, 50, 60));
             history.save(&colors).unwrap();
         }
-        history.delete(color(10, 20, 30)).unwrap();
+        history.delete(&[color(10, 20, 30)]).unwrap();
         assert_eq!(ColorHistory::new(&dir).colors(), vec![color(40, 50, 60)]);
         history.clear().unwrap();
         assert!(ColorHistory::new(&dir).colors().is_empty());

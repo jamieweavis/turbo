@@ -9,9 +9,10 @@ import os
 /// store), so it re-runs on every keystroke.
 @MainActor
 @Observable
-final class ClipboardBrowser {
+final class ClipboardBrowser: MultiSelecting {
     private(set) var items: [ClipboardItem] = []
     var selection = 0
+    var marks = Marks<Int64>()
     var error: String?
     @ObservationIgnored private let core: Core
     @ObservationIgnored private var query = ""
@@ -26,39 +27,58 @@ final class ClipboardBrowser {
         items.indices.contains(selection) ? items[selection] : nil
     }
 
+    var markIDs: [Int64] { items.map(\.id) }
+
+    /// What paste, pin and delete act on: the marked items, or the selected one.
+    var targets: [ClipboardItem] { targetIndices.map { items[$0] } }
+
     /// Keeps the same item selected across refreshes (e.g. a new copy arriving), if it's
-    /// still there.
+    /// still there, and the marks on the items still showing.
     func refresh(query: String) {
         let selectedID = query == self.query ? selected?.id : nil
         self.query = query
         items = core.clipboardItems(query: query, limit: Self.limit)
         selection = selectedID.flatMap { id in items.firstIndex { $0.id == id } } ?? 0
+        pruneMarks()
+    }
+
+    /// Puts back marks taken before the palette closed for a paste that then failed.
+    func restoreMarks(_ marks: Marks<Int64>) {
+        self.marks = marks
+        pruneMarks()
     }
 
     func move(by offset: Int) {
         guard !items.isEmpty else { return }
         selection = (selection + offset + items.count) % items.count
     }
-    func togglePinSelected() {
-        guard let item = selected else { return }
+
+    /// Pins the targets, or unpins them if every one is already pinned.
+    func togglePinTargets() {
+        let targets = targets
+        guard !targets.isEmpty else { return }
         do {
-            try core.setClipboardItemPinned(id: item.id, pinned: !item.pinned)
+            try core.setClipboardItemsPinned(ids: targets.map(\.id), pinned: !targets.allSatisfy(\.pinned))
             refresh(query: query)
         } catch {
-            Logger.clipboard.error("couldn't pin a clipboard item: \(error, privacy: .public)")
+            Logger.clipboard.error("couldn't pin clipboard items: \(error, privacy: .public)")
             self.error = error.userMessage
         }
     }
 
-    /// Removes the row straight away; a failure brings it back with the error.
-    func deleteSelected() {
-        guard let item = selected else { return }
-        items.remove(at: selection)
-        selection = min(selection, max(items.count - 1, 0))
+    /// Removes the rows straight away; a failure brings them back with the error.
+    func deleteTargets() {
+        let indices = targetIndices
+        guard let first = indices.first else { return }
+        let ids = indices.map { items[$0].id }
+        let deleted = Set(ids)
+        items.removeAll { deleted.contains($0.id) }
+        selection = min(first, max(items.count - 1, 0))
+        pruneMarks()
         do {
-            try core.deleteClipboardItem(id: item.id)
+            try core.deleteClipboardItems(ids: ids)
         } catch {
-            Logger.clipboard.error("couldn't delete a clipboard item: \(error, privacy: .public)")
+            Logger.clipboard.error("couldn't delete clipboard items: \(error, privacy: .public)")
             self.error = error.userMessage
             refresh(query: query)
         }
@@ -98,7 +118,7 @@ struct ClipboardModeView: View {
                 }
             }
             Divider()
-            FooterHints(hints: hints)
+            FooterHints(leading: browser.hasMarks ? browser.marksSummary : nil, hints: hints)
         }
     }
 
@@ -107,16 +127,21 @@ struct ClipboardModeView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(browser.items.enumerated()), id: \.element.id) { index, item in
-                        ClipboardRow(item: item, isSelected: index == browser.selection)
-                            .id(item.id)
-                            .contentShape(.rect)
-                            .onContinuousHover { phase in
-                                if case .active = phase { model.hover(index) }
-                            }
-                            .onTapGesture {
-                                browser.selection = index
-                                model.openSelected()
-                            }
+                        ClipboardRow(
+                            item: item,
+                            isSelected: index == browser.selection,
+                            isMarked: browser.marks.contains(item.id),
+                            // Neighbouring marked rows join into one block.
+                            joinsAbove: index > 0 && browser.marks.contains(browser.items[index - 1].id),
+                            joinsBelow: index + 1 < browser.items.count
+                                && browser.marks.contains(browser.items[index + 1].id)
+                        )
+                        .id(item.id)
+                        .contentShape(.rect)
+                        .onContinuousHover { phase in
+                            if case .active = phase { model.hover(index) }
+                        }
+                        .onTapGesture { model.click(index) }
                     }
                 }
                 .padding(PaletteLayout.listPadding)
@@ -151,13 +176,26 @@ struct ClipboardModeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// With rows marked, the keys act on all of them and Esc lets go of them.
     private var hints: [(key: String, label: String)] {
         let pastes = model.clipboardConfig.pasteOnOpen
+        let targets = browser.targets
+        let pin = !targets.isEmpty && targets.allSatisfy(\.pinned) ? "Unpin" : "Pin"
+        if browser.hasMarks {
+            return [
+                ("↩", pastes ? "Paste" : "Copy"),
+                ("⌘P", pin),
+                ("⌘⌫", "Delete"),
+                ("⎋", "Deselect"),
+                ("⌘K", "Actions"),
+            ]
+        }
         return [
             ("↩", pastes ? "Paste" : "Copy"),
             ("⌘↩", pastes ? "Copy" : "Paste"),
-            ("⌘P", browser.selected?.pinned == true ? "Unpin" : "Pin"),
+            ("⌘P", pin),
             ("⌘⌫", "Delete"),
+            ("TAB", "Select"),
             ("⌘K", "Actions"),
         ]
     }
@@ -166,6 +204,9 @@ struct ClipboardModeView: View {
 private struct ClipboardRow: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let isMarked: Bool
+    let joinsAbove: Bool
+    let joinsBelow: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -188,7 +229,14 @@ private struct ClipboardRow: View {
         .padding(.horizontal, 10)
         .frame(height: 36)
         .background {
-            if isSelected {
+            if isMarked {
+                // Tinted, and stronger under the cursor, so it still shows where the keys act.
+                let top: CGFloat = joinsAbove ? 0 : 8
+                let bottom: CGFloat = joinsBelow ? 0 : 8
+                UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: bottom,
+                                       bottomTrailingRadius: bottom, topTrailingRadius: top)
+                    .fill(Color.accentColor.opacity(isSelected ? 0.42 : 0.2))
+            } else if isSelected {
                 RoundedRectangle(cornerRadius: 8).fill(PaletteLayout.selectionFill)
             }
         }
@@ -196,7 +244,12 @@ private struct ClipboardRow: View {
 
     @ViewBuilder
     private var icon: some View {
-        if let color = item.hexColor {
+        if isMarked {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 15, weight: .medium))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, Color.accentColor)
+        } else if let color = item.hexColor {
             ColorSwatch(fill: color, size: 16)
         } else {
             Image(systemName: item.kind.symbol)
@@ -475,9 +528,10 @@ private struct FileRow: View {
 /// The colour picker's history, filtered by the query in the core.
 @MainActor
 @Observable
-final class ColorBrowser {
+final class ColorBrowser: MultiSelecting {
     private(set) var colors: [PickedColor] = []
     var selection = 0
+    var marks = Marks<UInt32>()
     var error: String?
     @ObservationIgnored private let core: Core
     @ObservationIgnored private var query = ""
@@ -490,10 +544,16 @@ final class ColorBrowser {
         colors.indices.contains(selection) ? colors[selection] : nil
     }
 
+    var markIDs: [UInt32] { colors.map(\.markID) }
+
+    /// What copy and delete act on: the marked colours, or the selected one.
+    var targets: [PickedColor] { targetIndices.map { colors[$0] } }
+
     func refresh(query: String) {
         self.query = query
         colors = core.searchColorHistory(query: query)
         selection = 0
+        pruneMarks()
     }
 
     func move(_ direction: GridDirection) {
@@ -501,18 +561,29 @@ final class ColorBrowser {
         selection = grid.move(selection, direction)
     }
 
-    /// Removes the swatch straight away; a failure brings it back with the error.
-    func deleteSelected() {
-        guard let color = selected else { return }
-        colors.remove(at: selection)
-        selection = min(selection, max(colors.count - 1, 0))
+    /// Removes the swatches straight away; a failure brings them back with the error.
+    func deleteTargets() {
+        let indices = targetIndices
+        guard let first = indices.first else { return }
+        let deleted = indices.map { colors[$0] }
+        let ids = Set(deleted.map(\.markID))
+        colors.removeAll { ids.contains($0.markID) }
+        selection = min(first, max(colors.count - 1, 0))
+        pruneMarks()
         do {
-            try core.deletePickedColor(color: color)
+            try core.deletePickedColors(colors: deleted)
         } catch {
-            Logger.palette.error("couldn't delete a picked colour: \(error, privacy: .public)")
+            Logger.palette.error("couldn't delete picked colours: \(error, privacy: .public)")
             self.error = error.userMessage
             refresh(query: query)
         }
+    }
+}
+
+extension PickedColor {
+    /// The history holds each colour once, so its channels identify it.
+    var markID: UInt32 {
+        UInt32(red) << 16 | UInt32(green) << 8 | UInt32(blue)
     }
 }
 
@@ -529,16 +600,23 @@ struct ColorsModeView: View {
                 cellHeight: PaletteLayout.colorCellHeight,
                 selection: browser.selection,
                 onHover: { model.hover($0) },
-                onTap: { index in
-                    browser.selection = index
-                    model.copySelectedColor()
-                }
+                onTap: { model.click($0) }
             ) { color, isSelected in
-                ColorCell(color: color, format: model.colorFormat, isSelected: isSelected)
+                ColorCell(color: color, format: model.colorFormat, isSelected: isSelected,
+                          isMarked: browser.marks.contains(color.markID))
             }
             Divider()
-            FooterHints(leading: otherFormats, hints: [("↩", "Copy \(model.colorFormat.title)"), ("⌘↩", "Pick Colour"), ("⌘K", "Actions")])
+            FooterHints(leading: browser.hasMarks ? browser.marksSummary : otherFormats, hints: hints)
         }
+    }
+
+    /// With swatches marked, the keys act on all of them and Esc lets go of them.
+    private var hints: [(key: String, label: String)] {
+        let copy = ("↩", "Copy \(model.colorFormat.title)")
+        if browser.hasMarks {
+            return [copy, ("⌘⌫", "Delete"), ("⎋", "Deselect"), ("⌘K", "Actions")]
+        }
+        return [copy, ("⌘↩", "Pick Colour"), ("TAB", "Select"), ("⌘K", "Actions")]
     }
 
     /// The selected colour in the two formats ↩ doesn't copy.
@@ -555,12 +633,24 @@ private struct ColorCell: View {
     let color: PickedColor
     let format: ColorFormat
     let isSelected: Bool
+    let isMarked: Bool
 
     var body: some View {
         VStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 12)
                 .fill(color.color.gradient)
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.primary.opacity(0.12)))
+                .overlay(alignment: .topTrailing) {
+                    if isMarked {
+                        // The shadow keeps it legible on a swatch near the accent colour.
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, Color.accentColor)
+                            .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                            .padding(7)
+                    }
+                }
                 .overlay {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 15)
@@ -581,7 +671,9 @@ private struct ColorCell: View {
         }
         .padding(8)
         .background {
-            if isSelected {
+            if isMarked {
+                RoundedRectangle(cornerRadius: 16).fill(Color.accentColor.opacity(isSelected ? 0.42 : 0.2))
+            } else if isSelected {
                 RoundedRectangle(cornerRadius: 16).fill(PaletteLayout.selectionFill)
             }
         }
@@ -834,13 +926,18 @@ private struct FooterHints: View {
             ForEach(hints, id: \.key) { hint in
                 HStack(spacing: 6) {
                     Text(hint.label).foregroundStyle(.secondary)
-                    Keycaps(keys: hint.key.map(String.init))
+                    Keycaps(keys: Self.caps(for: hint.key))
                 }
             }
         }
         .font(.caption)
         .padding(.horizontal, 16)
         .frame(height: PaletteLayout.footerHeight)
+    }
+
+    /// One cap per symbol ("⌘↩" is two), but a key spelt out ("TAB") stays on one.
+    private static func caps(for key: String) -> [String] {
+        key.count > 1 && key.allSatisfy(\.isLetter) ? [key] : key.map(String.init)
     }
 }
 

@@ -399,6 +399,8 @@ final class PaletteModel {
     var selection = 0
     /// A result that needs confirming; ⏎ again runs it, Esc backs out.
     private(set) var confirming: SearchResult?
+    /// ⌘⌫ on several marked rows asks first; ⏎ or ⌘⌫ again deletes them, Esc backs out.
+    private(set) var confirmingDelete = false
     private(set) var error: String?
     /// Shown briefly after copying a calculator result, before the palette closes.
     private(set) var copied: String?
@@ -467,6 +469,9 @@ final class PaletteModel {
         }
         if let error = error ?? clipboard.error ?? files.error ?? colors.error ?? emoji.error {
             return .error(error)
+        }
+        if confirmingDelete, let count = multiSelect?.targetIndices.count {
+            return .confirm("Delete \(count) \(mode == .colors ? "colours" : "items")")
         }
         switch mode {
         case .search:
@@ -546,6 +551,8 @@ final class PaletteModel {
         enteredFromSearch = fromSearch
         actionsMenu = nil
         confirming = nil
+        clipboard.clearMarks()
+        colors.clearMarks()
         error = nil
         copied = nil
         if query.isEmpty {
@@ -573,6 +580,7 @@ final class PaletteModel {
     }
 
     func refresh() {
+        confirmingDelete = false
         switch mode {
         case .search: search()
         case .clipboard: clipboard.refresh(query: query)
@@ -594,6 +602,8 @@ final class PaletteModel {
 
     /// ↑/↓ (a row up or down in grids).
     func move(by offset: Int) {
+        confirmingDelete = false
+        defer { multiSelect?.cursorMoved() }
         switch mode {
         case .search:
             guard !results.isEmpty else { return }
@@ -609,6 +619,8 @@ final class PaletteModel {
 
     /// ←/→ in grid modes; elsewhere they move the cursor in the field.
     func moveSideways(by offset: Int) {
+        confirmingDelete = false
+        defer { multiSelect?.cursorMoved() }
         let direction: GridDirection = offset < 0 ? .left : .right
         switch mode {
         case .colors: colors.move(direction)
@@ -637,6 +649,10 @@ final class PaletteModel {
 
     /// ⏎
     func openSelected() {
+        if confirmingDelete {
+            deleteTargets(confirmed: true)
+            return
+        }
         switch mode {
         case .search:
             if let result = selectedResult { open(result) }
@@ -656,6 +672,7 @@ final class PaletteModel {
     /// The ⌘ shortcuts; returns whether the key did something in this mode. Any of them
     /// closes the actions menu first, since they act on the selection behind it.
     func handle(_ key: PaletteKey) -> Bool {
+        if key != .delete { confirmingDelete = false }
         if key == .actions {
             toggleActions()
             return true
@@ -672,9 +689,9 @@ final class PaletteModel {
         case (.clipboard, .alternateOpen):
             pasteSelected(paste: !clipboardConfig.pasteOnOpen)
         case (.clipboard, .togglePin):
-            clipboard.togglePinSelected()
-        case (.clipboard, .delete):
-            clipboard.deleteSelected()
+            clipboard.togglePinTargets()
+        case (.clipboard, .delete), (.colors, .delete):
+            deleteTargets()
         case (.files, .alternateOpen):
             revealSelectedFile()
         case (.files, .copyPath):
@@ -684,8 +701,6 @@ final class PaletteModel {
             onQuickLook?(URL(fileURLWithPath: file.path))
         case (.colors, .alternateOpen):
             pickColor()
-        case (.colors, .delete):
-            deleteSelectedColor()
         case (.emoji, .alternateOpen):
             insertSelectedEmoji(paste: !emojiPasteOnOpen)
         default:
@@ -746,12 +761,14 @@ final class PaletteModel {
         }
     }
 
-    /// Esc: close the actions menu, back out of a confirmation or error, then clear the
-    /// query, then leave clipboard, file, colour or emoji mode for search if it was opened from
-    /// there, then close.
+    /// Esc: close the actions menu, back out of a confirmation or error, then unmark any
+    /// marked rows, then clear the query, then leave clipboard, file, colour or emoji mode for
+    /// search if it was opened from there, then close.
     func cancel() {
         if actionsMenu != nil {
             closeActions()
+        } else if confirmingDelete {
+            confirmingDelete = false
         } else if confirming != nil {
             confirming = nil
         } else if error != nil || clipboard.error != nil || files.error != nil || colors.error != nil
@@ -761,6 +778,8 @@ final class PaletteModel {
             files.error = nil
             colors.error = nil
             emoji.error = nil
+        } else if let browser = multiSelect, browser.hasMarks {
+            browser.clearMarks()
         } else if !query.isEmpty {
             query = ""
         } else if mode != .search, enteredFromSearch {
@@ -770,17 +789,125 @@ final class PaletteModel {
         }
     }
 
+    // MARK: Marking rows for bulk actions
+
+    /// The current mode's browser, if its rows can be marked.
+    private var multiSelect: (any MultiSelecting)? {
+        switch mode {
+        case .clipboard: clipboard
+        case .colors: colors
+        case .search, .files, .emoji, .camera: nil
+        }
+    }
+
+    /// A click on a clipboard row or colour swatch. ⌘-click marks it and ⇧-click marks the
+    /// run up to it; once anything is marked, plain clicks mark too rather than open.
+    func click(_ index: Int) {
+        guard let browser = multiSelect else { return }
+        confirmingDelete = false
+        browser.selection = index
+        let modifiers = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers.contains(.shift) {
+            browser.extendMarks(toClicked: index)
+        } else if modifiers.contains(.command) || browser.hasMarks {
+            browser.toggleMark(at: index)
+        } else {
+            openSelected()
+        }
+    }
+
+    /// Tab and ⇧Tab: mark or unmark the selected row and step to the next (or previous) one, so
+    /// repeating it marks a run. In search, Tab fills in the completion instead.
+    func tab(by offset: Int) {
+        guard let browser = multiSelect else {
+            if offset > 0 { completeSelected() }
+            return
+        }
+        confirmingDelete = false
+        browser.toggleMark(at: browser.selection)
+        if stepWithoutWrapping(offset > 0 ? (mode.isGrid ? .right : .down) : (mode.isGrid ? .left : .up)) {
+            browser.cursorMoved()
+        }
+    }
+
+    /// The actions menu's Select/Deselect: marks the selected row where it is.
+    func toggleMarkSelected() {
+        guard let browser = multiSelect else { return }
+        browser.toggleMark(at: browser.selection)
+    }
+
+    /// ⇧ with an arrow: moves the selection and marks everything from where ⇧ went down.
+    func extendMarks(_ direction: GridDirection) {
+        guard let browser = multiSelect else { return }
+        confirmingDelete = false
+        let previous = browser.selection
+        if stepWithoutWrapping(direction) {
+            browser.extendMarks(from: previous)
+        }
+    }
+
+    func markAll() {
+        multiSelect?.markAll()
+    }
+
+    func clearMarks() {
+        multiSelect?.clearMarks()
+    }
+
+    /// Moves the selection unless that would wrap round the end: a marked run shouldn't
+    /// suddenly span the whole list. Returns whether it moved.
+    private func stepWithoutWrapping(_ direction: GridDirection) -> Bool {
+        guard let browser = multiSelect else { return false }
+        let previous = browser.selection
+        let forward = direction == .down || direction == .right
+        switch mode {
+        case .clipboard: clipboard.move(by: forward ? 1 : -1)
+        case .colors: colors.move(direction)
+        case .search, .files, .emoji, .camera: return false
+        }
+        guard browser.selection != previous, (browser.selection > previous) == forward else {
+            browser.selection = previous
+            return false
+        }
+        return true
+    }
+
+    /// ⌘⌫: deletes the marked rows, or the selected one. One row goes straight away; several
+    /// ask first (`confirmingDelete`), since they can't be brought back.
+    func deleteTargets(confirmed: Bool = false) {
+        guard let browser = multiSelect else { return }
+        if browser.targetIndices.count > 1, !confirmed, !confirmingDelete {
+            confirmingDelete = true
+            return
+        }
+        confirmingDelete = false
+        switch mode {
+        case .clipboard:
+            clipboard.deleteTargets()
+        case .colors:
+            colors.deleteTargets()
+            onColorsChanged?()
+        case .search, .files, .emoji, .camera:
+            break
+        }
+    }
+
     // MARK: Clipboard and file actions
 
-    /// Closes first, so the paste lands in the app that was in front.
+    /// Pastes the marked items together (in the order listed), or the selected one. Closes
+    /// first, so the paste lands in the app that was in front; a failure reopens with the
+    /// marks as they were.
     func pasteSelected(paste: Bool) {
-        guard let item = clipboard.selected else { return }
+        let ids = clipboard.targets.map(\.id)
+        guard !ids.isEmpty else { return }
+        let marks = clipboard.marks
         onClose?()
         do {
-            try core.pasteClipboardItem(id: item.id, paste: paste)
+            try core.pasteClipboardItems(ids: ids, paste: paste)
         } catch {
-            Logger.palette.error("couldn't \(paste ? "paste" : "copy") a clipboard item: \(error, privacy: .public)")
+            Logger.palette.error("couldn't \(paste ? "paste" : "copy") clipboard items: \(error, privacy: .public)")
             onReopen?()
+            clipboard.restoreMarks(marks)
             self.error = error.userMessage
         }
     }
@@ -872,19 +999,28 @@ final class PaletteModel {
     // MARK: Colour actions
 
     func copySelectedColor() {
-        guard let color = colors.selected else { return }
-        do {
-            try core.copyColor(color: color, format: colorFormat)
-            showCopied(formatColor(color: color, format: colorFormat))
-        } catch {
-            Logger.palette.error("couldn't copy a colour: \(error, privacy: .public)")
-            self.error = error.userMessage
-        }
+        copyColors(as: colorFormat)
     }
 
-    func deleteSelectedColor() {
-        colors.deleteSelected()
-        onColorsChanged?()
+    /// Copies the selected colour as `format`, or the marked ones, one per line.
+    func copyColors(as format: ColorFormat) {
+        let targets = colors.targets
+        guard let first = targets.first else { return }
+        guard targets.count > 1 else {
+            do {
+                try core.copyColor(color: first, format: format)
+                showCopied(formatColor(color: first, format: format))
+            } catch {
+                Logger.palette.error("couldn't copy a colour: \(error, privacy: .public)")
+                self.error = error.userMessage
+            }
+            return
+        }
+        // Joining lines for the pasteboard is a UI convenience, like `copy`.
+        let lines = targets.map { formatColor(color: $0, format: format) }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
+        showCopied("\(targets.count) colours")
     }
 
     /// The magnifier covers the screen, so the palette gets out of its way first.
@@ -1012,6 +1148,7 @@ private struct PaletteView: View {
                     cursorToEndRequest: model.cursorToEndRequest,
                     refocusRequest: model.refocusRequest,
                     takesSidewaysArrows: model.mode.isGrid,
+                    extendsSelection: model.mode.hasMarkableRows,
                     // Nothing to search while the camera shows.
                     isEditable: model.mode != .camera
                 ) { command in
@@ -1022,7 +1159,12 @@ private struct PaletteView: View {
                     case .right: model.moveSideways(by: 1)
                     case .submit: model.openSelected()
                     case .alternateSubmit: _ = model.handle(.alternateOpen)
-                    case .complete: model.completeSelected()
+                    case .complete: model.tab(by: 1)
+                    case .backtab: model.tab(by: -1)
+                    case .extendUp: model.extendMarks(.up)
+                    case .extendDown: model.extendMarks(.down)
+                    case .extendLeft: model.extendMarks(.left)
+                    case .extendRight: model.extendMarks(.right)
                     case .cancel: model.cancel()
                     }
                 }
@@ -1114,6 +1256,11 @@ extension PaletteMode {
     /// Colours and emoji are grids, where ← and → move the selection.
     var isGrid: Bool {
         self == .colors || self == .emoji
+    }
+
+    /// Clipboard items and colours can be marked, to paste, pin, copy or delete several at once.
+    var hasMarkableRows: Bool {
+        self == .clipboard || self == .colors
     }
 
     var placeholder: String {
@@ -1422,7 +1569,7 @@ extension SearchResult {
     /// What ⏎ will do with this result, for the action bar.
     var primaryAction: (label: String, key: String) {
         if completion != nil {
-            return ("Complete", "⇥")
+            return ("Complete", "TAB")
         }
         if id.hasPrefix("mode:") {
             return ("Show", "↩")
@@ -1458,12 +1605,18 @@ struct SearchField: NSViewRepresentable {
     var refocusRequest = 0
     /// ← and → move through a grid instead of the cursor.
     var takesSidewaysArrows = false
+    /// ⇧ with an arrow marks rows instead of selecting text (sideways only in a grid), and
+    /// ⇧Tab is handed over too.
+    var extendsSelection = false
     /// Off, the field only shows its placeholder; Esc and the ⌘ shortcuts still reach the
     /// panel.
     var isEditable = true
     let onCommand: (Command) -> Void
 
-    enum Command { case up, down, left, right, submit, alternateSubmit, complete, cancel }
+    enum Command {
+        case up, down, left, right, submit, alternateSubmit, complete, cancel
+        case backtab, extendUp, extendDown, extendLeft, extendRight
+    }
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
@@ -1548,6 +1701,18 @@ struct SearchField: NSViewRepresentable {
                 let command = NSApp.currentEvent?.modifierFlags.contains(.command) == true
                 parent.onCommand(command ? .alternateSubmit : .submit)
             case #selector(NSResponder.insertTab(_:)): parent.onCommand(.complete)
+            case #selector(NSResponder.insertBacktab(_:)) where parent.extendsSelection:
+                parent.onCommand(.backtab)
+            case #selector(NSResponder.moveUpAndModifySelection(_:)) where parent.extendsSelection:
+                parent.onCommand(.extendUp)
+            case #selector(NSResponder.moveDownAndModifySelection(_:)) where parent.extendsSelection:
+                parent.onCommand(.extendDown)
+            case #selector(NSResponder.moveLeftAndModifySelection(_:))
+                where parent.extendsSelection && parent.takesSidewaysArrows:
+                parent.onCommand(.extendLeft)
+            case #selector(NSResponder.moveRightAndModifySelection(_:))
+                where parent.extendsSelection && parent.takesSidewaysArrows:
+                parent.onCommand(.extendRight)
             case #selector(NSResponder.cancelOperation(_:)): parent.onCommand(.cancel)
             default: return false
             }

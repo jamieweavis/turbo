@@ -25,7 +25,7 @@ use crate::config::ClipboardConfig;
 use crate::error::CoreError;
 use crate::input::SYNTHETIC_EVENT_MARKER;
 use crate::launcher::LauncherObserver;
-use store::Store;
+use store::{Store, Stored};
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
@@ -132,19 +132,27 @@ impl ClipboardHistory {
         })
     }
 
-    /// Puts the item back on the clipboard and, if `paste`, sends ⌘V to the frontmost app
-    /// (needs Accessibility). The shell closes the palette first. Returns at once; the
-    /// keystroke follows shortly after on its own thread.
-    pub fn paste(&self, id: i64, paste: bool) -> Result<(), CoreError> {
+    /// Puts the items back on the clipboard as one (see `Stored::merge`), in the order given,
+    /// and, if `paste`, sends ⌘V to the frontmost app (needs Accessibility). The shell closes
+    /// the palette first. Returns at once; the keystroke follows shortly after on its own
+    /// thread.
+    pub fn paste(&self, ids: &[i64], paste: bool) -> Result<(), CoreError> {
         // SAFETY: no arguments; reads the process's TCC state.
         if paste && unsafe { AXIsProcessTrusted() } == 0 {
             return Err(CoreError::PermissionDenied);
         }
-        let stored = self.store()?.stored(id)?.ok_or_else(|| CoreError::Other {
-            message: "that clipboard item no longer exists".into(),
-        })?;
-        // The monitor sees this write and bumps the item to the top, like any re-copy.
-        board::write(&stored)?;
+        let store = self.store()?;
+        let stored = ids
+            .iter()
+            .map(|&id| {
+                store.stored(id)?.ok_or_else(|| CoreError::Other {
+                    message: "that clipboard item no longer exists".into(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // The monitor sees this write and records it (or bumps the item to the top), like
+        // any copy.
+        board::write(&Stored::merge(stored)?)?;
         if paste {
             thread::spawn(|| {
                 thread::sleep(PASTE_DELAY);
@@ -154,17 +162,15 @@ impl ClipboardHistory {
         Ok(())
     }
 
-    pub fn delete(&self, id: i64) -> Result<(), CoreError> {
-        let deleted = self.store()?.delete(id)?;
-        if deleted {
+    pub fn delete(&self, ids: &[i64]) -> Result<(), CoreError> {
+        if self.store()?.delete(ids)? > 0 {
             self.notify();
         }
         Ok(())
     }
 
-    pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<(), CoreError> {
-        let changed = self.store()?.set_pinned(id, pinned)?;
-        if changed {
+    pub fn set_pinned(&self, ids: &[i64], pinned: bool) -> Result<(), CoreError> {
+        if self.store()?.set_pinned(ids, pinned)? > 0 {
             self.notify();
         }
         Ok(())
@@ -416,9 +422,9 @@ mod tests {
         let a = record(&history, "a", now());
         record(&history, "b", now());
 
-        history.set_pinned(a, true).unwrap();
+        history.set_pinned(&[a], true).unwrap();
         assert_eq!(counter.count(), 1);
-        history.set_pinned(a, true).unwrap();
+        history.set_pinned(&[a], true).unwrap();
         assert_eq!(counter.count(), 1, "pinning a pinned item changes nothing");
 
         history.clear().unwrap();
@@ -427,9 +433,9 @@ mod tests {
         history.clear().unwrap();
         assert_eq!(counter.count(), 2, "nothing unpinned was left to clear");
 
-        history.delete(a).unwrap();
+        history.delete(&[a]).unwrap();
         assert_eq!(counter.count(), 3);
-        history.delete(a).unwrap();
+        history.delete(&[a]).unwrap();
         assert_eq!(
             counter.count(),
             3,
@@ -502,7 +508,7 @@ mod tests {
         let history = ClipboardHistory::new(&dir, config(0, 0));
         // Fails on the lookup, before anything is written to the pasteboard.
         assert!(matches!(
-            history.paste(12345, false),
+            history.paste(&[12345], false),
             Err(CoreError::Other { .. })
         ));
         drop(history);
@@ -518,10 +524,10 @@ mod tests {
         let history = ClipboardHistory::new(&dir, config(0, 0));
         assert!(history.store.is_none());
         assert!(history.items("", 10).is_empty());
-        assert!(history.delete(1).is_err());
-        assert!(history.set_pinned(1, true).is_err());
+        assert!(history.delete(&[1]).is_err());
+        assert!(history.set_pinned(&[1], true).is_err());
         assert!(history.clear().is_err());
-        assert!(history.paste(1, false).is_err());
+        assert!(history.paste(&[1], false).is_err());
         history.set_config(config(1, 1));
         drop(history);
         fs::remove_dir_all(dir).unwrap();

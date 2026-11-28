@@ -445,7 +445,11 @@ impl Core {
     }
 
     pub fn delete_picked_color(&self, color: PickedColor) -> Result<(), CoreError> {
-        self.colors.delete(color)
+        self.colors.delete(&[color])
+    }
+
+    pub fn delete_picked_colors(&self, colors: Vec<PickedColor>) -> Result<(), CoreError> {
+        self.colors.delete(&colors)
     }
 
     pub fn clear_color_history(&self) -> Result<(), CoreError> {
@@ -584,18 +588,18 @@ impl Core {
         self.clipboard.items(&query, limit as usize)
     }
 
-    /// Puts an item back on the clipboard and, if `paste`, pastes it into the frontmost app.
-    /// Close the palette first so the paste lands in the right place.
-    pub fn paste_clipboard_item(&self, id: i64, paste: bool) -> Result<(), CoreError> {
-        self.clipboard.paste(id, paste)
+    /// Puts the items back on the clipboard and, if `paste`, pastes them into the frontmost
+    /// app. Several items go as one, in the order given: text joined by line breaks.
+    pub fn paste_clipboard_items(&self, ids: Vec<i64>, paste: bool) -> Result<(), CoreError> {
+        self.clipboard.paste(&ids, paste)
     }
 
-    pub fn delete_clipboard_item(&self, id: i64) -> Result<(), CoreError> {
-        self.clipboard.delete(id)
+    pub fn delete_clipboard_items(&self, ids: Vec<i64>) -> Result<(), CoreError> {
+        self.clipboard.delete(&ids)
     }
 
-    pub fn set_clipboard_item_pinned(&self, id: i64, pinned: bool) -> Result<(), CoreError> {
-        self.clipboard.set_pinned(id, pinned)
+    pub fn set_clipboard_items_pinned(&self, ids: Vec<i64>, pinned: bool) -> Result<(), CoreError> {
+        self.clipboard.set_pinned(&ids, pinned)
     }
 
     /// Deletes every unpinned item.

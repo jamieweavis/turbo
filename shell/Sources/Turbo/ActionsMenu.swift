@@ -27,6 +27,8 @@ enum ActionKeys {
     static let delete = ["⌘", "⌫"]
     static let quickLook = ["⌘", "Y"]
     static let copy = ["⌘", "C"]
+    static let select = ["TAB"]
+    static let deselect = ["⎋"]
 }
 
 /// The open menu: the actions it was opened with, filtered by its own query.
@@ -178,41 +180,72 @@ extension PaletteModel {
         return actions
     }
 
+    /// With rows marked, everything here acts on all of them, and says how many.
     private func clipboardActions() -> [PaletteAction] {
-        guard let item = clipboard.selected else { return [] }
+        let targets = clipboard.targets
+        guard let item = targets.first else { return [] }
+        let several = targets.count > 1
+        let items = several ? " \(targets.count) Items" : ""
         let pastes = clipboardConfig.pasteOnOpen
-        let paste = PaletteAction(title: Self.pasteTitle, symbol: "doc.on.clipboard",
-                                  keys: pastes ? ActionKeys.primary : ActionKeys.alternate) {
+        // Without marks ⌘↩ does the other of paste and copy; with them, ↩ is the only key.
+        let otherKeys = clipboard.hasMarks ? [] : ActionKeys.alternate
+        let paste = PaletteAction(title: several ? "Paste\(items)" : Self.pasteTitle, symbol: "doc.on.clipboard",
+                                  keys: pastes ? ActionKeys.primary : otherKeys) {
             self.pasteSelected(paste: true)
         }
-        let copy = PaletteAction(title: "Copy to Clipboard", symbol: "doc.on.doc",
-                                 keys: pastes ? ActionKeys.alternate : ActionKeys.primary) {
+        let copy = PaletteAction(title: several ? "Copy\(items)" : "Copy to Clipboard", symbol: "doc.on.doc",
+                                 keys: pastes ? otherKeys : ActionKeys.primary) {
             self.pasteSelected(paste: false)
         }
         var actions = pastes ? [paste, copy] : [copy, paste]
-        if item.kind == .files, let path = item.filePaths.first {
+        if !several, item.kind == .files, let path = item.filePaths.first {
             actions.append(PaletteAction(title: "Show in Finder", symbol: "folder") {
                 self.attempt { try self.core.revealFile(path: path) }
             })
         }
+        let pinned = targets.allSatisfy(\.pinned)
         actions += [
-            PaletteAction(title: item.pinned ? "Unpin" : "Pin", symbol: item.pinned ? "pin.slash" : "pin",
+            PaletteAction(title: (pinned ? "Unpin" : "Pin") + items, symbol: pinned ? "pin.slash" : "pin",
                           keys: ActionKeys.pin) {
-                self.clipboard.togglePinSelected()
+                self.clipboard.togglePinTargets()
             },
-            PaletteAction(title: "Delete", symbol: "trash", keys: ActionKeys.delete, isDestructive: true) {
-                self.clipboard.deleteSelected()
-            },
-            PaletteAction(title: "Clear Unpinned History", symbol: "trash.slash",
-                          isDestructive: true, needsConfirmation: true) {
-                do {
-                    try self.core.clearClipboardHistory()
-                    self.refresh()
-                } catch {
-                    self.report(error)
-                }
+            PaletteAction(title: "Delete" + items, symbol: "trash", keys: ActionKeys.delete, isDestructive: true,
+                          needsConfirmation: several) {
+                self.deleteTargets(confirmed: true)
             },
         ]
+        actions += markActions(for: clipboard)
+        actions.append(PaletteAction(title: "Clear Unpinned History", symbol: "trash.slash",
+                                     isDestructive: true, needsConfirmation: true) {
+            do {
+                try self.core.clearClipboardHistory()
+                self.refresh()
+            } catch {
+                self.report(error)
+            }
+        })
+        return actions
+    }
+
+    /// Marking rows for bulk actions, so the menu teaches Tab and ⎋, and offers Select All.
+    private func markActions(for browser: some MultiSelecting) -> [PaletteAction] {
+        let marked = browser.isSelectionMarked
+        var actions = [
+            PaletteAction(title: marked ? "Deselect" : "Select", symbol: marked ? "circle" : "checkmark.circle",
+                          keys: ActionKeys.select) {
+                self.toggleMarkSelected()
+            },
+        ]
+        if !browser.allMarked {
+            actions.append(PaletteAction(title: "Select All", symbol: "checklist") {
+                self.markAll()
+            })
+        }
+        if browser.hasMarks {
+            actions.append(PaletteAction(title: "Deselect All", symbol: "xmark.circle", keys: ActionKeys.deselect) {
+                self.clearMarks()
+            })
+        }
         return actions
     }
 
@@ -235,36 +268,38 @@ extension PaletteModel {
         ]
     }
 
+    /// With swatches marked, copying and deleting act on all of them.
     private func colorActions() -> [PaletteAction] {
-        guard let color = colors.selected else { return [] }
+        let targets = colors.targets
+        guard !targets.isEmpty else { return [] }
+        let several = targets.count > 1
         let formats = [colorFormat] + ColorFormat.allCases.filter { $0 != colorFormat }
         var actions = formats.enumerated().map { index, format in
-            PaletteAction(title: "Copy \(format.title)", symbol: "doc.on.doc",
-                          keys: index == 0 ? ActionKeys.primary : []) {
-                self.attempt(closing: false) {
-                    try self.core.copyColor(color: color, format: format)
-                    self.showCopied(formatColor(color: color, format: format))
-                }
+            PaletteAction(title: several ? "Copy \(targets.count) as \(format.title)" : "Copy \(format.title)",
+                          symbol: "doc.on.doc", keys: index == 0 ? ActionKeys.primary : []) {
+                self.copyColors(as: format)
             }
         }
         actions += [
             PaletteAction(title: "Pick Colour", symbol: "eyedropper", keys: ActionKeys.alternate) {
                 self.pickColor()
             },
-            PaletteAction(title: "Delete", symbol: "trash", keys: ActionKeys.delete, isDestructive: true) {
-                self.deleteSelectedColor()
-            },
-            PaletteAction(title: "Clear Colour History", symbol: "trash.slash",
-                          isDestructive: true, needsConfirmation: true) {
-                do {
-                    try self.core.clearColorHistory()
-                    self.refresh()
-                    self.onColorsChanged?()
-                } catch {
-                    self.report(error)
-                }
+            PaletteAction(title: several ? "Delete \(targets.count) Colours" : "Delete", symbol: "trash",
+                          keys: ActionKeys.delete, isDestructive: true, needsConfirmation: several) {
+                self.deleteTargets(confirmed: true)
             },
         ]
+        actions += markActions(for: colors)
+        actions.append(PaletteAction(title: "Clear Colour History", symbol: "trash.slash",
+                                     isDestructive: true, needsConfirmation: true) {
+            do {
+                try self.core.clearColorHistory()
+                self.refresh()
+                self.onColorsChanged?()
+            } catch {
+                self.report(error)
+            }
+        })
         return actions
     }
 
@@ -349,7 +384,7 @@ struct ActionsMenuView: View {
                 case .submit, .alternateSubmit:
                     if let action = menu.selected { model.run(action) }
                 case .cancel: model.closeActions()
-                case .left, .right, .complete: break
+                default: break
                 }
             }
             .padding(.horizontal, 14)

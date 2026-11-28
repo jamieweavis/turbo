@@ -36,6 +36,45 @@ pub(super) enum Stored {
     Files(Vec<String>),
 }
 
+impl Stored {
+    /// Several items as one, to paste together in the order given: files stay files when
+    /// that's all there is, otherwise everything becomes lines of text (files as their
+    /// paths). An image only pastes on its own.
+    pub fn merge(mut items: Vec<Stored>) -> Result<Stored, CoreError> {
+        if items.len() <= 1 {
+            return items.pop().ok_or_else(|| CoreError::Other {
+                message: "there's nothing to paste".into(),
+            });
+        }
+        if items.iter().any(|item| matches!(item, Stored::Image(_))) {
+            return Err(CoreError::Other {
+                message: "images can't be pasted together with other items".into(),
+            });
+        }
+        if items.iter().all(|item| matches!(item, Stored::Files(_))) {
+            let mut paths: Vec<String> = Vec::new();
+            for item in items {
+                let Stored::Files(files) = item else { continue };
+                for path in files {
+                    if !paths.contains(&path) {
+                        paths.push(path);
+                    }
+                }
+            }
+            return Ok(Stored::Files(paths));
+        }
+        let lines: Vec<String> = items
+            .into_iter()
+            .map(|item| match item {
+                Stored::Text(text) => text,
+                Stored::Files(paths) => paths.join("\n"),
+                Stored::Image(_) => unreachable!("images were refused above"),
+            })
+            .collect();
+        Ok(Stored::Text(lines.join("\n")))
+    }
+}
+
 /// Two connections to one WAL database, so the palette's lookups never wait on a write.
 /// Writes take turns on `writer`, and an image is written to disk while it's held, so
 /// pruning can't remove a file an insert is about to refer to.
@@ -192,28 +231,32 @@ impl Store {
         }))
     }
 
-    /// Whether anything was deleted.
-    pub fn delete(&self, id: i64) -> Result<bool, CoreError> {
+    /// Deletes the given items; returns how many there were to delete.
+    pub fn delete(&self, ids: &[i64]) -> Result<usize, CoreError> {
+        let condition = format!("WHERE id IN ({})", placeholders(ids.len()));
         let writer = self.writer.lock();
-        let images = image_paths(&writer, "WHERE id = ?1", [id])?;
+        let images = image_paths(&writer, &condition, params_from_iter(ids))?;
         let deleted = writer
-            .execute("DELETE FROM items WHERE id = ?1", [id])
-            .map_err(sql_error)?;
-        remove_files(&images);
-        Ok(deleted > 0)
-    }
-
-    /// Whether anything changed.
-    pub fn set_pinned(&self, id: i64, pinned: bool) -> Result<bool, CoreError> {
-        let changed = self
-            .writer
-            .lock()
             .execute(
-                "UPDATE items SET pinned = ?2 WHERE id = ?1 AND pinned != ?2",
-                params![id, pinned],
+                &format!("DELETE FROM items {condition}"),
+                params_from_iter(ids),
             )
             .map_err(sql_error)?;
-        Ok(changed > 0)
+        remove_files(&images);
+        Ok(deleted)
+    }
+
+    /// Pins or unpins the given items; returns how many changed.
+    pub fn set_pinned(&self, ids: &[i64], pinned: bool) -> Result<usize, CoreError> {
+        let sql = format!(
+            "UPDATE items SET pinned = ?1 WHERE pinned != ?1 AND id IN ({})",
+            placeholders(ids.len())
+        );
+        let values = std::iter::once(i64::from(pinned)).chain(ids.iter().copied());
+        self.writer
+            .lock()
+            .execute(&sql, params_from_iter(values))
+            .map_err(sql_error)
     }
 
     /// Deletes every unpinned item; returns how many.
@@ -280,6 +323,11 @@ impl Store {
             }
         }
     }
+}
+
+/// `count` comma-separated `?`s, for an `IN (…)` list.
+fn placeholders(count: usize) -> String {
+    vec!["?"; count].join(", ")
 }
 
 fn image_paths(
@@ -442,8 +490,8 @@ mod tests {
         store.insert(&text("old"), &source("A"), 1.0).unwrap();
         store.insert(&text("new"), &source("A"), 2.0).unwrap();
         let old = store.items("old", 1).unwrap()[0].id;
-        assert!(store.set_pinned(old, true).unwrap());
-        assert!(!store.set_pinned(old, true).unwrap());
+        assert_eq!(store.set_pinned(&[old], true).unwrap(), 1);
+        assert_eq!(store.set_pinned(&[old], true).unwrap(), 0);
         assert_eq!(texts(&store.items("", 10).unwrap()), vec!["old", "new"]);
 
         // Pruning to one item far in the future drops everything unpinned.
@@ -545,10 +593,74 @@ mod tests {
             Some(Stored::Files(vec!["/tmp/a b.txt".into()]))
         );
 
-        assert!(store.delete(items[1].id).unwrap());
+        assert_eq!(store.delete(&[items[1].id]).unwrap(), 1);
         assert!(!image_path.exists());
         assert_eq!(store.stored(items[1].id).unwrap(), None);
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn several_items_are_deleted_and_pinned_at_once() {
+        let dir = temp_dir("bulk");
+        let store = Store::open(&dir).unwrap();
+        for (at, name) in ["a", "b", "c", "d"].iter().enumerate() {
+            store.insert(&text(name), &source("A"), at as f64).unwrap();
+        }
+        let image = Content::Image {
+            png: vec![1, 2, 3],
+            width: 2,
+            height: 1,
+        };
+        store.insert(&image, &Source::default(), 9.0).unwrap();
+        let items = store.items("", 10).unwrap();
+        let image_path = PathBuf::from(items[0].image_path.clone().unwrap());
+        let id = |name: &str| items.iter().find(|i| i.text == name).unwrap().id;
+
+        assert_eq!(store.set_pinned(&[id("a"), id("c")], true).unwrap(), 2);
+        // Only "b" still changes.
+        assert_eq!(store.set_pinned(&[id("a"), id("b")], true).unwrap(), 1);
+        assert_eq!(
+            store
+                .set_pinned(&[id("a"), id("b"), id("c")], false)
+                .unwrap(),
+            3
+        );
+        assert_eq!(store.set_pinned(&[], true).unwrap(), 0);
+
+        // Missing ids are skipped, and a deleted image takes its file with it.
+        assert_eq!(
+            store
+                .delete(&[id("a"), id("d"), items[0].id, 9999])
+                .unwrap(),
+            3
+        );
+        assert!(!image_path.exists());
+        assert_eq!(texts(&store.items("", 10).unwrap()), vec!["c", "b"]);
+        assert_eq!(store.delete(&[]).unwrap(), 0);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn items_merge_into_one_to_paste_together() {
+        let text = |s: &str| Stored::Text(s.into());
+        let files = |paths: &[&str]| Stored::Files(paths.iter().map(|p| p.to_string()).collect());
+        assert!(Stored::merge(vec![]).is_err());
+        // One item pastes as it is, whatever it is.
+        let image = Stored::Image(PathBuf::from("/tmp/a.png"));
+        assert_eq!(Stored::merge(vec![image.clone()]).unwrap(), image);
+        assert_eq!(
+            Stored::merge(vec![text("one"), text("two\nthree")]).unwrap(),
+            text("one\ntwo\nthree")
+        );
+        assert_eq!(
+            Stored::merge(vec![files(&["/a", "/b"]), files(&["/b", "/c"])]).unwrap(),
+            files(&["/a", "/b", "/c"])
+        );
+        assert_eq!(
+            Stored::merge(vec![text("see"), files(&["/a", "/b"])]).unwrap(),
+            text("see\n/a\n/b")
+        );
+        assert!(Stored::merge(vec![text("one"), image]).is_err());
     }
 
     #[test]

@@ -147,7 +147,7 @@ Save text you type again and again, like an email address or a canned reply, and
 
 ### Clipboard
 
-Search and paste everything you've copied: text, links, colours and images, opened with <kbd>⌥</kbd><kbd>⌘</kbd><kbd>V</kbd>. Pin the items you want to keep, and set how many items and how many days of history to hold on to. Copies from password managers are never recorded.
+Search and paste everything you've copied: text, links, colours and images, opened with <kbd>⌥</kbd><kbd>⌘</kbd><kbd>V</kbd>. Pin the items you want to keep, and set how many items and how many days of history to hold on to. Mark several with <kbd>⇧</kbd><kbd>↓</kbd>, <kbd>⌘</kbd>-click or <kbd>Tab</kbd> to paste them together, pin or delete them in one go. Copies from password managers are never recorded.
 
 <p align="center"><img src=".github/screenshots/clipboard.png" alt="Clipboard settings"></p>
 
