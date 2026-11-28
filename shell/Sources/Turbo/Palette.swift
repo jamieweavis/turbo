@@ -1155,9 +1155,20 @@ private struct PaletteView: View {
 
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: model.mode.symbol)
-                    .font(.system(size: 19, weight: .regular))
-                    .foregroundStyle(.secondary)
+                Group {
+                    if model.mode == .search {
+                        // The launcher itself wears Turbo's own mark, the menu bar's glyph, sized to
+                        // sit where the other modes' symbols do.
+                        Image(nsImage: MenuBarIcon.turbo)
+                            .renderingMode(.template)
+                            .resizable()
+                            .frame(width: 22, height: 22)
+                    } else {
+                        Image(systemName: model.mode.symbol)
+                            .font(.system(size: 19, weight: .regular))
+                    }
+                }
+                .foregroundStyle(.secondary)
                 SearchField(
                     text: $model.query,
                     placeholder: model.placeholder,
